@@ -67,6 +67,9 @@ Repository = "https://github.com/ecmwf/anemoi-training/"
 Issues = "https://github.com/ecmwf/anemoi-training/issues"
 # Changelog = "https://github.com/ecmwf/anemoi-training/CHANGELOG.md"
 
+[project.scripts]
+# Add subcommand in the `commands` directory
+anemoi-training = "anemoi.training.__main__:main"
 
 [tool.setuptools_scm]
 version_file = "src/anemoi/training/_version.py"
