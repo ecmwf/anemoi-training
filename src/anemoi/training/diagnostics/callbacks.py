@@ -7,7 +7,6 @@
 # nor does it submit to any jurisdiction.
 
 import copy
-import json
 import logging
 import time
 import uuid
@@ -16,7 +15,6 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 from typing import Optional
-from zipfile import ZipFile
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -564,22 +562,10 @@ class AnemoiCheckpoint(ModelCheckpoint):
         if trainer.is_global_zero:
             model = self._torch_drop_down(trainer)
 
-            # We want a different uuid each time we save the model
-            # so we can tell them apart in the catalogue (i.e. different epochs)
-            checkpoint_uuid = str(uuid.uuid4())
-            trainer.lightning_module._hparams["metadata"]["uuid"] = checkpoint_uuid
-
-            trainer.lightning_module._hparams["metadata"]["model"] = self.model_metadata(model)
-            trainer.lightning_module._hparams["metadata"]["tracker"] = self.tracker_metadata(trainer)
-
-            trainer.lightning_module._hparams["metadata"]["training"] = {
-                "current_epoch": trainer.current_epoch,
-                "global_step": trainer.global_step,
-                "elapsed_time": time.time() - self.start,
-            }
-
             Path(lightning_checkpoint_filepath).parent.mkdir(parents=True, exist_ok=True)
 
+            # If we are saving the model, we need to remove the config and metadata
+            # otherwise they will be twice in the checkpoint, once with the model and once `save_metadata.`
             save_config = model.config
             model.config = None
 
@@ -587,20 +573,31 @@ class AnemoiCheckpoint(ModelCheckpoint):
             model.metadata = None
 
             metadata = dict(**save_metadata)
+            # We want a different uuid each time we save the model
+            # so we can tell them apart in the catalogue (i.e. different epochs)
+            metadata["version"] = "1.0.0"
+            metadata["uuid"] = str(uuid.uuid4())
+            metadata["tracker"] = self.tracker_metadata(trainer)
+            metadata["training"] = {
+                "current_epoch": trainer.current_epoch,
+                "global_step": trainer.global_step,
+                "time_since_last_restartq": time.time() - self.start,
+            }
 
             inference_checkpoint_filepath = Path(lightning_checkpoint_filepath).parent / Path(
                 "inference-" + str(Path(lightning_checkpoint_filepath).name),
             )
 
+            # Save the model
             torch.save(model, inference_checkpoint_filepath)
 
-            with ZipFile(inference_checkpoint_filepath, "a") as zipf:
-                base = Path(inference_checkpoint_filepath).stem
-                zipf.writestr(
-                    f"{base}/ai-models.json",
-                    json.dumps(metadata),
-                )
+            # Save the metadata
+            save_metadata(inference_checkpoint_filepath, metadata)
 
+            # Save the model info separately, because it is large and not useful for inference, only for display
+            save_metadata(inference_checkpoint_filepath, self.model_metadata(model), "model.json")
+
+            # Restore the model's config and metadata
             model.config = save_config
             model.metadata = save_metadata
 
