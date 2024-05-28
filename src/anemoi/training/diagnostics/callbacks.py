@@ -572,10 +572,10 @@ class AnemoiCheckpoint(ModelCheckpoint):
             save_metadata = model.metadata
             model.metadata = None
 
-            metadata = dict(**save_metadata)
+            metadata = save_metadata.copy()
+            metadata["version"] = "1.0.0"
             # We want a different uuid each time we save the model
             # so we can tell them apart in the catalogue (i.e. different epochs)
-            metadata["version"] = "1.0.0"
             metadata["uuid"] = str(uuid.uuid4())
             metadata["tracker"] = self.tracker_metadata(trainer)
             metadata["training"] = {
