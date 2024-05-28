@@ -1,24 +1,26 @@
-Installing
-==========
+############
+ Installing
+############
 
 To install the package, you can use the following command:
 
-.. code-block:: bash
+.. code:: bash
 
-    pip install anemoi-training
+   pip install anemoi-training
 
-Contributing
-------------
+**************
+ Contributing
+**************
 
-.. code-block:: bash
+.. code:: bash
 
-    git clone ...
-    cd anemoi-training
-    pip install .[dev]
-    pip install -r docs/requirements.txt
+   git clone ...
+   cd anemoi-training
+   pip install .[dev]
+   pip install -r docs/requirements.txt
 
 You may also have to install pandoc on MacOS:
 
-.. code-block:: bash
+.. code:: bash
 
-    brew install pandoc
+   brew install pandoc
