@@ -581,7 +581,7 @@ class AnemoiCheckpoint(ModelCheckpoint):
             metadata["training"] = {
                 "current_epoch": trainer.current_epoch,
                 "global_step": trainer.global_step,
-                "time_since_last_restartq": time.time() - self.start,
+                "time_since_last_restart": time.time() - self.start,
             }
 
             inference_checkpoint_filepath = Path(lightning_checkpoint_filepath).parent / Path(
