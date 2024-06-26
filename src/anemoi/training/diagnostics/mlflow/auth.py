@@ -1,8 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime
-from datetime import timedelta
+import time
 from getpass import getpass
 
 import requests
@@ -10,7 +9,7 @@ from requests.exceptions import HTTPError
 
 LOG = logging.getLogger(__name__)
 
-REFRESH_TOKEN_EXPIRE = 30  # days
+REFRESH_TOKEN_EXPIRE = 29  # days
 CONFIG_PATH = os.path.expanduser("~/.config/anemoi")
 CONFIG_FILE = os.path.join(CONFIG_PATH, "mlflow-auth.json")
 
@@ -28,10 +27,10 @@ def save_config(refresh_token):
     if not os.path.exists(CONFIG_PATH):
         os.makedirs(CONFIG_PATH)
 
-    expires = datetime.now() + timedelta(days=REFRESH_TOKEN_EXPIRE)
+    refresh_expires = time.time() + (REFRESH_TOKEN_EXPIRE * 24 * 60 * 60)
     config = {
         "refresh_token": refresh_token,
-        "expires": expires.isoformat(timespec="hours"),
+        "refresh_expires": int(refresh_expires),
     }
 
     with open(CONFIG_FILE, "w") as file:
@@ -50,9 +49,9 @@ class TokenAuthenticator:
         config = get_config()
 
         refresh_token = config.get("refresh_token")
-        expires = datetime.fromisoformat(config.get("expires", "1970-01-01"))
+        refresh_expires = config.get("refresh_expires", 0)
 
-        if refresh_token and expires > datetime.now():
+        if refresh_token and refresh_expires >= time.time():
             new_refresh_token = self._token_login(refresh_token)
         else:
             username = input("Username: ")
