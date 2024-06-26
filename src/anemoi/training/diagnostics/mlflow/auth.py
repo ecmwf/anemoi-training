@@ -34,16 +34,20 @@ class TokenAuthenticator:
         self.authenticate()
 
     def login(self):
+        LOG.info(f"Logging in to {self.uri}")
+
         if self.refresh_token and self.refresh_expires >= time.time():
-            new_refresh_token = self._token_login(self.refresh_token)
+            new_refresh_token = self._get_refresh_token(self.refresh_token)
         else:
+            LOG.info("No valid refresh token found. Please sign in with your credentials.")
             username = input("Username: ")
             password = getpass("Password: ")
-            new_refresh_token = self._credential_login(username, password)
+            new_refresh_token = self._get_refresh_token(username=username, password=password)
 
         if new_refresh_token:
             self.refresh_token = new_refresh_token
             self._save_config(new_refresh_token)
+
             LOG.info("Successfully authenticated with MLflow. Happy logging!")
         else:
             raise ValueError("No refresh token received.")
@@ -60,11 +64,10 @@ class TokenAuthenticator:
 
         self.access_token, self.access_expires = self._get_access_token()
 
+        os.environ["MLFLOW_TRACKING_TOKEN"] = self.access_token
         LOG.debug("Access token refreshed.")
 
-        os.environ["MLFLOW_TRACKING_TOKEN"] = self.access_token
-
-    def _save_config(self, refresh_token: str):
+    def _save_config(self, refresh_token):
         refresh_expires = time.time() + (self.refresh_expire_days * 24 * 60 * 60)
         config = {
             "refresh_token": refresh_token,
@@ -72,15 +75,15 @@ class TokenAuthenticator:
         }
         save_config(self.config_file, config)
 
-    def _credential_login(self, username: str, password: str):
-        payload = {"username": username, "password": password}
-        response = self._request("newtoken", payload)
+    def _get_refresh_token(self, refresh_token=None, username=None, password=None):
+        if refresh_token:
+            path = "refreshtoken"
+            payload = {"refresh_token": refresh_token}
+        else:
+            path = "newtoken"
+            payload = {"username": username, "password": password}
 
-        return response.get("refresh_token")
-
-    def _token_login(self, refresh_token: str):
-        payload = {"refresh_token": refresh_token}
-        response = self._request("refreshtoken", payload)
+        response = self._request(path, payload)
 
         return response.get("refresh_token")
 
@@ -95,7 +98,7 @@ class TokenAuthenticator:
 
         return token, expires
 
-    def _request(self, path: str, payload: dict):
+    def _request(self, path, payload):
 
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
