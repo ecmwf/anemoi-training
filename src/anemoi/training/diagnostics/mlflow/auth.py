@@ -41,6 +41,7 @@ class TokenAuthenticator:
     def __init__(self, uri: str = "https://mlflow-test.ecmwf.int", enabled=True):
         self.uri = uri
         self.enabled = enabled
+        self.refresh_token = None
         self.auth_token = None
         self.auth_expires = 0
 
@@ -59,8 +60,9 @@ class TokenAuthenticator:
             new_refresh_token = self._credential_login(username, password)
 
         if new_refresh_token:
+            self.refresh_token = new_refresh_token
             save_config(new_refresh_token)
-            LOG.info("Successfully authenticated with MLflow.")
+            LOG.info("Successfully authenticated with MLflow. Happy logging!")
         else:
             raise ValueError("No refresh token received.")
 
