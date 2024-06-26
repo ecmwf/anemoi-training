@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from getpass import getpass
 
@@ -23,8 +24,11 @@ class TokenAuthenticator:
 
         self.config_file = "mlflow-token.json"
         self.refresh_token = None
-        self.auth_token = None
-        self.auth_expires = 0
+        self.access_token = None
+        self.access_expires = 0
+
+    def __call__(self):
+        self.authenticate()
 
     def login(self):
 
@@ -47,6 +51,22 @@ class TokenAuthenticator:
         else:
             raise ValueError("No refresh token received.")
 
+    def authenticate(self):
+        if not self.enabled:
+            return
+
+        if self.access_expires > time.time():
+            return
+
+        if not self.refresh_token:
+            raise RuntimeError("You are not logged in to MLFlow. Please log in first.")
+
+        self.access_token, self.access_expires = self._get_access_token()
+
+        LOG.debug("Access token refreshed.")
+
+        os.environ["MLFLOW_TRACKING_TOKEN"] = self.access_token
+
     def _save_config(self, refresh_token: str):
         refresh_expires = time.time() + (self.refresh_expire_days * 24 * 60 * 60)
         config = {
@@ -66,6 +86,17 @@ class TokenAuthenticator:
         response = self._request("refreshtoken", payload)
 
         return response.get("refresh_token")
+
+    def _get_access_token(self):
+        payload = {"refresh_token": self.refresh_token}
+        response = self._request("refreshtoken", payload)
+
+        token = response.get("access_token")
+        expires_in = response.get("expires_in")
+
+        expires = time.time() + (expires_in * 0.7)  # some buffer time
+
+        return token, expires
 
     def _request(self, path: str, payload: dict):
 
