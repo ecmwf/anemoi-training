@@ -23,7 +23,10 @@ class TokenAuthenticator:
         self.enabled = enabled
 
         self.config_file = "mlflow-token.json"
-        self.refresh_token = None
+        config = load_config(self.config_file)
+
+        self.refresh_token = config.get("refresh_token")
+        self.refresh_expires = config.get("refresh_expires", 0)
         self.access_token = None
         self.access_expires = 0
 
@@ -31,14 +34,8 @@ class TokenAuthenticator:
         self.authenticate()
 
     def login(self):
-
-        config = load_config(self.config_file)
-
-        refresh_token = config.get("refresh_token")
-        refresh_expires = config.get("refresh_expires", 0)
-
-        if refresh_token and refresh_expires >= time.time():
-            new_refresh_token = self._token_login(refresh_token)
+        if self.refresh_token and self.refresh_expires >= time.time():
+            new_refresh_token = self._token_login(self.refresh_token)
         else:
             username = input("Username: ")
             password = getpass("Password: ")
