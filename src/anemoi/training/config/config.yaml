@@ -1,0 +1,11 @@
+defaults:
+  - _self_
+
+model:
+  num_channels: 128
+dataloader:
+  limit_batches:
+    training: 100
+    validation: 100
+training:
+  max_epochs: 3
