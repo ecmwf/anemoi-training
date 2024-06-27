@@ -15,11 +15,13 @@ LOG = logging.getLogger(__name__)
 class TokenAuth:
     def __init__(
         self,
-        uri="https://mlflow-test.ecmwf.int",
+        url,
         refresh_expire_days=29,
         enabled=True,
     ):
-        self.uri = uri
+        assert url, "Please provide a URL for the authentication server."
+
+        self.url = url
         self.refresh_expire_days = refresh_expire_days
         self.enabled = enabled
 
@@ -35,7 +37,7 @@ class TokenAuth:
         self.authenticate()
 
     def login(self, force_credentials=False, **kwargs):
-        LOG.info(f"Logging in to {self.uri}")
+        LOG.info(f"Logging in to {self.url}")
         new_refresh_token = None
 
         if not force_credentials and self.refresh_token and self.refresh_expires > time.time():
@@ -108,7 +110,7 @@ class TokenAuth:
         }
 
         try:
-            response = requests.post(f"{self.uri}/{path}", headers=headers, json=payload)
+            response = requests.post(f"{self.url}/{path}", headers=headers, json=payload)
             response.raise_for_status()
             response_json = response.json()
 
