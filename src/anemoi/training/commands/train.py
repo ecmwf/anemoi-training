@@ -10,6 +10,7 @@
 
 
 import json
+import logging
 
 import hydra
 from anemoi.utils.config import load_raw_config
@@ -17,10 +18,10 @@ from omegaconf import OmegaConf
 
 from . import Command
 
+LOGGER = logging.getLogger(__name__)
+
 
 class Train(Command):
-
-    accept_unknown_args = True
 
     def add_arguments(self, command_parser):
         command_parser.add_argument(
@@ -30,12 +31,13 @@ class Train(Command):
             help="A list of extra config files to load",
             default=[],
         )
+        command_parser.add_argument("overrides", nargs="*", type=str, help="A list of overrides to apply")
 
-    def run(self, args, overrides=[]):
+    def run(self, args):
 
-        hydra.initialize(config_path="../config", version_base="1.1")
+        hydra.initialize(config_path="../config", version_base=None)
 
-        cfg = hydra.compose(config_name="config", overrides=overrides)
+        cfg = hydra.compose(config_name="config", overrides=args.overrides)
 
         # Add project config
         # cfg = OmegaConf.merge(cfg, OmegaConf.create(...))
@@ -57,11 +59,11 @@ class Train(Command):
         # Add extra config files specified in the command line
 
         for config in args.config:
-            print(f"Loading config {config}")
+            LOGGER.info(f"Loading config {config}")
             cfg = OmegaConf.merge(cfg, OmegaConf.load(config))
 
         # We need to reapply the overrides
-        cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(overrides))
+        cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(args.overrides))
 
         print(json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=4))
 
