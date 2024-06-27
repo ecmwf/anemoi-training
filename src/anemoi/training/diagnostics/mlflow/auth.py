@@ -36,10 +36,12 @@ class TokenAuth:
 
     def login(self, force_credentials=False, **kwargs):
         LOG.info(f"Logging in to {self.uri}")
+        new_refresh_token = None
 
-        if not force_credentials and self.refresh_token and self.refresh_expires >= time.time():
+        if not force_credentials and self.refresh_token and self.refresh_expires > time.time():
             new_refresh_token = self._get_refresh_token(self.refresh_token)
-        else:
+
+        if not new_refresh_token:
             LOG.info("Please sign in with your credentials.")
             username = input("Username: ")
             password = getpass("Password: ")
@@ -51,7 +53,7 @@ class TokenAuth:
 
             LOG.info("Successfully logged in to MLflow. Happy logging!")
         else:
-            raise ValueError("No refresh token received.")
+            raise RuntimeError("Failed to log in. Please try again.")
 
     def authenticate(self):
         if not self.enabled:
@@ -61,7 +63,7 @@ class TokenAuth:
             return
 
         if not self.refresh_token or self.refresh_expires < time.time():
-            raise RuntimeError("You are not logged in to MLFlow. Please log in first.")
+            raise RuntimeError("You are not logged in to MLflow. Please log in first.")
 
         self.access_token, self.access_expires = self._get_access_token()
 
