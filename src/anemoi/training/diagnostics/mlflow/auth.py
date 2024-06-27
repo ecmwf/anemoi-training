@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -108,6 +109,17 @@ class TokenAuth:
             response = requests.post(f"{self.uri}/{path}", headers=headers, json=payload)
             response.raise_for_status()
             response_json = response.json()
+
+            if response_json.get("status", "") == "ERROR":
+                # TODO: there's a bug in the API that returns the error response as a string instead of a json object.
+                # Remove this when the API is fixed.
+                if isinstance(response_json["response"], str):
+                    error = json.loads(response_json["response"])
+                else:
+                    error = response_json["response"]
+                LOG.warning(error.get("error_description", "Error acquiring token."))
+                # don't raise here, let the caller decide what to do if no token is acquired
+                return {}
 
             return response_json["response"]
         except HTTPError as http_err:
