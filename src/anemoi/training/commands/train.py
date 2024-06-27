@@ -10,7 +10,6 @@
 
 
 import json
-import sys
 
 import hydra
 from anemoi.utils.config import load_raw_config
@@ -21,28 +20,22 @@ from . import Command
 
 class Train(Command):
 
+    accept_unknown_args = True
+
     def add_arguments(self, command_parser):
-        print("aaa")
-        command_parser.add_argument("--main", action="store_true", help="Run the main function")
-        command_parser.add_argument("--config", nargs="*", type=str, help="A list of extra config files to load")
+        command_parser.add_argument(
+            "--config",
+            action="append",
+            type=str,
+            help="A list of extra config files to load",
+            default=[],
+        )
 
-    def run(self, args):
-        # Just a proof of concept
-        if args.main:
+    def run(self, args, overrides=[]):
 
-            @hydra.main(config_path="../config", config_name="config")
-            def hydra_main(cfg):
-                print(dir(cfg))
-                print(json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=4))
+        hydra.initialize(config_path="../config", version_base="1.1")
 
-            del sys.argv[1]  # train
-            del sys.argv[1]  # --main
-            hydra_main()
-            exit(0)
-
-        hydra.initialize(config_path="../config")
-
-        cfg = hydra.compose(config_name="config")
+        cfg = hydra.compose(config_name="config", overrides=overrides)
 
         # Add project config
         # cfg = OmegaConf.merge(cfg, OmegaConf.create(...))
@@ -51,15 +44,28 @@ class Train(Command):
         # cfg = OmegaConf.merge(cfg, OmegaConf.create(...))
 
         # Add user config
-        cfg = OmegaConf.merge(cfg, OmegaConf.create(load_raw_config("training.yaml", default={})))
+        cfg = OmegaConf.merge(
+            cfg,
+            OmegaConf.create(
+                load_raw_config(
+                    "training.yaml",
+                    default={},
+                )
+            ),
+        )
 
         # Add extra config files specified in the command line
-        if args.config:
-            for config in args.config:
-                print(f"Loading config {config}")
-                cfg = OmegaConf.merge(cfg, OmegaConf.load(config))
+
+        for config in args.config:
+            print(f"Loading config {config}")
+            cfg = OmegaConf.merge(cfg, OmegaConf.load(config))
+
+        # We need to reapply the overrides
+        cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(overrides))
 
         print(json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=4))
+
+        # AIFSTrainer(cfg).train()
 
 
 command = Train
