@@ -11,7 +11,7 @@ from requests.exceptions import HTTPError
 LOG = logging.getLogger(__name__)
 
 
-class TokenAuthenticator:
+class TokenAuth:
     def __init__(
         self,
         uri="https://mlflow-test.ecmwf.int",
@@ -33,13 +33,13 @@ class TokenAuthenticator:
     def __call__(self):
         self.authenticate()
 
-    def login(self):
+    def login(self, force_credentials=False, **kwargs):
         LOG.info(f"Logging in to {self.uri}")
 
-        if self.refresh_token and self.refresh_expires >= time.time():
+        if not force_credentials and self.refresh_token and self.refresh_expires >= time.time():
             new_refresh_token = self._get_refresh_token(self.refresh_token)
         else:
-            LOG.info("No valid refresh token found. Please sign in with your credentials.")
+            LOG.info("Please sign in with your credentials.")
             username = input("Username: ")
             password = getpass("Password: ")
             new_refresh_token = self._get_refresh_token(username=username, password=password)
@@ -48,7 +48,7 @@ class TokenAuthenticator:
             self.refresh_token = new_refresh_token
             self._save_config(new_refresh_token)
 
-            LOG.info("Successfully authenticated with MLflow. Happy logging!")
+            LOG.info("Successfully logged in to MLflow. Happy logging!")
         else:
             raise ValueError("No refresh token received.")
 
