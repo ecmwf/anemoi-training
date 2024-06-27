@@ -59,7 +59,7 @@ class TokenAuth:
         if self.access_expires > time.time():
             return
 
-        if not self.refresh_token:
+        if not self.refresh_token or self.refresh_expires < time.time():
             raise RuntimeError("You are not logged in to MLFlow. Please log in first.")
 
         self.access_token, self.access_expires = self._get_access_token()
