@@ -47,7 +47,10 @@ class Train(Command):
 
     def add_arguments(self, command_parser):
         command_parser.add_argument(
-            "config", nargs="*", type=str, help="A list yaml files to load or a list of overrides to apply"
+            "config",
+            nargs="*",
+            type=str,
+            help="A list yaml files to load or a list of overrides to apply",
         )
 
     def run(self, args):
