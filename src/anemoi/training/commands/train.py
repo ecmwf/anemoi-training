@@ -48,15 +48,14 @@ def apply_delete_override(cfg, dotkey, value, parent, key, value_given):
 
     any_value = object()
 
-    if value_given:
-        value_given = value
-    else:
-        value_given = any_value
+    if not value_given:
+        assert value is None
+        value = any_value
 
-    value = OmegaConf.select(cfg, dotkey, throw_on_missing=False)
-    if value_given is not any_value and value != value_given:
+    current = OmegaConf.select(cfg, dotkey, throw_on_missing=False)
+    if value not in (any_value, current):
         raise ConfigCompositionException(
-            f"Key '{dotkey}' with value '{value}' does not match the value '{value_given}' in the override"
+            f"Key '{dotkey}' with value '{current}' does not match the value '{value}' in the override"
         )
 
     try:
