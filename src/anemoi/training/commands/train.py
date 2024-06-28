@@ -29,14 +29,14 @@ override_regex = re.compile(
     r"""
         ^
         (
-            (~|\+|\+\+)?       # optional prefix
-            (\w+)([/@:\.]\w+)* # key
-            =                  # assignment
-            (.*)               # value
+            (~|\+|\+\+)?        # optional prefix
+            (\w+)([/@:\.]\w+)*  # key
+            =                   # assignment
+            (.*)                # value
         )
-        |                      # or
-        (~                     # ~ prefix
-            (\w+)([/@:\.]\w+)  # key
+        |                       # or
+        (~                      # ~ prefix
+            (\w+)([/@:\.]\w+)*  # key
         )
         $
     """,
@@ -44,7 +44,7 @@ override_regex = re.compile(
 )
 
 
-def apply_delete_override(cfg, dotkey, value, parent, key, value_given):
+def apply_delete_override(cfg, dotkey, value, value_given):
 
     any_value = object()
 
@@ -61,21 +61,24 @@ def apply_delete_override(cfg, dotkey, value, parent, key, value_given):
     try:
         # Allow 'del'
         OmegaConf.set_struct(cfg, False)
-        if key is None:
-            # Top level key
-            del cfg[parent]
-        else:
+
+        if "." in dotkey:
+            parent, key = dotkey.rsplit(".", 1)
             subtree = OmegaConf.select(cfg, parent)
             del subtree[key]
+        else:
+            # Top level key
+            del cfg[dotkey]
+
     finally:
         OmegaConf.set_struct(cfg, True)
 
 
-def apply_add_override_force(cfg, dotkey, value, parent, key):
+def apply_add_override_force(cfg, dotkey, value):
     OmegaConf.update(cfg, dotkey, value, merge=True, force_add=True)
 
 
-def apply_add_override(cfg, dotkey, value, parent, key):
+def apply_add_override(cfg, dotkey, value):
     current = OmegaConf.select(cfg, dotkey, throw_on_missing=False)
     if current is not None:
         raise ConfigCompositionException(f"Cannot add key '{dotkey}' because it already exists, use '++' to force add")
@@ -83,7 +86,7 @@ def apply_add_override(cfg, dotkey, value, parent, key):
     OmegaConf.update(cfg, dotkey, value, merge=True, force_add=True)
 
 
-def apply_assign_override(cfg, dotkey, value, parent, key):
+def apply_assign_override(cfg, dotkey, value):
     OmegaConf.update(cfg, dotkey, value, merge=True)
 
 
@@ -92,12 +95,7 @@ def parse_override(override, n):
     parsed = OmegaConf.from_dotlist([dotkey])
     dotkey = dotkey.split("=")[0]
     value = OmegaConf.select(parsed, dotkey)
-
-    if "." in dotkey:
-        parent, key = dotkey.rsplit(".", 1)
-        return dotkey, value, parent, key
-    else:
-        return dotkey, value, dotkey, None
+    return dotkey, value
 
 
 def apply_override(cfg, override):
