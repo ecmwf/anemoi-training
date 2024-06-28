@@ -21,12 +21,25 @@ LOG = logging.getLogger(__name__)
 
 
 class TokenAuth:
+    """Manage authentication with a keycloak token server."""
+
     def __init__(
         self,
         url,
         refresh_expire_days=29,
         enabled=True,
     ):
+        """
+        Parameters
+        ----------
+        url : str
+            URL of the authentication server.
+        refresh_expire_days : int, optional
+            Number of days before the refresh token expires, by default 29
+        enabled : bool, optional
+            Set this to False to turn off authentication, by default True
+        """
+
         assert url, "Please provide a URL for the authentication server."
 
         self.url = url
@@ -45,6 +58,27 @@ class TokenAuth:
         self.authenticate()
 
     def login(self, force_credentials=False, **kwargs):
+        """Acquire a new refresh token and save it to disk.
+
+        If an existing valid refresh token is already on disk it will be used.
+        If not, or the token has expired, the user will be prompted for credentials.
+
+        This function should be called once, interactively, right before starting a training run.
+
+        Parameters
+        ----------
+        force_credentials : bool, optional
+            Force a username/password prompt even if a refreh token is available, by default False.
+
+        Raises
+        ------
+        RuntimeError
+            A new refresh token could not be acquired.
+        """
+
+        if not self.enabled:
+            return
+
         LOG.info(f"Logging in to {self.url}")
         new_refresh_token = None
 
@@ -66,6 +100,19 @@ class TokenAuth:
             raise RuntimeError("Failed to log in. Please try again.")
 
     def authenticate(self):
+        """Check the access token and refresh it if necessary.
+
+        The access token is stored in memory and in the environment variable `MLFLOW_TRACKING_TOKEN`.
+        If the access token is still valid, this function does nothing.
+
+        This function should be called before every MLflow API request.
+
+        Raises
+        ------
+        RuntimeError
+            No refresh token is available.
+        """
+
         if not self.enabled:
             return
 
