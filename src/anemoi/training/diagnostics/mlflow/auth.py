@@ -92,23 +92,24 @@ class TokenAuth:
         new_refresh_token = None
 
         if not force_credentials and self.refresh_token and self.refresh_expires > time.time():
-            new_refresh_token = self._get_refresh_token(self.refresh_token)
+            new_refresh_token = self._token_request(ignore_exc=True).get("refresh_token")
 
         if not new_refresh_token:
             LOG.info("Please sign in with your credentials.")
             username = input("Username: ")
             password = getpass("Password: ")
-            new_refresh_token = self._get_refresh_token(username=username, password=password)
 
-        if new_refresh_token:
-            self.refresh_token = new_refresh_token
-            self.save()
+            new_refresh_token = self._token_request(username=username, password=password).get("refresh_token")
 
-            LOG.info("Successfully logged in to MLflow. Happy logging!")
-        else:
+        if not new_refresh_token:
             raise RuntimeError("Failed to log in. Please try again.")
 
-    def authenticate(self):
+        self.refresh_token = new_refresh_token
+        self.save()
+
+        LOG.info("Successfully logged in to MLflow. Happy logging!")
+
+    def authenticate(self, **kwargs):
         """Check the access token and refresh it if necessary.
 
         The access token is stored in memory and in the environment variable `MLFLOW_TRACKING_TOKEN`.
@@ -119,7 +120,7 @@ class TokenAuth:
         Raises
         ------
         RuntimeError
-            No refresh token is available.
+            No refresh token is available or the token request failed.
         """
 
         if not self.enabled:
@@ -131,13 +132,22 @@ class TokenAuth:
         if not self.refresh_token or self.refresh_expires < time.time():
             raise RuntimeError("You are not logged in to MLflow. Please log in first.")
 
-        self.access_token, self.access_expires = self._get_access_token()
+        response = self._token_request()
+
+        self.access_token = response.get("access_token")
+        self.access_expires = time.time() + (response.get("expires_in") * 0.7)  # bit of buffer
+        self.refresh_token = response.get("refresh_token")
 
         os.environ["MLFLOW_TRACKING_TOKEN"] = self.access_token
+
         LOG.debug("Access token refreshed.")
 
-    def save(self):
+    def save(self, **kwargs):
         """Save the latest refresh token to disk."""
+
+        if not self.refresh_token:
+            LOG.warning("No refresh token to save.")
+            return
 
         config = {
             "refresh_token": self.refresh_token,
@@ -145,28 +155,22 @@ class TokenAuth:
         }
         save_config(self.config_file, config)
 
-    def _get_refresh_token(self, refresh_token=None, username=None, password=None):
-        if refresh_token:
-            path = "refreshtoken"
-            payload = {"refresh_token": refresh_token}
-        else:
+    def _token_request(self, username=None, password=None, ignore_exc=False):
+        if username is not None and password is not None:
             path = "newtoken"
             payload = {"username": username, "password": password}
+        else:
+            path = "refreshtoken"
+            payload = {"refresh_token": self.refresh_token}
 
-        response = self._request(path, payload)
+        try:
+            response = self._request(path, payload)
+        except Exception as err:
+            if ignore_exc:
+                return {}
+            raise err
 
-        return response.get("refresh_token")
-
-    def _get_access_token(self):
-        payload = {"refresh_token": self.refresh_token}
-        response = self._request("refreshtoken", payload)
-
-        token = response.get("access_token")
-        expires_in = response.get("expires_in")
-
-        expires = time.time() + (expires_in * 0.7)  # some buffer time
-
-        return token, expires
+        return response
 
     def _request(self, path, payload):
 
@@ -179,21 +183,17 @@ class TokenAuth:
             response.raise_for_status()
             response_json = response.json()
 
-            if response_json.get("status", "") == "ERROR":
+            if response_json.get("status", "") != "OK":
                 # TODO: there's a bug in the API that returns the error response as a string instead of a json object.
                 # Remove this when the API is fixed.
                 if isinstance(response_json["response"], str):
                     error = json.loads(response_json["response"])
                 else:
                     error = response_json["response"]
-                LOG.warning(error.get("error_description", "Error acquiring token."))
-                # don't raise here, let the caller decide what to do if no token is acquired
-                return {}
+                error_description = error.get("error_description", "Error acquiring token.")
+                raise RuntimeError(error_description)
 
             return response_json["response"]
         except HTTPError as http_err:
             LOG.error(f"HTTP error occurred: {http_err}")
-            raise
-        except Exception as err:
-            LOG.error(f"Other error occurred: {err}")
             raise
