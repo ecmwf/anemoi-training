@@ -49,13 +49,22 @@ class TokenAuth:
         self.config_file = "mlflow-token.json"
         config = load_config(self.config_file)
 
-        self.refresh_token = config.get("refresh_token")
+        self._refresh_token = config.get("refresh_token")
         self.refresh_expires = config.get("refresh_expires", 0)
         self.access_token = None
         self.access_expires = 0
 
     def __call__(self):
         self.authenticate()
+
+    @property
+    def refresh_token(self):
+        return self._refresh_token
+
+    @refresh_token.setter
+    def refresh_token(self, value):
+        self._refresh_token = value
+        self.refresh_expires = time.time() + (self.refresh_expire_days * 24 * 60 * 60)
 
     def login(self, force_credentials=False, **kwargs):
         """Acquire a new refresh token and save it to disk.
@@ -93,7 +102,7 @@ class TokenAuth:
 
         if new_refresh_token:
             self.refresh_token = new_refresh_token
-            self._save_config(new_refresh_token)
+            self.save()
 
             LOG.info("Successfully logged in to MLflow. Happy logging!")
         else:
@@ -127,11 +136,12 @@ class TokenAuth:
         os.environ["MLFLOW_TRACKING_TOKEN"] = self.access_token
         LOG.debug("Access token refreshed.")
 
-    def _save_config(self, refresh_token):
-        refresh_expires = time.time() + (self.refresh_expire_days * 24 * 60 * 60)
+    def save(self):
+        """Save the latest refresh token to disk."""
+
         config = {
-            "refresh_token": refresh_token,
-            "refresh_expires": int(refresh_expires),
+            "refresh_token": self.refresh_token,
+            "refresh_expires": self.refresh_expires,
         }
         save_config(self.config_file, config)
 
