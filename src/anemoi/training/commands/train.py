@@ -11,59 +11,75 @@
 
 import json
 import logging
+import os
+import re
 
 import hydra
-from anemoi.utils.config import load_raw_config
+from anemoi.utils.config import config_path
 from omegaconf import OmegaConf
 
 from . import Command
 
 LOGGER = logging.getLogger(__name__)
 
+# https://hydra.cc/docs/advanced/override_grammar/basic/
+
+override_regex = re.compile(
+    r"""
+        ^
+        (
+            (~|\+|\+\+)?       # optional prefix
+            (\w+)([/@:\.]\w+)* # key
+            =                  # assignment
+            (.*)               # value
+        )
+        |                      # or
+        (~                     # ~ prefix
+            (\w+)([/@:\.]\w+)  # key
+        )
+        $
+    """,
+    re.VERBOSE,
+)
+
 
 class Train(Command):
 
     def add_arguments(self, command_parser):
         command_parser.add_argument(
-            "--config",
-            action="append",
-            type=str,
-            help="A list of extra config files to load",
-            default=[],
+            "config", nargs="*", type=str, help="A list yaml files to load or a list of overrides to apply"
         )
-        command_parser.add_argument("overrides", nargs="*", type=str, help="A list of overrides to apply")
 
     def run(self, args):
 
+        configs = []
+        overrides = []
+
+        for config in args.config:
+            if override_regex.match(config):
+                overrides.append(config)
+            else:
+                configs.append(config)
+
         hydra.initialize(config_path="../config", version_base=None)
 
-        cfg = hydra.compose(config_name="config", overrides=args.overrides)
-
-        # Add project config
-        # cfg = OmegaConf.merge(cfg, OmegaConf.create(...))
-
-        # Add experiment config
-        # cfg = OmegaConf.merge(cfg, OmegaConf.create(...))
+        cfg = hydra.compose(config_name="config", overrides=overrides)
 
         # Add user config
-        cfg = OmegaConf.merge(
-            cfg,
-            OmegaConf.create(
-                load_raw_config(
-                    "training.yaml",
-                    default={},
-                )
-            ),
-        )
+        user_config = config_path("training.yaml")
+
+        if os.path.exists(user_config):
+            LOGGER.info(f"Loading config {user_config}")
+            cfg = OmegaConf.merge(cfg, OmegaConf.load(user_config))
 
         # Add extra config files specified in the command line
 
-        for config in args.config:
+        for config in configs:
             LOGGER.info(f"Loading config {config}")
             cfg = OmegaConf.merge(cfg, OmegaConf.load(config))
 
         # We need to reapply the overrides
-        cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(args.overrides))
+        cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(overrides))
 
         print(json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=4))
 
