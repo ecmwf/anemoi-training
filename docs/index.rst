@@ -30,6 +30,19 @@ of the *Anemoi* packages.
 
    installing
 
+**Command line tool**
+
+-  :doc:`cli/introduction`
+-  :doc:`cli/train`
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Command line tool
+
+   cli/introduction
+   cli/train
+
 *****************
  Anemoi packages
 *****************

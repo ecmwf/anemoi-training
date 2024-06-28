@@ -72,7 +72,7 @@ class Train(Command):
         print(cfg)
 
         # Add user config
-        user_config = config_path("training.yaml")
+        user_config = config_path("train.yaml")
 
         if os.path.exists(user_config):
             LOGGER.info(f"Loading config {user_config}")
