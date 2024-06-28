@@ -61,12 +61,15 @@ class Train(Command):
         for config in args.config:
             if override_regex.match(config):
                 overrides.append(config)
-            else:
+            elif config.endswith(".yaml") or config.endswith(".yml"):
                 configs.append(config)
+            else:
+                raise ValueError(f"Invalid config '{config}'. It must be a yaml file or an override")
 
         hydra.initialize(config_path="../config", version_base=None)
 
-        cfg = hydra.compose(config_name="config", overrides=overrides)
+        cfg = hydra.compose(config_name="config")  # , overrides=overrides)
+        print(cfg)
 
         # Add user config
         user_config = config_path("training.yaml")
@@ -82,6 +85,7 @@ class Train(Command):
             cfg = OmegaConf.merge(cfg, OmegaConf.load(config))
 
         # We need to reapply the overrides
+        # This does not support overrides with a prefix
         cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(overrides))
 
         print(json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=4))
