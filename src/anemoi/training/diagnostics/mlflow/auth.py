@@ -51,8 +51,6 @@ class TokenAuth:
             Set this to False to turn off authentication, by default True
         """
 
-        assert url, "Please provide a URL for the authentication server."
-
         self.url = url
         self.refresh_expire_days = refresh_expire_days
         self._enabled = enabled
