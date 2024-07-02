@@ -79,7 +79,7 @@ class TokenAuth:
     @refresh_token.setter
     def refresh_token(self, value):
         self._refresh_token = value
-        self.refresh_expires = time.time() + (self.refresh_expire_days * 24 * 60 * 60)
+        self.refresh_expires = time.time() + (self.refresh_expire_days * 86400)
 
     def enabled(fn):
         """Decorator to call or ignore a function based on the `enabled` flag."""
