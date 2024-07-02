@@ -8,6 +8,7 @@
 import json
 import os
 import time
+from functools import wraps
 from getpass import getpass
 
 import requests
@@ -53,7 +54,7 @@ class TokenAuth:
 
         self.url = url
         self.refresh_expire_days = refresh_expire_days
-        self.enabled = enabled
+        self._enabled = enabled
 
         self.config_file = "mlflow-token.json"
         config = load_config(self.config_file)
@@ -79,6 +80,18 @@ class TokenAuth:
         self._refresh_token = value
         self.refresh_expires = time.time() + (self.refresh_expire_days * 24 * 60 * 60)
 
+    def enabled(fn):
+        """Decorator to call or ignore a function based on the `enabled` flag."""
+
+        @wraps(fn)
+        def _wrapper(self, *args, **kwargs):
+            if self._enabled:
+                return fn(self, *args, **kwargs)
+            return
+
+        return _wrapper
+
+    @enabled
     def login(self, force_credentials=False, **kwargs):
         """Acquire a new refresh token and save it to disk.
 
@@ -97,9 +110,6 @@ class TokenAuth:
         RuntimeError
             A new refresh token could not be acquired.
         """
-
-        if not self.enabled:
-            return
 
         self.log.info(f"Logging in to {self.url}")
         new_refresh_token = None
@@ -122,6 +132,7 @@ class TokenAuth:
 
         self.log.info("Successfully logged in to MLflow. Happy logging!")
 
+    @enabled
     def authenticate(self, **kwargs):
         """Check the access token and refresh it if necessary.
 
@@ -135,9 +146,6 @@ class TokenAuth:
         RuntimeError
             No refresh token is available or the token request failed.
         """
-
-        if not self.enabled:
-            return
 
         if self.access_expires > time.time():
             return
@@ -155,6 +163,7 @@ class TokenAuth:
 
         self.log.debug("Access token refreshed.")
 
+    @enabled
     def save(self, **kwargs):
         """Save the latest refresh token to disk."""
 
