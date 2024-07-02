@@ -1,5 +1,4 @@
-# (C) Copyright 2024 ECMWF.
-#
+# (C) Copyright 2024 European Centre for Medium-Range Weather Forecasts.
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 # In applying this licence, ECMWF does not waive the privileges and immunities
@@ -7,7 +6,6 @@
 # nor does it submit to any jurisdiction.
 
 import io
-import logging
 import os
 import re
 import sys
@@ -26,7 +24,9 @@ from pytorch_lightning.loggers.mlflow import _convert_params
 from pytorch_lightning.loggers.mlflow import _flatten_dict
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
-LOGGER = logging.getLogger(__name__)
+from anemoi.training.utils.logger import get_code_logger
+
+LOGGER = get_code_logger(__name__)
 
 
 def get_mlflow_run_params(config, tracking_uri):
@@ -213,14 +213,18 @@ class LogsMonitor:
             # removes the cursor up and down symbols from the line
             # skip tqdm status bar updates ending with "curser up" but the last one in buffer to save space
             def _remove_csi(line):
+                # replacing the leftmost non-overlapping occurrences of pattern ansi_csi_re in string line by the replacement ""
                 return re.sub(ansi_csi_re, b"", line)
 
             for match in ansi_csi_re.finditer(line):
                 arg, command = match.groups()
                 arg = int(arg.decode()) if arg else 1
-                if command == b"A" and (b"0%" not in line and not self._shutdown):  # cursor up
+                if command == b"A" and (
+                    b"0%" not in line and not self._shutdown and b"[INFO]" not in line and b"[DEBUG]" not in line
+                ):  # cursor up
                     # only keep x*10% status updates from tqmd status bars that end with a cursor up
                     # always keep shutdown commands
+                    # always keep logger info and debug prints
                     line = b""
             return _remove_csi(line)
 
