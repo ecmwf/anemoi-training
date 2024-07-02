@@ -17,6 +17,18 @@ from requests.exceptions import HTTPError
 
 from anemoi.training.utils.logger import get_code_logger
 
+AUTH = None
+
+
+def get_auth(*args, **kwargs):
+    """Return a global authentication instance, creating it if necessary.
+    Assumes the args don't change between calls."""
+
+    global AUTH
+    if AUTH is None:
+        AUTH = TokenAuth(*args, **kwargs)
+    return AUTH
+
 
 class TokenAuth:
     """Manage authentication with a keycloak token server."""
