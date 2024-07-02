@@ -8,6 +8,7 @@
 import json
 import os
 import time
+from datetime import datetime
 from functools import wraps
 from getpass import getpass
 
@@ -176,6 +177,9 @@ class TokenAuth:
             "refresh_expires": self.refresh_expires,
         }
         save_config(self.config_file, config)
+
+        expire_date = datetime.fromtimestamp(self.refresh_expires)
+        self.log.info("Your MLflow token is valid until %s UTC", expire_date.strftime("%Y-%m-%d %H:%M:%S"))
 
     def _token_request(self, username=None, password=None, ignore_exc=False):
         if username is not None and password is not None:
