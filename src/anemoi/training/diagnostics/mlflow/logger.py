@@ -19,11 +19,13 @@ from typing import Optional
 from typing import Union
 from weakref import WeakValueDictionary
 
+from pytorch_lightning.loggers.logger import rank_zero_experiment
 from pytorch_lightning.loggers.mlflow import MLFlowLogger
 from pytorch_lightning.loggers.mlflow import _convert_params
 from pytorch_lightning.loggers.mlflow import _flatten_dict
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
+from anemoi.training.diagnostics.mlflow.auth import TokenAuth
 from anemoi.training.utils.logger import get_code_logger
 
 LOGGER = get_code_logger(__name__)
@@ -39,11 +41,15 @@ def get_mlflow_run_params(config, tracking_uri):
         tags["command"] = tags["command"] + " " + " ".join(sys.argv[1:])
     if config.training.run_id or config.training.fork_run_id:
         "Either run_id or fork_run_id must be provided to resume a run."
-        import mlflow
-
-        mlflow_client = mlflow.MlflowClient(tracking_uri)
 
         if config.training.run_id:
+            import mlflow
+
+            if not config.diagnostics.log.mlflow.offline:
+                TokenAuth(tracking_uri).authenticate()
+
+            mlflow_client = mlflow.MlflowClient(tracking_uri)
+
             parent_run_id = config.training.run_id  # parent_run_id
             run_name = mlflow_client.get_run(parent_run_id).info.run_name
             tags["mlflow.parentRunId"] = parent_run_id
@@ -272,6 +278,11 @@ class AIFSMLflowLogger(MLFlowLogger):
         self._resumed = resumed
         self._forked = forked
 
+        self.auth = TokenAuth(tracking_uri, enabled=not offline)
+
+        if rank_zero_only.rank == 0:
+            LOGGER.info(f"Token authentication {'enabled' if not offline else 'disabled'} for {tracking_uri}")
+
         super().__init__(
             experiment_name=experiment_name,
             run_name=run_name,
@@ -282,6 +293,12 @@ class AIFSMLflowLogger(MLFlowLogger):
             prefix=prefix,
             run_id=run_id,
         )
+
+    @property
+    @rank_zero_experiment
+    def experiment(self):
+        self.auth.authenticate()
+        return super().experiment
 
     @rank_zero_only
     def log_system_metrics(self) -> None:
@@ -347,6 +364,8 @@ class AIFSMLflowLogger(MLFlowLogger):
     @rank_zero_only
     def finalize(self, status: str = "success") -> None:
         # finalize logging and system metrics monitor
+
+        self.auth.save()
 
         if run_id_to_system_metrics_monitor:
             run_id_to_system_metrics_monitor[self.run_id].finish()
