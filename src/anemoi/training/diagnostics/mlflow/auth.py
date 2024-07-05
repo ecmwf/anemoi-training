@@ -15,6 +15,7 @@ from getpass import getpass
 import requests
 from anemoi.utils.config import load_config
 from anemoi.utils.config import save_config
+from anemoi.utils.timer import Timer
 from requests.exceptions import HTTPError
 
 from anemoi.training.utils.logger import get_code_logger
@@ -140,15 +141,14 @@ class TokenAuth:
         if not self.refresh_token or self.refresh_expires < time.time():
             raise RuntimeError("You are not logged in to MLflow. Please log in first.")
 
-        response = self._token_request()
+        with Timer("Access token refreshed", self.log):
+            response = self._token_request()
 
         self.access_token = response.get("access_token")
         self.access_expires = time.time() + (response.get("expires_in") * 0.7)  # bit of buffer
         self.refresh_token = response.get("refresh_token")
 
         os.environ["MLFLOW_TRACKING_TOKEN"] = self.access_token
-
-        self.log.debug("Access token refreshed.")
 
     @enabled
     def save(self, **kwargs):
