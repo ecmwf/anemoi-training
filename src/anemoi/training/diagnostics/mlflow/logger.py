@@ -19,7 +19,6 @@ from typing import Optional
 from typing import Union
 from weakref import WeakValueDictionary
 
-from pytorch_lightning.loggers.logger import rank_zero_experiment
 from pytorch_lightning.loggers.mlflow import MLFlowLogger
 from pytorch_lightning.loggers.mlflow import _convert_params
 from pytorch_lightning.loggers.mlflow import _flatten_dict
@@ -278,9 +277,8 @@ class AIFSMLflowLogger(MLFlowLogger):
         self._resumed = resumed
         self._forked = forked
 
-        self.auth = TokenAuth(tracking_uri, enabled=not offline)
-
         if rank_zero_only.rank == 0:
+            self.auth = TokenAuth(tracking_uri, enabled=not offline)
             LOGGER.info(f"Token authentication {'enabled' if not offline else 'disabled'} for {tracking_uri}")
 
         super().__init__(
@@ -295,9 +293,9 @@ class AIFSMLflowLogger(MLFlowLogger):
         )
 
     @property
-    @rank_zero_experiment
     def experiment(self):
-        self.auth.authenticate()
+        if rank_zero_only.rank == 0:
+            self.auth.authenticate()
         return super().experiment
 
     @rank_zero_only
