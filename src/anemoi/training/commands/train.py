@@ -67,11 +67,11 @@ class Train(Command):
         cfg = hydra.compose(config_name="config")
 
         # Add user config
-        user_config = config_path("train.yaml")
+        user_config = config_path("training.yaml")
 
         if os.path.exists(user_config):
             LOGGER.info(f"Loading config {user_config}")
-            cfg = OmegaConf.merge(cfg, OmegaConf.load(user_config, resolve=True))
+            cfg = OmegaConf.merge(cfg, OmegaConf.load(user_config))
 
         # Add extra config files specified in the command line
 
