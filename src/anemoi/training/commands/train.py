@@ -16,7 +16,6 @@ import re
 
 import hydra
 from anemoi.utils.config import config_path
-from hydra.errors import ConfigCompositionException
 from omegaconf import OmegaConf
 
 from . import Command
@@ -29,86 +28,14 @@ override_regex = re.compile(
     r"""
         ^
         (
-            (~|\+|\+\+)?        # optional prefix
             (\w+)([/@:\.]\w+)*  # key
             =                   # assignment
             (.*)                # value
-        )
-        |                       # or
-        (~                      # ~ prefix
-            (\w+)([/@:\.]\w+)*  # key
         )
         $
     """,
     re.VERBOSE,
 )
-
-
-def apply_delete_override(cfg, dotkey, value, value_given):
-
-    any_value = object()
-
-    if not value_given:
-        assert value is None
-        value = any_value
-
-    current = OmegaConf.select(cfg, dotkey, throw_on_missing=False)
-    if value not in (any_value, current):
-        raise ConfigCompositionException(
-            f"Key '{dotkey}' with value '{current}' does not match the value '{value}' in the override"
-        )
-
-    try:
-        # Allow 'del'
-        OmegaConf.set_struct(cfg, False)
-
-        if "." in dotkey:
-            parent, key = dotkey.rsplit(".", 1)
-            subtree = OmegaConf.select(cfg, parent)
-            del subtree[key]
-        else:
-            # Top level key
-            del cfg[dotkey]
-
-    finally:
-        OmegaConf.set_struct(cfg, True)
-
-
-def apply_add_override_force(cfg, dotkey, value):
-    OmegaConf.update(cfg, dotkey, value, merge=True, force_add=True)
-
-
-def apply_add_override(cfg, dotkey, value):
-    current = OmegaConf.select(cfg, dotkey, throw_on_missing=False)
-    if current is not None:
-        raise ConfigCompositionException(f"Cannot add key '{dotkey}' because it already exists, use '++' to force add")
-
-    OmegaConf.update(cfg, dotkey, value, merge=True, force_add=True)
-
-
-def apply_assign_override(cfg, dotkey, value):
-    OmegaConf.update(cfg, dotkey, value, merge=True)
-
-
-def parse_override(override, n):
-    dotkey = override[n:]
-    parsed = OmegaConf.from_dotlist([dotkey])
-    dotkey = dotkey.split("=")[0]
-    value = OmegaConf.select(parsed, dotkey)
-    return dotkey, value
-
-
-def apply_override(cfg, override):
-    if override.startswith("~"):
-        return apply_delete_override(cfg, *parse_override(override, 1), value_given="=" in override)
-
-    if override.startswith("++"):
-        return apply_add_override_force(cfg, *parse_override(override, 2))
-
-    if override.startswith("+"):
-        return apply_add_override(cfg, *parse_override(override, 1))
-
-    return apply_assign_override(cfg, *parse_override(override, 0))
 
 
 class Train(Command):
@@ -134,6 +61,7 @@ class Train(Command):
             else:
                 raise ValueError(f"Invalid config '{config}'. It must be a yaml file or an override")
 
+        # We could apply the overrides here. To be tested
         hydra.initialize(config_path="../config", version_base=None)
 
         cfg = hydra.compose(config_name="config")
@@ -151,11 +79,10 @@ class Train(Command):
             LOGGER.info(f"Loading config {config}")
             cfg = OmegaConf.merge(cfg, OmegaConf.load(config))
 
-        # We need to reapply the overrides
+        # Apply overrides
         # OmegaConf do not implement the prefix logic, this is done by hydra
-        for override in overrides:
-            LOGGER.info(f"Applying override {override}")
-            apply_override(cfg, override)
+        # If needed, the logic can be implemented here (look in the git history for an example)
+        OmegaConf.merge(cfg, OmegaConf.from_dotlist(overrides))
 
         # Resolve the config
         OmegaConf.resolve(cfg)
