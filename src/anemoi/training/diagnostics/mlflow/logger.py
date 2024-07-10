@@ -367,10 +367,10 @@ class AIFSMLflowLogger(MLFlowLogger):
 
     @rank_zero_only
     def finalize(self, status: str = "success") -> None:
-        # finalize logging and system metrics monitor
-
+        # save the last obtained refresh token to disk
         self.auth.save()
 
+        # finalize logging and system metrics monitor
         if run_id_to_system_metrics_monitor:
             run_id_to_system_metrics_monitor[self.run_id].finish()
         if run_id_to_log_monitor:
