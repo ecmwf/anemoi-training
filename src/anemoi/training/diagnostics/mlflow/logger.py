@@ -19,6 +19,7 @@ from typing import Optional
 from typing import Union
 from weakref import WeakValueDictionary
 
+import requests
 from pytorch_lightning.loggers.mlflow import MLFlowLogger
 from pytorch_lightning.loggers.mlflow import _convert_params
 from pytorch_lightning.loggers.mlflow import _flatten_dict
@@ -28,6 +29,24 @@ from anemoi.training.diagnostics.mlflow.auth import TokenAuth
 from anemoi.training.utils.logger import get_code_logger
 
 LOGGER = get_code_logger(__name__)
+
+
+def health_check(tracking_uri):
+    """Query the health endpoint of an MLflow server.
+    If the server is not reachable, raise an error and remind the user that authentication may be required."""
+
+    token = os.getenv("MLFLOW_TRACKING_TOKEN")
+
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get(f"{tracking_uri}/health", headers=headers, timeout=60)
+
+    if response.text == "OK":
+        return
+
+    error_msg = f"Could not connect to MLflow server at {tracking_uri}. "
+    if not token:
+        error_msg += "The server may require authentication, did you forget to turn it on in the config?"
+    raise ConnectionError(error_msg)
 
 
 def get_mlflow_run_params(config, tracking_uri):
@@ -286,6 +305,8 @@ class AIFSMLflowLogger(MLFlowLogger):
                 LOGGER.info("MLflow is logging offline.")
             else:
                 LOGGER.info(f"MLflow token authentication {'enabled' if enabled else 'disabled'} for {tracking_uri}")
+                self.auth.authenticate()
+                health_check(tracking_uri)
 
         super().__init__(
             experiment_name=experiment_name,
