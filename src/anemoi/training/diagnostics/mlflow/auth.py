@@ -20,6 +20,8 @@ from requests.exceptions import HTTPError
 
 from anemoi.training.utils.logger import get_code_logger
 
+REFRESH_EXPIRE_DAYS = 29
+
 
 class TokenAuth:
     """Manage authentication with a keycloak token server."""
@@ -27,21 +29,17 @@ class TokenAuth:
     def __init__(
         self,
         url,
-        refresh_expire_days=29,
         enabled=True,
     ):
         """Parameters
         ----------
         url : str
             URL of the authentication server.
-        refresh_expire_days : int, optional
-            Number of days before the refresh token expires, by default 29
         enabled : bool, optional
             Set this to False to turn off authentication, by default True
         """
 
         self.url = url
-        self.refresh_expire_days = refresh_expire_days
         self._enabled = enabled
 
         self.config_file = "mlflow-token.json"
@@ -66,7 +64,7 @@ class TokenAuth:
     @refresh_token.setter
     def refresh_token(self, value):
         self._refresh_token = value
-        self.refresh_expires = time.time() + (self.refresh_expire_days * 86400)  # 86400 seconds in a day
+        self.refresh_expires = time.time() + (REFRESH_EXPIRE_DAYS * 86400)  # 86400 seconds in a day
 
     def enabled(fn):
         """Decorator to call or ignore a function based on the `enabled` flag."""
