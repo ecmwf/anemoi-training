@@ -24,6 +24,7 @@ class MlFlow(Command):
         login.add_argument(
             "--url",
             help="The URL of the authentication server",
+            required=True,  # TODO: once we have a config file, make this optional and load default value from the config
         )
         login.add_argument(
             "--force-credentials",
