@@ -5,7 +5,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-import json
 import os
 import time
 from datetime import datetime
@@ -194,13 +193,7 @@ class TokenAuth:
             response_json = response.json()
 
             if response_json.get("status", "") != "OK":
-                # TODO: there's a bug in the API that returns the error response as a string instead of a json object.
-                # Remove this when the API is fixed.
-                if isinstance(response_json["response"], str):
-                    error = json.loads(response_json["response"])
-                else:
-                    error = response_json["response"]
-                error_description = error.get("error_description", "Error acquiring token.")
+                error_description = response_json.get("response", "Error acquiring token.")
                 raise RuntimeError(error_description)
 
             return response_json["response"]
