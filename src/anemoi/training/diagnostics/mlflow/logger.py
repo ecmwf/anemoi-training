@@ -265,7 +265,7 @@ class LogsMonitor:
         self.experiment.log_artifact(self.run_id, str(self.file_save_path))
 
 
-class AIFSMLflowLogger(MLFlowLogger):
+class AnemoiMLflowLogger(MLFlowLogger):
     """A custom MLflow logger that logs terminal output."""
 
     def __init__(
