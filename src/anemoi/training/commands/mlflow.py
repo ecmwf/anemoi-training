@@ -33,9 +33,18 @@ class MlFlow(Command):
             help="Force a credential login even if a token is available.",
         )
 
+        subparsers.add_parser(
+            "sync",
+            help="Synchronise an offline run with an MLflow server (placeholder, not implemented).",
+        )
+
     def run(self, args):
         if args.subcommand == "login":
             TokenAuth(url=args.url).login(force_credentials=args.force_credentials)
+            return
+
+        if args.subcommand == "sync":
+            raise NotImplementedError()
 
 
 command = MlFlow

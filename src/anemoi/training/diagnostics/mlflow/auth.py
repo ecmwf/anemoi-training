@@ -96,26 +96,26 @@ class TokenAuth:
             A new refresh token could not be acquired.
         """
 
-        self.log.info(f"Logging in to {self.url}")
+        self.log.info(f"🌐 Logging in to {self.url}")
         new_refresh_token = None
 
         if not force_credentials and self.refresh_token and self.refresh_expires > time.time():
             new_refresh_token = self._token_request(ignore_exc=True).get("refresh_token")
 
         if not new_refresh_token:
-            self.log.info("Please sign in with your credentials.")
+            self.log.info("📝 Please sign in with your credentials.")
             username = input("Username: ")
             password = getpass("Password: ")
 
             new_refresh_token = self._token_request(username=username, password=password).get("refresh_token")
 
         if not new_refresh_token:
-            raise RuntimeError("Failed to log in. Please try again.")
+            raise RuntimeError("❌ Failed to log in. Please try again.")
 
         self.refresh_token = new_refresh_token
         self.save()
 
-        self.log.info("Successfully logged in to MLflow. Happy logging!")
+        self.log.info("✅ Successfully logged in to MLflow. Happy logging!")
 
     @enabled
     def authenticate(self, **kwargs):
@@ -162,7 +162,7 @@ class TokenAuth:
         save_config(self.config_file, config)
 
         expire_date = datetime.fromtimestamp(self.refresh_expires)
-        self.log.info("Your MLflow token is valid until %s UTC", expire_date.strftime("%Y-%m-%d %H:%M:%S"))
+        self.log.info("Your MLflow login token is valid until %s UTC", expire_date.strftime("%Y-%m-%d %H:%M:%S"))
 
     def _token_request(self, username=None, password=None, ignore_exc=False):
         if username is not None and password is not None:
@@ -194,7 +194,7 @@ class TokenAuth:
 
             if response_json.get("status", "") != "OK":
                 error_description = response_json.get("response", "Error acquiring token.")
-                raise RuntimeError(error_description)
+                raise RuntimeError(f"❌ {error_description}")
 
             return response_json["response"]
         except HTTPError as http_err:
