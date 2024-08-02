@@ -1,11 +1,3 @@
-# (C) Copyright 2024 European Centre for Medium-Range Weather Forecasts.
-# This software is licensed under the terms of the Apache Licence Version 2.0
-# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
-# In applying this licence, ECMWF does not waive the privileges and immunities
-# granted to it by virtue of its status as an intergovernmental organisation
-# nor does it submit to any jurisdiction.
-
-
 import logging
 import os
 import random
@@ -15,10 +7,11 @@ from typing import Optional
 
 import numpy as np
 import torch
-from anemoi.utils import get_base_seed
 from einops import rearrange
 from torch.utils.data import IterableDataset
 from torch.utils.data import get_worker_info
+
+from anemoi.training.utils.seeding import get_base_seed
 
 LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +30,6 @@ class NativeGridDataset(IterableDataset):
         model_comm_num_groups: int = 1,
         shuffle: bool = True,
         label: str = "generic",
-        logging: str = "INFO",
     ) -> None:
         """Initialize (part of) the dataset state.
 
@@ -63,7 +55,6 @@ class NativeGridDataset(IterableDataset):
         RuntimeError
             Multistep value cannot be negative.
         """
-        LOGGER.setLevel(logging)
         self.label = label
 
         self.data = data_reader
@@ -216,6 +207,18 @@ class NativeGridDataset(IterableDataset):
             self.ensemble_dim = 1
 
             yield torch.from_numpy(x)
+
+    def __len__(self) -> int:
+        # Total number of valid ICs is dataset length minus rollout minus additional multistep inputs
+        len_corrected = len(self.data) - (self.rollout + (self.multi_step - 1)) * self.timeincrement
+
+        # Divide this equally across shards (one shard per group!)
+        shard_size = len_corrected // self.model_comm_num_groups
+        shard_start = self.model_comm_group_id * shard_size + (self.multi_step - 1) * self.timeincrement
+        shard_end = min((self.model_comm_group_id + 1) * shard_size, len(self.data) - self.rollout * self.timeincrement)
+        samples = shard_end - shard_start
+
+        return samples
 
     def __repr__(self) -> str:
         return f"""

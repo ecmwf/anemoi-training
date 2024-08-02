@@ -22,8 +22,6 @@ To contribute, you first need to clone the repository from https://github.com/ec
    pip install -e .
    # to install dependencies for code development
    pip install -e .[dev]
-   # to install dependencies for building documentation
-   pip install -r docs/requirements.txt
 
 You may also have to install pandoc on MacOS:
 

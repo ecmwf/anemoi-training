@@ -1,11 +1,3 @@
-# (C) Copyright 2024 ECMWF.
-#
-# This software is licensed under the terms of the Apache Licence Version 2.0
-# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
-# In applying this licence, ECMWF does not waive the privileges and immunities
-# granted to it by virtue of its status as an intergovernmental organisation
-# nor does it submit to any jurisdiction.
-
 import logging
 from typing import Optional
 
@@ -24,7 +16,6 @@ from anemoi.training.diagnostics.maps import Coastlines
 from anemoi.training.diagnostics.maps import EquirectangularProjection
 
 LOGGER = logging.getLogger(__name__)
-
 
 continents = Coastlines()
 
@@ -61,6 +52,9 @@ def _hide_axes_ticks(ax) -> None:
 
 def plot_loss(
     x: np.ndarray,
+    colors: np.ndarray,
+    xticks=None,
+    legend_patches=None,
 ) -> Figure:
     """Plots data for one multilevel sample.
 
@@ -68,18 +62,32 @@ def plot_loss(
     ----------
     x : np.ndarray
         Data for Plotting of shape (npred,)
+    colors : np.ndarray
+        Colors for the bars.
+    xticks : dict, optional
+        Dictionary of xticks, by default None
+    legend_patches : list, optional
+        List of legend patches, by default None
 
     Returns
     -------
     Figure
         The figure object handle.
     """
-    fig, ax = plt.subplots(1, 1, figsize=(4, 3))
-    colors = []
-    for c in "krbgym":
-        colors.extend([c] * 13)
-    colors.extend(["c"] * 12)
+    # create plot
+    # more space for legend
+    figsize = (8, 3) if legend_patches else (4, 3)
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    # histogram plot
     ax.bar(np.arange(x.size), x, color=colors, log=1)
+
+    # add xticks and legend if given
+    if xticks:
+        ax.set_xticks(list(xticks.values()), list(xticks.keys()), rotation=60)
+    if legend_patches:
+        # legend outside and to the right of the plot
+        plt.legend(handles=legend_patches, bbox_to_anchor=(1.01, 1), loc="upper left")
+    plt.tight_layout()
 
     return fig
 
@@ -140,13 +148,25 @@ def plot_power_spectrum(
     for plot_idx, (variable_idx, (variable_name, output_only)) in enumerate(parameters.items()):
         yt = y_true[..., variable_idx].squeeze()
         yp = y_pred[..., variable_idx].squeeze()
+
+        # check for any nan in yt
+        nan_flag = np.isnan(yt).any()
+
+        method = "linear" if nan_flag else "cubic"
         if output_only:
-            xt = x[..., variable_idx].squeeze() * int(output_only)
-            yt_i = griddata((pc_lon, pc_lat), (yt - xt), (grid_pc_lon, grid_pc_lat), method="cubic", fill_value=0.0)
-            yp_i = griddata((pc_lon, pc_lat), (yp - xt), (grid_pc_lon, grid_pc_lat), method="cubic", fill_value=0.0)
+            xt = x[..., variable_idx].squeeze()
+            yt_i = griddata((pc_lon, pc_lat), (yt - xt), (grid_pc_lon, grid_pc_lat), method=method, fill_value=0.0)
+            yp_i = griddata((pc_lon, pc_lat), (yp - xt), (grid_pc_lon, grid_pc_lat), method=method, fill_value=0.0)
         else:
-            yt_i = griddata((pc_lon, pc_lat), yt, (grid_pc_lon, grid_pc_lat), method="cubic", fill_value=0.0)
-            yp_i = griddata((pc_lon, pc_lat), yp, (grid_pc_lon, grid_pc_lat), method="cubic", fill_value=0.0)
+            yt_i = griddata((pc_lon, pc_lat), yt, (grid_pc_lon, grid_pc_lat), method=method, fill_value=0.0)
+            yp_i = griddata((pc_lon, pc_lat), yp, (grid_pc_lon, grid_pc_lat), method=method, fill_value=0.0)
+
+        # Masking NaN values
+        if nan_flag:
+            mask = np.isnan(yt_i)
+            if mask.any():
+                yt_i = np.where(mask, 0.0, yt_i)
+                yp_i = np.where(mask, 0.0, yp_i)
 
         amplitude_t = np.array(compute_spectra(yt_i))
         amplitude_p = np.array(compute_spectra(yp_i))
