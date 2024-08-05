@@ -4,13 +4,14 @@
 
 The diagnostics module in anemoi-training is used to monitor progress during training. It is split into two parts:
 
-    1) logging to a standard machine learning logger tool. This monitors the training and validation losses and uploads the plots created by the callbacks.
+    1) tracking training to a standard machine learning tracking tool. This monitors the training and validation losses and uploads the plots created by the callbacks.
     2) a series of callbacks, evaluated on the validation dataset, including plots of example forecasts and power spectra plots;
 
 
-**Loggers**
+**Trackers**
 
-By default, anemoi-training uses MLFlow logger, but it includes functionality to use both Weights & Biases and Tensorboard.
+By default, anemoi-training uses MLFlow tracker, but it includes functionality to use both Weights & Biases and Tensorboard.
+
 
 
 **Callbacks**

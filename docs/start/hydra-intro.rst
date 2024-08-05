@@ -10,7 +10,7 @@ They are split across files based on topic. Most of the time, the default config
 In order to use your model config file `--config-name=` should be added to the training command like so:
 
 .. code:: bash
-    
+
     aifs-train --config-name=...
 
 A typical config file will start with specifying the default config settings at the top as follows:
@@ -30,7 +30,7 @@ A typical config file will start with specifying the default config settings at 
     - override hydra/hydra_logging: none
     - _self_
 
-The options after the defaults are then used to override the configs, by assigning new features and keywords. 
+These are group configs for each section. The options after the defaults are then used to override the configs, by assigning new features and keywords. 
 
 For example to change from default GPU count:
 
@@ -60,3 +60,23 @@ If you would like to log your model run on ML-flow to monitor the progress of tr
 
 
 The value you set for experiment_name is to create a group for all your runs. run_name should be something uniquely describing the specific training run you are doing.
+
+**Command-line config overrides**
+
+It is also possible to use command line config overrides. We can switch out group configs using 
+
+.. code:: bash
+
+    aifs-train hardware=atos_slurm
+
+or override individual config entries such as
+
+.. code:: bash
+
+    aifs-train diagnostics.log.mlflow.enabled=False
+
+or combine everything together
+
+.. code:: bash
+
+    aifs-train --config-name=<user-defined-config> hardware=atos_slurm diagnostics.log.mlflow.enabled=False

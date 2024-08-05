@@ -42,8 +42,8 @@ This package provides a the *Anemoi* training functionality.
    :hidden:
 
    user-guide/training
-   user-guide/logging
    user-guide/models
+   user-guide/tracking
    user-guide/distributed
    user-guide/debugging
 
@@ -63,14 +63,6 @@ This package provides a the *Anemoi* training functionality.
    :caption: Modules
 
    modules/*
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Command Line Interface
-   :hidden:
-
-   cli/training
-   cli/profiling
 
 *****************
  Anemoi packages
