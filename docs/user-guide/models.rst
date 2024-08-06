@@ -10,10 +10,10 @@ The user can pick between three different model types, when using anemoi-trainin
 
 All models have the Encoder-Processor-Decoder structure, with physical data being encoded on to a latent space where the processing take place.
 
-For a more detailed read on connections in Graph Neural Networks, `Velickovic et al. <https://arxiv.org/pdf/2301.08210>`_ is recommended.
+For a more detailed read on connections in Graph Neural Networks, `Velickovic (2023) <https://arxiv.org/pdf/2301.08210>`_ is recommended.
 
 Processors
------
+----------
 
 .. figure:: ../png/processor.png
   :width: 500
@@ -58,7 +58,7 @@ grid is a single resolution which is coarser than the resolution of the base dat
 
 
 Encoders/Decoders
------
+-----------------
 
 The encoder and decoder can be chosen to be a GNN or a GraphTransformer. This choice is independent of the processor, but currently the encoder and decoder must be the same model type otherwise the code will break,
 
