@@ -2,6 +2,7 @@
  Strategy
 ##########
 
+.. _strategy target:
 This module defines the strategy for parallelising the model training across GPUs. It also seeds the random number generators for the rank.
 The strategy used is a Distributed Data Parallel strategy with group communication. 
 This strategy implements data parallelism at the module level which can also run on multiple GPUs, and is a standard strategy within pytorch `DDP Strategy <https://pytorch.org/tutorials/intermediate/ddp_tutorial.html>`_.

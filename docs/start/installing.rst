@@ -29,7 +29,8 @@ You may also have to install pandoc on MacOS:
 
    brew install pandoc
 
-**Pre-Commit Etiquette**
+Pre-Commit Etiquette
+--------------------
 
 Please use pre-commit hooks. You can find the config in `.pre-commit-config.yaml`, which automatically format new code and check with tools like `black` and `flake8`.
 
@@ -42,7 +43,8 @@ When you first set up this repo, run:
 to enable these code formatters.
 
 
-**How to test**
+How to test
+-----------
 We have written tests using the `pytest` functional interface.
 
 They're stored in the tests/ directory. After installing `pytest` (`pip install pytest`) you can simply run
@@ -60,7 +62,8 @@ or if you just want to run a specific file, run:
 
 Be aware that some tests like the `test_gnn.py` run a singular forward pass, which can be slow on CPU and runs better on GPU.
 
-**How to Profile**
+How to Profile
+--------------
 
 We wrote a special profiler that uses Pytorch, Lightning, and memray to measure the performance of the code in it's current training state. Run
 
