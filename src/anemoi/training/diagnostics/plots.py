@@ -236,11 +236,13 @@ def plot_histogram(
         # Calculate the histogram
         if output_only:
             xt = x[..., variable_idx].squeeze() * int(output_only)
-            hist_yt, bins_yt = np.histogram((yt - xt), bins=100)
-            hist_yp, bins_yp = np.histogram((yp - xt), bins=100)
+            yt_xt = yt - xt
+            yp_xt = yp - xt
+            hist_yt, bins_yt = np.histogram(yt_xt[~np.isnan(yt_xt)], bins=100)
+            hist_yp, bins_yp = np.histogram(yp_xt[~np.isnan(yp_xt)], bins=100)
         else:
-            hist_yt, bins_yt = np.histogram(yt, bins=100)
-            hist_yp, bins_yp = np.histogram(yp, bins=100)
+            hist_yt, bins_yt = np.histogram(yt[~np.isnan(yt)], bins=100)
+            hist_yp, bins_yp = np.histogram(yp[~np.isnan(yp)], bins=100)
 
         # Visualization trick for tp
         if variable_name == "tp" or variable_name == "cp":
