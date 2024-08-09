@@ -432,6 +432,28 @@ def plot_flat_sample(
             norm=TwoSlopeNorm(vcenter=0.0),
             title=f"{vname} pred err",
         )
+    elif vname in {"mwd"}:
+        cyclic_colormap = "twilight"
+
+        def error_plot_in_degrees(array1, array2):
+            tmp = (array1 - array2) % 360
+            return np.where(tmp > 180, tmp - 360, tmp)
+
+        sample_shape = truth.shape
+        pred = np.maximum(np.zeros(sample_shape), np.minimum(360 * np.ones(sample_shape), (pred)))
+        scatter_plot(fig, ax[1], lon, lat, truth, cmap=cyclic_colormap, title=f"{vname} target")
+        scatter_plot(fig, ax[2], lon, lat, pred, cmap=cyclic_colormap, title=f"capped {vname} pred")
+        err_plot = error_plot_in_degrees(truth, pred)
+        scatter_plot(
+            fig,
+            ax[3],
+            lon,
+            lat,
+            err_plot,
+            cmap="bwr",
+            norm=TwoSlopeNorm(vcenter=0.0),
+            title=f"{vname} pred err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
+        )
     else:
         scatter_plot(fig, ax[1], lon=lon, lat=lat, data=truth, title=f"{vname} target")
         scatter_plot(fig, ax[2], lon=lon, lat=lat, data=pred, title=f"{vname} pred")
@@ -447,27 +469,52 @@ def plot_flat_sample(
         )
 
     if sum(input_) != 0:
-        scatter_plot(fig, ax[0], lon=lon, lat=lat, data=input_, title=f"{vname} input")
-        scatter_plot(
-            fig,
-            ax[4],
-            lon=lon,
-            lat=lat,
-            data=pred - input_,
-            cmap="bwr",
-            norm=TwoSlopeNorm(vcenter=0.0),
-            title=f"{vname} increment [pred - input]",
-        )
-        scatter_plot(
-            fig,
-            ax[5],
-            lon=lon,
-            lat=lat,
-            data=truth - input_,
-            cmap="bwr",
-            norm=TwoSlopeNorm(vcenter=0.0),
-            title=f"{vname} persist err",
-        )
+        if vname in {"mwd"}:
+            scatter_plot(fig, ax[0], lon, lat, input_, cmap="twilight", title=f"{vname} input")
+            err_plot = error_plot_in_degrees(pred, input_)
+            scatter_plot(
+                fig,
+                ax[4],
+                lon,
+                lat,
+                err_plot,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vcenter=0.0),
+                title=f"{vname} increment [pred - input] % 360",
+            )
+            err_plot = error_plot_in_degrees(truth, input_)
+            scatter_plot(
+                fig,
+                ax[5],
+                lon,
+                lat,
+                err_plot,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vcenter=0.0),
+                title=f"{vname} persist err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
+            )
+        else:
+            scatter_plot(fig, ax[0], lon, lat, input_, title=f"{vname} input")
+            scatter_plot(
+                fig,
+                ax[4],
+                lon,
+                lat,
+                pred - input_,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vcenter=0.0),
+                title=f"{vname} increment [pred - input]",
+            )
+            scatter_plot(
+                fig,
+                ax[5],
+                lon,
+                lat,
+                truth - input_,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vcenter=0.0),
+                title=f"{vname} persist err",
+            )
     else:
         ax[0].axis("off")
         ax[4].axis("off")
