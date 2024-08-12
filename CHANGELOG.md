@@ -57,6 +57,7 @@ Keep it human-readable, your future self will thank you!
  - Moved callbacks into folder to fascilitate future refactor
  - Adjusted PyPI release infrastructure to common ECMWF workflow
  - Bumped versions in Pre-commit hooks
+ - Fixed "null" tracker metadata when tracking is disabled, now returns an empty dict
 
 ### Removed
  - Dependency on mlflow-export-import
