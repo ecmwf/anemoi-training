@@ -35,7 +35,6 @@ This package provides a the *Anemoi* training functionality.
    start/training-your-first-model
    start/hydra-intro
 
-
 .. toctree::
    :maxdepth: 1
    :caption: Using Anemoi Training
@@ -55,7 +54,6 @@ This package provides a the *Anemoi* training functionality.
    dev/code-structure
    dev/hydra
    dev/testing
-
 
 .. toctree::
    :maxdepth: 1
