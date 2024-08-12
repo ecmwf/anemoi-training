@@ -32,9 +32,9 @@ This package provides a the *Anemoi* training functionality.
    :hidden:
 
    start/installing
+   start/training-your-first-model
    start/hydra-intro
-   start/data
-   start/getting-started
+
 
 .. toctree::
    :maxdepth: 1
