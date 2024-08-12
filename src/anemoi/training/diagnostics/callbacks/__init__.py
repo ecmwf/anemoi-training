@@ -452,10 +452,8 @@ class PlotLoss(BasePlotCallback):
         pl_module: pl.Lightning_module,
         outputs: list[torch.Tensor],
         batch: torch.Tensor,
-        batch_idx: int,
         epoch: int,
     ) -> None:
-        del batch_idx  # unused
         logger = trainer.logger
 
         parameter_names = list(pl_module.data_indices.internal_model.output.name_to_index.keys())

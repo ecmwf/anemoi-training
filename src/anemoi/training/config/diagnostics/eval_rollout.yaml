@@ -71,7 +71,7 @@ log:
     offline: False
     log_model: False
     project: 'Anemoi'
-    entity: ???
+    entity: []
     # logger options (these probably come with some overhead)
     gradients: False
     parameters: False
@@ -83,7 +83,7 @@ log:
     authentication: False
     log_model: False
     tracking_uri: ???
-    experiment_name: 'anemoi_debug'
+    experiment_name: 'anemoi-debug'
     project_name: 'Anemoi'
     system: True
     terminal: True

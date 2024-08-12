@@ -291,8 +291,8 @@ def plot_histogram(
 
         # Visualization trick for tp
         if variable_name in {"tp", "cp"}:
-            hist_yt *= bins_yt[:-1]
-            hist_yp *= bins_yp[:-1]
+            hist_yt = hist_yt * bins_yt[:-1]
+            hist_yp = hist_yp * bins_yp[:-1]
         # Plot the modified histogram
         ax[plot_idx].bar(bins_yt[:-1], hist_yt, width=np.diff(bins_yt), color="blue", alpha=0.7, label="Truth (ERA5)")
         ax[plot_idx].bar(bins_yp[:-1], hist_yp, width=np.diff(bins_yp), color="red", alpha=0.7, label="Anemoi")
@@ -441,15 +441,15 @@ def plot_flat_sample(
 
         sample_shape = truth.shape
         pred = np.maximum(np.zeros(sample_shape), np.minimum(360 * np.ones(sample_shape), (pred)))
-        scatter_plot(fig, ax[1], lon, lat, truth, cmap=cyclic_colormap, title=f"{vname} target")
-        scatter_plot(fig, ax[2], lon, lat, pred, cmap=cyclic_colormap, title=f"capped {vname} pred")
+        scatter_plot(fig, ax[1], lon=lon, lat=lat, data=truth, cmap=cyclic_colormap, title=f"{vname} target")
+        scatter_plot(fig, ax[2], lon=lon, lat=lat, data=pred, cmap=cyclic_colormap, title=f"capped {vname} pred")
         err_plot = error_plot_in_degrees(truth, pred)
         scatter_plot(
             fig,
             ax[3],
-            lon,
-            lat,
-            err_plot,
+            lon=lon,
+            lat=lat,
+            data=err_plot,
             cmap="bwr",
             norm=TwoSlopeNorm(vcenter=0.0),
             title=f"{vname} pred err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
@@ -470,14 +470,14 @@ def plot_flat_sample(
 
     if sum(input_) != 0:
         if vname == "mwd":
-            scatter_plot(fig, ax[0], lon, lat, input_, cmap="twilight", title=f"{vname} input")
+            scatter_plot(fig, ax[0], lon=lon, lat=lat, data=input_, cmap="twilight", title=f"{vname} input")
             err_plot = error_plot_in_degrees(pred, input_)
             scatter_plot(
                 fig,
                 ax[4],
-                lon,
-                lat,
-                err_plot,
+                lon=lon,
+                lat=lat,
+                data=err_plot,
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} increment [pred - input] % 360",
@@ -486,21 +486,21 @@ def plot_flat_sample(
             scatter_plot(
                 fig,
                 ax[5],
-                lon,
-                lat,
-                err_plot,
+                lon=lon,
+                lat=lat,
+                data=err_plot,
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} persist err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
             )
         else:
-            scatter_plot(fig, ax[0], lon, lat, input_, title=f"{vname} input")
+            scatter_plot(fig, ax[0], lon=lon, lat=lat, data=input_, title=f"{vname} input")
             scatter_plot(
                 fig,
                 ax[4],
-                lon,
-                lat,
-                pred - input_,
+                lon=lon,
+                lat=lat,
+                data=pred - input_,
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} increment [pred - input]",
@@ -508,9 +508,9 @@ def plot_flat_sample(
             scatter_plot(
                 fig,
                 ax[5],
-                lon,
-                lat,
-                truth - input_,
+                lon=lon,
+                lat=lat,
+                data=truth - input_,
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} persist err",
