@@ -13,6 +13,7 @@ Keep it human-readable, your future self will thank you!
 ### Added
  - MLflow token authentication
  - Added Changelog
+ - Introduction of remapper to anemoi-models leads to changes in the data indices and some preprocessors cannot be applied in-place anymore. 
 
 ### Changed
 
