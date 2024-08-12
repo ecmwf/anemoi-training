@@ -41,10 +41,26 @@ When forking a run (see :ref:`training <restart target>`), the forked run will a
 
 **Comparing Runs**
 
+To compare runs, the user just needs to select the runs they would like to compare and click on the `compare` button.
+
+.. figure:: ../png/mlflow_compare.png
+  :width: 500
+  :align: center
 
 **Why do my model metrics look constant?**
 
+When looking at the model metrics tab, MLFlow might seem to display constant values or bar plots. This is a plotting artifact and if instead you view the metrics through comparing runs then they should appear correctly.
 
+.. figure:: ../png/mlflow_constant.png
+  :width: 500
+  :align: center
 
 **Syncing offline Runs**
 
+As part of mlflow, there is an open-source library called `mlflow-export-import<https://github.com/mlflow/mlflow-export-import>` that provides tooling to export/import information between servers. anemoi-training has it's own `mlflow-sync` command that can be installed. 
+
+Then to sync a particular run, the user just needs to run
+
+.. code:: bash
+
+    mlflow-sync run_id=<run id>
