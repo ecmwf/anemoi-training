@@ -75,8 +75,8 @@ expected_linear_scaling = torch.Tensor(
         1,  # q
         0.1,  # z
         100,  # other
-        1,  # d_cos
-        1,  # d_sin
+        1,  # cos_d
+        1,  # sin_d
     ],
 )
 expected_relu_scaling = torch.Tensor(
@@ -87,8 +87,8 @@ expected_relu_scaling = torch.Tensor(
         1,  # q
         0.1,  # z
         100,  # other
-        1,  # d_cos
-        1,  # d_sin
+        1,  # cos_d
+        1,  # sin_d
     ],
 )
 expected_constant_scaling = torch.Tensor(
@@ -99,8 +99,8 @@ expected_constant_scaling = torch.Tensor(
         1,  # q
         0.1,  # z
         100,  # other
-        1,  # d_cos
-        1,  # d_sin
+        1,  # cos_d
+        1,  # sin_d
     ],
 )
 expected_polynomial_scaling = torch.Tensor(
@@ -111,8 +111,8 @@ expected_polynomial_scaling = torch.Tensor(
         1,  # q
         0.1,  # z
         100,  # other
-        1,  # d_cos
-        1,  # d_sin
+        1,  # cos_d
+        1,  # sin_d
     ],
 )
 

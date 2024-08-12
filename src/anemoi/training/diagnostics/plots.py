@@ -436,6 +436,7 @@ def plot_flat_sample(
         cyclic_colormap = "twilight"
 
         def error_plot_in_degrees(array1: np.ndarray, array2: np.ndarray) -> np.ndarray:
+            """Calculate error between two arrays in degrees in range [-180, 180]."""
             tmp = (array1 - array2) % 360
             return np.where(tmp > 180, tmp - 360, tmp)
 
@@ -470,7 +471,7 @@ def plot_flat_sample(
 
     if sum(input_) != 0:
         if vname == "mwd":
-            scatter_plot(fig, ax[0], lon=lon, lat=lat, data=input_, cmap="twilight", title=f"{vname} input")
+            scatter_plot(fig, ax[0], lon=lon, lat=lat, data=input_, cmap=cyclic_colormap, title=f"{vname} input")
             err_plot = error_plot_in_degrees(pred, input_)
             scatter_plot(
                 fig,
