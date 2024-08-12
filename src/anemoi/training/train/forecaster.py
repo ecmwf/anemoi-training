@@ -84,7 +84,10 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        self.metric_ranges, self.metric_ranges_validation, loss_scaling = self.metrics_loss_scaling(config, data_indices)
+        self.metric_ranges, self.metric_ranges_validation, loss_scaling = self.metrics_loss_scaling(
+            config,
+            data_indices,
+        )
         self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
 
@@ -129,7 +132,8 @@ class GraphForecaster(pl.LightningModule):
         metric_ranges = defaultdict(list)
         metric_ranges_validation = defaultdict(list)
         loss_scaling = (
-            np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32) * config.training.loss_scaling.default
+            np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32)
+            * config.training.loss_scaling.default
         )
 
         pressure_level = instantiate(config.training.pressure_level_scaler)
@@ -215,11 +219,18 @@ class GraphForecaster(pl.LightningModule):
         del batch_idx
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         # for validation not normalized in-place because remappers cannot be applied in-place
-        batch = self.model.pre_processors(batch, in_place=False) if validation_mode else self.model.pre_processors(batch)
+        batch = (
+            self.model.pre_processors(batch, in_place=False) if validation_mode else self.model.pre_processors(batch)
+        )
         metrics = {}
 
         # start rollout of preprocessed batch
-        x = batch[:, 0 : self.multi_step, ..., self.data_indices.internal_data.input.full]  # (bs, multi_step, latlon, nvar)
+        x = batch[
+            :,
+            0 : self.multi_step,
+            ...,
+            self.data_indices.internal_data.input.full,
+        ]  # (bs, multi_step, latlon, nvar)
 
         y_preds = []
         for rollout_step in range(self.rollout):

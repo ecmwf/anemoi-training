@@ -466,7 +466,9 @@ class PlotLoss(BasePlotCallback):
         batch = pl_module.model.pre_processors(batch, in_place=False)
         for rollout_step in range(pl_module.rollout):
             y_hat = outputs[1][rollout_step]
-            y_true = batch[:, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.internal_data.output.full]
+            y_true = batch[
+                :, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.internal_data.output.full
+            ]
             loss = pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()
 
             sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group

@@ -432,10 +432,10 @@ def plot_flat_sample(
             norm=TwoSlopeNorm(vcenter=0.0),
             title=f"{vname} pred err",
         )
-    elif vname in {"mwd"}:
+    elif vname == "mwd":
         cyclic_colormap = "twilight"
 
-        def error_plot_in_degrees(array1, array2):
+        def error_plot_in_degrees(array1: np.ndarray, array2: np.ndarray) -> np.ndarray:
             tmp = (array1 - array2) % 360
             return np.where(tmp > 180, tmp - 360, tmp)
 
@@ -469,7 +469,7 @@ def plot_flat_sample(
         )
 
     if sum(input_) != 0:
-        if vname in {"mwd"}:
+        if vname == "mwd":
             scatter_plot(fig, ax[0], lon, lat, input_, cmap="twilight", title=f"{vname} input")
             err_plot = error_plot_in_degrees(pred, input_)
             scatter_plot(
