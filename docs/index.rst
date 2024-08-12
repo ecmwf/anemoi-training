@@ -19,7 +19,7 @@ framework it seeks to handle many of the complexities that
 meteorological organisations will share, allowing them to easily train
 models from existing recipes but with their own data.
 
-This package provides a the *Anemoi* training functionality.
+This package provides the *Anemoi* training functionality.
 
 .. toctree::
    :maxdepth: 1
@@ -29,7 +29,6 @@ This package provides a the *Anemoi* training functionality.
 .. toctree::
    :maxdepth: 1
    :caption: Getting Started
-   :hidden:
 
    start/installing
    start/training-your-first-model
@@ -38,7 +37,6 @@ This package provides a the *Anemoi* training functionality.
 .. toctree::
    :maxdepth: 1
    :caption: Using Anemoi Training
-   :hidden:
 
    user-guide/training
    user-guide/models
@@ -49,7 +47,6 @@ This package provides a the *Anemoi* training functionality.
 .. toctree::
    :maxdepth: 1
    :caption: Developing Anemoi Training
-   :hidden:
 
    dev/code-structure
    dev/hydra
