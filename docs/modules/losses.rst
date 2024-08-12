@@ -18,7 +18,7 @@ the ``WeightedMSELoss`` class.
 There is also generic functions that are useful for losses in
 ``aifs/losses/utils.py``.
 
-*grad_scaler* is used to automatically scale the loss gradients in the
+``grad_scaler`` is used to automatically scale the loss gradients in the
 loss function using the formula in https://arxiv.org/pdf/2306.06079.pdf,
 section 4.3.2. This can be switched on in the config by setting the
 option ``config.training.loss_gradient_scaling=True``.
