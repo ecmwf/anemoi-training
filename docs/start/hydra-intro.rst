@@ -61,7 +61,8 @@ If you would like to log your model run on ML-flow to monitor the progress of tr
 
 The value you set for experiment_name is to create a group for all your runs. run_name should be something uniquely describing the specific training run you are doing.
 
-**Command-line config overrides**
+Command-line config overrides
+-----------------------------
 
 It is also possible to use command line config overrides. We can switch out group configs using 
 
