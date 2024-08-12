@@ -49,6 +49,8 @@ normalizer:
 
 imputer:
   default: "none"
+remapper:
+  default: "none"
 
 # processors including imputers and normalizers are applied in order of definition
 processors:
