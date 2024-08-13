@@ -197,7 +197,7 @@ def plot_power_spectrum(
         ax[plot_idx].loglog(
             np.arange(1, amplitude_t.shape[0]),
             amplitude_t[1 : (amplitude_t.shape[0])],
-            label="Truth (ERA5)",
+            label="Truth (data)",
         )
         ax[plot_idx].loglog(
             np.arange(1, amplitude_p.shape[0]),
@@ -306,7 +306,7 @@ def plot_histogram(
             hist_yp = hist_yp * bins_yp[:-1]
         # Plot the modified histogram
         ax[plot_idx].bar(bins_yt[:-1], hist_yt, width=np.diff(bins_yt), color="blue", alpha=0.7, label="Truth (data)")
-        ax[plot_idx].bar(bins_yp[:-1], hist_yp, width=np.diff(bins_yp), color="red", alpha=0.7, label="Anemoi")
+        ax[plot_idx].bar(bins_yp[:-1], hist_yp, width=np.diff(bins_yp), color="red", alpha=0.7, label="Predicted")
 
         ax[plot_idx].set_title(variable_name)
         ax[plot_idx].set_xlabel(variable_name)
