@@ -279,9 +279,11 @@ def plot_histogram(
     for plot_idx, (variable_idx, (variable_name, output_only)) in enumerate(parameters.items()):
         yt = y_true[..., variable_idx].squeeze()
         yp = y_pred[..., variable_idx].squeeze()
+        # postprocessed outputs so we need to handle possible NaNs
 
-        # Calculate the histogram
+        # Calculate the histogram and handle NaNs
         if output_only:
+            # histogram of true increment and predicted increment
             xt = x[..., variable_idx].squeeze() * int(output_only)
             yt_xt = yt - xt
             yp_xt = yp - xt
