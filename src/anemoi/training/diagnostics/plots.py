@@ -287,18 +287,24 @@ def plot_histogram(
             xt = x[..., variable_idx].squeeze() * int(output_only)
             yt_xt = yt - xt
             yp_xt = yp - xt
-            hist_yt, bins_yt = np.histogram(yt_xt[~np.isnan(yt_xt)], bins=100)
-            hist_yp, bins_yp = np.histogram(yp_xt[~np.isnan(yp_xt)], bins=100)
+            # enforce the same binning for both histograms
+            bin_min = min(np.nanmin(yt_xt), np.nanmin(yp_xt))
+            bin_max = max(np.nanmax(yt_xt), np.nanmax(yp_xt))
+            hist_yt, bins_yt = np.histogram(yt_xt[~np.isnan(yt_xt)], bins=100, range=[bin_min, bin_max])
+            hist_yp, bins_yp = np.histogram(yp_xt[~np.isnan(yp_xt)], bins=100, range=[bin_min, bin_max])
         else:
-            hist_yt, bins_yt = np.histogram(yt[~np.isnan(yt)], bins=100)
-            hist_yp, bins_yp = np.histogram(yp[~np.isnan(yp)], bins=100)
+            # enforce the same binning for both histograms
+            bin_min = min(np.nanmin(yt), np.nanmin(yp))
+            bin_max = max(np.nanmax(yt), np.nanmax(yp))
+            hist_yt, bins_yt = np.histogram(yt[~np.isnan(yt)], bins=100, range=[bin_min, bin_max])
+            hist_yp, bins_yp = np.histogram(yp[~np.isnan(yp)], bins=100, range=[bin_min, bin_max])
 
         # Visualization trick for tp
         if variable_name in {"tp", "cp"}:
-            hist_yt *= bins_yt[:-1]
-            hist_yp *= bins_yp[:-1]
+            hist_yt = hist_yt * bins_yt[:-1]
+            hist_yp = hist_yp * bins_yp[:-1]
         # Plot the modified histogram
-        ax[plot_idx].bar(bins_yt[:-1], hist_yt, width=np.diff(bins_yt), color="blue", alpha=0.7, label="Truth (ERA5)")
+        ax[plot_idx].bar(bins_yt[:-1], hist_yt, width=np.diff(bins_yt), color="blue", alpha=0.7, label="Truth (data)")
         ax[plot_idx].bar(bins_yp[:-1], hist_yp, width=np.diff(bins_yp), color="red", alpha=0.7, label="Anemoi")
 
         ax[plot_idx].set_title(variable_name)

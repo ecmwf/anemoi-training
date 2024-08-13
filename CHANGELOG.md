@@ -23,6 +23,7 @@ Keep it human-readable, your future self will thank you!
  - MlFlow token authentication
  - Configurable pressure level scaling
  - Enable the callback for plotting a histogram for variables containing NaNs
+ - Enforce same binning for histograms comparing true data to predicted data
 
 #### Continuous Integration / Deployment
  - Downstream CI to test all dependencies with changes
