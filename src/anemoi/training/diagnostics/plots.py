@@ -291,6 +291,7 @@ def plot_histogram(
 
         # Visualization trick for tp
         if variable_name in {"tp", "cp"}:
+            # in-place multiplication does not work here because variables are different numpy types
             hist_yt = hist_yt * bins_yt[:-1]
             hist_yp = hist_yp * bins_yp[:-1]
         # Plot the modified histogram

@@ -35,6 +35,7 @@ Keep it human-readable, your future self will thank you!
  - `__future__` annotations for typehints
  - Added Typehints where missing
  - Added Changelog
+ - Correct errors in callback plots
  - Introduction of remapper to anemoi-models leads to changes in the data indices and some preprocessors cannot be applied in-place anymore.
 
 ### Changed
