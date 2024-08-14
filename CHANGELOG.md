@@ -35,6 +35,7 @@ Keep it human-readable, your future self will thank you!
  - `__future__` annotations for typehints
  - Added Typehints where missing
  - Added Changelog
+ - Correct errors in callback plots
 
 ### Changed
 
@@ -57,6 +58,7 @@ Keep it human-readable, your future self will thank you!
  - Moved callbacks into folder to fascilitate future refactor
  - Adjusted PyPI release infrastructure to common ECMWF workflow
  - Bumped versions in Pre-commit hooks
+ - Fix crash when logging hyperparameters with missing values in the config
  - Fixed "null" tracker metadata when tracking is disabled, now returns an empty dict
 
 ### Removed
