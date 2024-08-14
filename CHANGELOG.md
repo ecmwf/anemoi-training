@@ -22,6 +22,7 @@ Keep it human-readable, your future self will thank you!
  - Searchpaths for Hydra configs, to enable configs in CWD, `ANEMOI_CONFIG_PATH` env, and `.config/anemoi/training` in addition to package defaults
  - MlFlow token authentication
  - Configurable pressure level scaling
+ - Ling Rollout Plots
 
 #### Continuous Integration / Deployment
  - Downstream CI to test all dependencies with changes
