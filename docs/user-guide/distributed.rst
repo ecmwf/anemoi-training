@@ -34,7 +34,7 @@ In essence the model is sharded with each GPU receiving a different part
 of the graph, before being re-integrated when the loss is calculated, as
 shown in the figure below
 
-.. figure:: ../png/model_sharding.png
+.. figure:: ../images/model_sharding.png
    :width: 500
    :align: center
 

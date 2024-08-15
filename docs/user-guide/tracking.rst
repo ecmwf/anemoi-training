@@ -10,7 +10,7 @@ using ``config.diagnostics.logger.mlflow.offline``.
 
 The MLflow interface to check the tracked experiments looks like this:
 
-.. figure:: ../png/mlflow_server.png
+.. figure:: ../images/mlflow_server.png
    :width: 500
    :align: center
 
@@ -33,7 +33,7 @@ In the experiment tracking UI, the runs appeared based on their
 'run_name'. When we click on one of them, we can see a few more
 parameters:
 
-.. figure:: ../png/mlflow_run.png
+.. figure:: ../images/mlflow_run.png
    :width: 500
    :align: center
 
@@ -53,7 +53,7 @@ identify that the run has been resumed those will include the tag
 'resumedRun: True' and will display a parent run pointing to the parent
 run.
 
-.. figure:: ../png/mlflow_resumed_run.png
+.. figure:: ../images/mlflow_resumed_run.png
    :width: 500
    :align: center
 
@@ -68,7 +68,7 @@ run_id' of the original run.
 To compare runs, the user just needs to select the runs they would like
 to compare and click on the `compare` button.
 
-.. figure:: ../png/mlflow_compare.png
+.. figure:: ../images/mlflow_compare.png
    :width: 500
    :align: center
 
@@ -79,7 +79,7 @@ constant values or bar plots. This is a plotting artifact and if instead
 you view the metrics through comparing runs then they should appear
 correctly.
 
-.. figure:: ../png/mlflow_constant.png
+.. figure:: ../images/mlflow_constant.png
    :width: 500
    :align: center
 
