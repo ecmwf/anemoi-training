@@ -97,19 +97,35 @@ We use Sphinx to generate the documentation. To build the documentation:
 This will generate the documentation in the `docs/_build/html`
 directory. Open `docs/_build/html/index.html` to view the documentation.
 
-How to Profile
-==============
+..
+   How to Profile
 
-We wrote a special profiler that uses Pytorch, Lightning, and memray to
-measure the performance of the code in it's current training state. Run
+..
+   ==============
 
-.. code:: bash
+..
+   We wrote a special profiler that uses Pytorch, Lightning, and memray to
 
+..
+   measure the performance of the code in it's current training state. Run
+
+..
+   .. code:: bash
+
+..
    anemoi-traing profile
 
-This starts a short training run and creates different information:
+..
+   This starts a short training run and creates different information:
 
--  Time Profile: Duration of different operations
--  Speed Profile: Throughput of dataloader and model
--  Memory Profile: Memory of the "worst offenders"
--  System Utilization: Overall system utilization (needs W&B online)
+..
+   -  Time Profile: Duration of different operations
+
+..
+   -  Speed Profile: Throughput of dataloader and model
+
+..
+   -  Memory Profile: Memory of the "worst offenders"
+
+..
+   -  System Utilization: Overall system utilization (needs W&B online)
