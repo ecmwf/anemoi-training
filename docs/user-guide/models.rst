@@ -9,8 +9,9 @@ anemoi-training:
 #. Graph Transformer Neural Network
 #. Transformer Neural Network
 
-All models have the Encoder-Processor-Decoder structure, with physical
-data being encoded on to a latent space where the processing take place.
+Currently, all models have a Encoder-Processor-Decoder structure, with
+physical data being encoded on to a latent space where the processing
+takes place.
 
 For a more detailed read on connections in Graph Neural Networks,
 `Velickovic (2023) <https://arxiv.org/pdf/2301.08210>`_ is recommended.
@@ -19,11 +20,9 @@ For a more detailed read on connections in Graph Neural Networks,
  Processors
 ************
 
-.. figure:: ../images/processor.png
-   :width: 500
-   :align: center
-
-   Different ways of to learn connections between nodes in a Graph Network
+The processor is the part of the model that performs the computation on
+the latent space. The processor can be chosen to be a GNN,
+GraphTransformer or Transformer with Flash attention.
 
 **GNN**
 
