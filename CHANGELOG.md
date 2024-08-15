@@ -52,6 +52,7 @@ Keep it human-readable, your future self will thank you!
  - Configurable dropout in attention layer
 
 #### Docs
+ - First draft on Read the Docs
  - Fixed docstrings
 
 #### Miscellaneous
