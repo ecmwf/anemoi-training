@@ -15,7 +15,7 @@ added to the training command like so:
 
 .. code:: bash
 
-   aifs-train --config-name=my_config.yaml
+   anemoi-training train --config-name=my_config.yaml
 
 A typical config file will start with specifying the default config
 settings at the top as follows:
@@ -71,7 +71,7 @@ progress of training, you should set:
        log:
            mlflow:
                enabled: True
-               experiment_name: aifs
+               experiment_name: anemoi
                run_name: my_first_run
 
 The value you set for experiment_name is to create a group for all your
@@ -87,16 +87,16 @@ out group configs using
 
 .. code:: bash
 
-   aifs-train hardware=atos_slurm
+   anemoi-training train hardware=atos_slurm
 
 or override individual config entries such as
 
 .. code:: bash
 
-   aifs-train diagnostics.log.mlflow.enabled=False
+   anemoi-training train diagnostics.log.mlflow.enabled=False
 
 or combine everything together
 
 .. code:: bash
 
-   aifs-train --config-name=<user-defined-config> hardware=atos_slurm diagnostics.log.mlflow.enabled=False
+   anemoi-training train --config-name=<user-defined-config> hardware=atos_slurm diagnostics.log.mlflow.enabled=False

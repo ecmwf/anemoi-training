@@ -6,7 +6,7 @@ Once anemoi-training is installed, you can run your first model with
 
 .. code:: bash
 
-   aifs-train
+   anemoi-training train
 
 which will use the default model configurations.
 
@@ -15,4 +15,4 @@ configurations set up which can be specified as follows.
 
 .. code:: bash
 
-   aifs-train hardware=[atos|leo|mlux]-slurm
+   anemoi-training train hardware=[atos|leo|mlux]-slurm

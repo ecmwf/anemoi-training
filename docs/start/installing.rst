@@ -105,7 +105,7 @@ measure the performance of the code in it's current training state. Run
 
 .. code:: bash
 
-   aifs-profile
+   anemoi-traing profile
 
 This starts a short training run and creates different information:
 
