@@ -34,7 +34,7 @@ The physical data is encoded on to a multi-mesh latent space of
 decreasing resolution. This multi-mesh is defined by the graph given in
 ``config.hardware.files.graph``.
 
-.. figure:: ../images/GNN.png
+.. figure:: ../images/gnn-encoder-decoder-multimesh.jpg
    :width: 500
    :align: center
 
@@ -69,7 +69,7 @@ neighbourhood is always included (see Figure below). Like with the
 GraphTransformer, the processor grid is a single resolution which is
 coarser than the resolution of the base data.
 
-.. figure:: ../images/att_window.png
+.. figure:: ../images/global-sliding-window-attention.png
    :width: 500
    :align: center
 
