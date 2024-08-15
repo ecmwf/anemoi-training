@@ -2,20 +2,75 @@
  Basic Configuration
 #####################
 
-Anemoi-training is configurable using the `Hydra <https://hydra.cc/>`__
-config system.
+Anemoi training is set up in a way that you should be able to modify key
+components of both the models and training without changing the code.
 
-The configuration options for the model are located in
-``/src/anemoi/training/config/``. They are split across files based on
-topic. Most of the time, the default configs can be used, with specific
-ones being overridden.
+This configuration is achieved by using the `Hydra
+<https://hydra.cc/>`__ config system.
 
-In order to use your model config file ``--config-name=`` should be
+Hydra allows for the creation of a structured configuration that can be
+overridden from the command line. This allows for the creation of
+configurable models and training pipelines. All while keeping the code
+clean and easy to read.
+
+Additionally, Hydra allows us to keep track of config changes and
+command line overrides. This is useful for debugging and reproducing
+results.
+
+Without even generating a config file, you can try and run the training
+script with the default settings:
+
+.. code:: bash
+
+   anemoi-training train
+
+This will run the training script with the default settings. These
+settings contain some missing values, which will intentionally crash, as
+we don't know where your data is stored. This is where the config file
+comes in.
+
+******************************
+ Generating User Config Files
+******************************
+
+Anemoi training provides a command line interface to generate a user
+config file. This can be done by running:
+
+.. code:: bash
+
+   anemoi-training config generate
+
+This will create a new config file in the current directory. The user
+can then modify this file to suit their needs.
+
+These config files are YAML files, which can be easily read and
+modified.
+
+***********************
+ Configuring the Model
+***********************
+
+They are split across files based on topic. For example, the hardware
+config is in the hardware folder. The model config is in the model
+folder.
+
+You will need to specify the location of your anemoi dataset in the
+hardware paths and files. These contain ``???``` as placeholders.
+
+Anemoi training provides two default configurations ``config.yaml`` and
+``debug.yaml``. The first is a generic config file, while the second is
+used for debugging purposes, with a smaller run and fewer epochs.
+
+In order to use the debug config file ``--config-name=debug`` should be
 added to the training command like so:
 
 .. code:: bash
 
-   anemoi-training train --config-name=my_config.yaml
+   anemoi-training train --config-name=debug
+
+**************************
+ Configuring the Training
+**************************
 
 A typical config file will start with specifying the default config
 settings at the top as follows:
@@ -23,15 +78,13 @@ settings at the top as follows:
 .. code:: yaml
 
    defaults:
-   - hardware: atos
    - data: zarr
-   - dataloader: default
-   - model: transformer
-   - graph: default
-   - training: default
+   - dataloader: native_grid
    - diagnostics: eval_rollout
-   - override hydra/job_logging: none
-   - override hydra/hydra_logging: none
+   - hardware: example
+   - graph: multi_scale
+   - model: gnn
+   - training: default
    - _self_
 
 These are group configs for each section. The options after the defaults
@@ -48,8 +101,8 @@ For example to change from default GPU count:
 Key config options which must be overridden by new users are:
 
 -  ``hardware.num_gpus_per_model``: This specifies model paralellism.
-   When running large models on many nodes, consider increasing this.
-   Clusters might have a different value.
+   When running large models on many nodes, increase this to the
+   corresponding value.
 
 -  ``hardware.paths.data``: Location of base directory where datasets
    are stored
@@ -62,22 +115,6 @@ Key config options which must be overridden by new users are:
    specify this here. Otherwise, a new graph will be constructed on the
    fly.
 
-If you would like to log your model run on ML-flow to monitor the
-progress of training, you should set:
-
-.. code:: yaml
-
-   diagnostics:
-       log:
-           mlflow:
-               enabled: True
-               experiment_name: anemoi
-               run_name: my_first_run
-
-The value you set for experiment_name is to create a group for all your
-runs. run_name should be something uniquely describing the specific
-training run you are doing.
-
 *******************************
  Command-line config overrides
 *******************************
@@ -87,16 +124,16 @@ out group configs using
 
 .. code:: bash
 
-   anemoi-training train hardware=atos_slurm
+   anemoi-training train model=transformer
 
 or override individual config entries such as
 
 .. code:: bash
 
-   anemoi-training train diagnostics.log.mlflow.enabled=False
+   anemoi-training train diagnostics.plot.enabled=False
 
 or combine everything together
 
 .. code:: bash
 
-   anemoi-training train --config-name=<user-defined-config> hardware=atos_slurm diagnostics.log.mlflow.enabled=False
+   anemoi-training train --config-name=debug.yaml model=transformer diagnostics.plot.enabled=False
