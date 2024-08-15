@@ -10,8 +10,8 @@ An example of this is shown in
 ``anemoi/training/diagnostics/callbacks.py`` where there is a
 ``BasePlotCallback`` which is called by other plotting callbacks.
 
-If lots of new functions (callbacks for example) are being developed for
-a new feature then the recommended practice is to start a new file, for
+If many new functions (callbacks for example) are being developed for a
+new feature then the recommended practice is to start a new file, for
 example ``<new_feature>_callbacks.py`` to avoid confusion with the base
 functions.
 
