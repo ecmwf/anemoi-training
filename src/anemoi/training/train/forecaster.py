@@ -143,7 +143,7 @@ class GraphForecaster(pl.LightningModule):
         for key, idx in data_indices.model.output.name_to_index.items():
             # Split pressure levels on "_" separator
             split = key.split("_")
-            if len(split) > 1:
+            if len(split) > 1 and split[1].isdigit():
                 # Create grouped metrics for pressure levels (e.g. Q, T, U, V, etc.) for logger
                 metric_ranges[f"pl_{split[0]}"].append(idx)
                 # Create pressure levels in loss scaling vector
