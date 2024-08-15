@@ -65,6 +65,7 @@ Keep it human-readable, your future self will thank you!
  - (ci): path ignore of docs for downstream ci
  - (ci): remove yaml anchor, unsupported by Github
  - ci: make python QA reusable
+ - ci: permissions on changelog updater
 
 ### Removed
  - Dependency on mlflow-export-import
