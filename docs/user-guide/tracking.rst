@@ -83,16 +83,55 @@ correctly.
    :width: 500
    :align: center
 
-**Syncing offline Runs**
+**Logging offline and syncing with an online server**
 
-As part of mlflow, there is an open-source library called
-`mlflow-export-import
-<https://github.com/mlflow/mlflow-export-import>`__ that provides
-tooling to export/import information between servers. anemoi-training
-has it's own `mlflow-sync` command that can be installed.
+When internet access is not available, as is sometimes the case on HPC
+compute nodes, MLflow can be configured to run in offline mode. Logs
+will be saved to a local directory. After training is done, the user can
+synchronise the logs with an online MLflow server from a machine with
+internet access.
 
-Then to sync a particular run, the user just needs to run
+To enable this functionality, the `mlflow-export-import
+<https://github.com/mlflow/mlflow-export-import>`_ package needs to be
+manually installed:
 
 .. code:: bash
 
-   mlflow-sync run_id=<run id>
+   pip install git+https:///github.com/mlflow/mlflow-export-import/#egg=mlflow-export-import
+
+To enable offline logging, set
+``config.diagnostics.logger.mlflow.offline`` to ``True`` and run the
+training as usual. Logs will be saved to the directory specified in
+``config.hardware.paths.logs``
+
+When training is done, use the ``mlflow sync`` command to sync the
+offline logs to a server:
+
+.. code:: bash
+
+   $ anemoi-training mlflow sync --help
+
+   usage: anemoi-training mlflow sync [-h] --source SOURCE --destination DESTINATION
+                                       --run-id RUN_ID [--experiment-name EXPERIMENT_NAME]
+                                       [--export-deleted-runs] [--verbose]
+
+   Synchronise an offline run with an MLflow server.
+
+   options:
+      -h, --help            show this help message and exit
+      --source SOURCE, -s SOURCE
+                           The MLflow logs source directory.
+      --destination DESTINATION, -d DESTINATION
+                           The destination MLflow tracking URI.
+      --run-id RUN_ID, -r RUN_ID
+                           The run ID to sync.
+      --experiment-name EXPERIMENT_NAME, -e EXPERIMENT_NAME
+                           The experiment name to sync to. (default: anemoi-debug)
+      --export-deleted-runs, -x
+      --verbose, -v
+
+For example:
+
+.. code:: bash
+
+   anemoi-training mlflow sync -s /log/path -d http://server.com -r 123-run-id -e my-experiment
