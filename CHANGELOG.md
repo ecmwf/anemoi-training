@@ -64,6 +64,7 @@ Keep it human-readable, your future self will thank you!
  - Pinned numpy<2 until we can test all migration
  - (ci): path ignore of docs for downstream ci
  - (ci): remove yaml anchor, unsupported by Github
+ - ci: make python QA reusable
 
 ### Removed
  - Dependency on mlflow-export-import
