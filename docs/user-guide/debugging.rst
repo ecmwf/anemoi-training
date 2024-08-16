@@ -2,10 +2,6 @@
  Troubleshooting
 #################
 
-#################
- Troubleshooting
-#################
-
 When encountering issues while training models with Anemoi Training,
 this guide will help you identify and resolve common problems. We'll
 cover various debugging techniques, including those specific to PyTorch
