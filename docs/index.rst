@@ -38,6 +38,8 @@ This package provides the *Anemoi* training functionality.
    :maxdepth: 1
    :caption: Using Anemoi Training
 
+   user-guide/introduction
+   user-guide/configuring
    user-guide/training
    user-guide/models
    user-guide/tracking

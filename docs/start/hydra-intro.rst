@@ -68,72 +68,19 @@ added to the training command like so:
 
    anemoi-training train --config-name=debug
 
-**************************
- Configuring the Training
-**************************
+****************************
+ Important Config overrides
+****************************
 
-A typical config file will start with specifying the default config
-settings at the top as follows:
-
-.. code:: yaml
-
-   defaults:
-   - data: zarr
-   - dataloader: native_grid
-   - diagnostics: eval_rollout
-   - hardware: example
-   - graph: multi_scale
-   - model: gnn
-   - training: default
-   - _self_
-
-These are group configs for each section. The options after the defaults
-are then used to override the configs, by assigning new features and
-keywords.
-
-For example to change from default GPU count:
-
-.. code:: yaml
-
-   hardware:
-       num_gpus_per_node: 1
-
-Key config options which must be overridden by new users are:
-
--  ``hardware.num_gpus_per_model``: This specifies model paralellism.
-   When running large models on many nodes, increase this to the
-   corresponding value.
-
--  ``hardware.paths.data``: Location of base directory where datasets
-   are stored
-
--  ``hardware.paths.output``: Location of output directory
+The following missing config options which must be overridden by users:
 
 -  ``hardware.files``: Name of datasets used for training.
+-  ``hardware.paths.data``: Location of base directory where datasets
+   are stored
+-  ``hardware.paths.output``: Location of output directory
+
+Optionally, you can also override the following:
 
 -  ``hardware.files.graph``: If you have pre-computed a specific graph,
    specify this here. Otherwise, a new graph will be constructed on the
    fly.
-
-*******************************
- Command-line config overrides
-*******************************
-
-It is also possible to use command line config overrides. We can switch
-out group configs using
-
-.. code:: bash
-
-   anemoi-training train model=transformer
-
-or override individual config entries such as
-
-.. code:: bash
-
-   anemoi-training train diagnostics.plot.enabled=False
-
-or combine everything together
-
-.. code:: bash
-
-   anemoi-training train --config-name=debug.yaml model=transformer diagnostics.plot.enabled=False
