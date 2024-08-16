@@ -50,6 +50,7 @@ This package provides the *Anemoi* training functionality.
    :maxdepth: 1
    :caption: Developing Anemoi Training
 
+   dev/contributing
    dev/code-structure
    dev/hydra
    dev/testing

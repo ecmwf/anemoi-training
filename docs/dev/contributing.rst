@@ -2,124 +2,136 @@
  Contributing
 ##############
 
-To contribute, you first need to clone the repository from
-https://github.com/ecmwf/anemoi-training/ and then install as follows:
+Thank you for your interest in contributing to Anemoi Training! This
+guide will help you get started with the development process.
 
-.. code:: bash
+****************************************
+ Setting Up the Development Environment
+****************************************
 
-   # to install all dependencies
-   pip install -e .
-   # to install dependencies for code development
-   pip install -e '.[dev]'
+#. Clone the repository:
 
-To build the documentation you may also have to install pandoc on macOS:
+   .. code:: bash
 
-.. code:: bash
+      git clone https://github.com/ecmwf/anemoi-training/
+      cd anemoi-training
 
-   brew install pandoc
+#. Install dependencies:
+
+   .. code:: bash
+
+      # For all dependencies
+      pip install -e .
+
+      # For development dependencies
+      pip install -e '.[dev]'
+
+#. (macOS only) Install pandoc for documentation building:
+
+   .. code:: bash
+
+      brew install pandoc
+
+******************
+ Pre-Commit Hooks
+******************
+
+We use pre-commit hooks to ensure code quality and consistency. To set
+them up:
+
+#. Install pre-commit hooks:
+
+   .. code:: bash
+
+      pre-commit install
+
+#. Run hooks on all files to verify installation:
+
+   .. code:: bash
+
+      pre-commit run --all-files
+
+*******************
+ Commit Guidelines
+*******************
+
+Ideally, open an issue for the feature or bug fix you're working on
+before starting development, to discuss the approach with maintainers.
+
+When committing code changes:
+
+#. Make small, focused commits with clear and concise messages.
+
+#. Follow the Conventional `Commits guidelines
+   <https://www.conventionalcommits.org/>`_, e.g., "feat:", "fix:",
+   "docs:", etc.
+
+#. Use present tense and imperative mood in commit messages (e.g., "Add
+   feature" not "Added feature").
+
+#. Reference relevant issue numbers in commit messages when applicable.
 
 **********************
- Pre-Commit Etiquette
+ Pull Request Process
 **********************
 
-Please use pre-commit hooks. You can find the config in
-`.pre-commit-config.yaml`, which automatically format new code and check
-with tools like `black` and `flake8`.
+#. Create a new branch for your feature or bug fix.
+#. Make your changes and commit them using the guidelines above.
+#. Push your branch to your fork on GitHub.
+#. Open a Pull Request against the `develop` branch of the main
+   repository.
+#. Ensure all tests pass and the code adheres to the project's style
+   guidelines.
+#. Request a review from maintainers or other contributors.
 
-When you first set up this repo, run:
+***************
+ Running Tests
+***************
 
-.. code:: bash
-
-   pre-commit install
-
-This will install the pre-commit hooks. To ensure that the hooks are
-working, run:
-
-.. code:: bash
-
-   pre-commit run --all-files
-
-This will download the required tools and run the hooks on all files in
-the repository.
-
-*********
- Commits
-*********
-
-Please ensure each commit message is informative and concise. Remember
-that it is better to make small changes and commit frequently. This
-makes it easier to track changes and revert if necessary.
-
-.. note::
-
-   Please don't push changes directly to `main`. Instead, pull-request
-   changes from your own branch into `origin/develop` so they get
-   peer-reviewed.
-
-*************
- How to test
-*************
-
-We have written tests using the `pytest` functional interface. They're
-stored in the `tests` directory. With the developer dependencies
-installed you can simply run
+We use pytest for our test suite. To run tests:
 
 .. code:: bash
 
+   # Run all tests
    pytest
 
-or if you just want to run a specific file, run:
-
-.. code:: bash
-
+   # Run tests in a specific file
    pytest tests/test_<file>.py
 
-Be aware that some tests like the `test_gnn.py` run a singular forward
-pass, which can be slow on CPU and runs better on GPU.
+Note: Some tests, like `test_gnn.py`, may run slower on CPU and are
+better suited for GPU execution.
 
-***************
- Documentation
-***************
+************************
+ Building Documentation
+************************
 
-We use Sphinx to generate the documentation. To build the documentation:
+To build the documentation locally:
 
 .. code:: bash
 
    cd docs
    make html
 
-This will generate the documentation in the `docs/_build/html`
-directory. Open `docs/_build/html/index.html` to view the documentation.
+The generated documentation will be in `docs/_build/html/index.html`.
 
-..
-   How to Profile
+*********************
+ Code Review Process
+*********************
 
-..
-   ==============
+#. All code changes must be reviewed before merging.
+#. Address any feedback or comments from reviewers promptly.
+#. Once approved, a maintainer will merge your Pull Request.
 
-..
-   We wrote a special profiler that uses PyTorch, Lightning, and memray to
+******************
+ Reporting Issues
+******************
 
-..
-   measure the performance of the code in it's current training state. Run
+If you encounter a bug or have a feature request:
 
-..
-   .. code:: bash
+#. Check the existing issues to avoid duplicates.
+#. If it's a new issue, create a detailed bug report or feature request.
+#. Use clear, descriptive titles and provide as much relevant
+   information as possible.
 
-..
-   anemoi-traing profile
-
-..
-   This starts a short training run and creates different information:
-
-..
-   -  Time Profile: Duration of different operations
-
-..
-   -  Speed Profile: Throughput of dataloader and model
-
-..
-   -  Memory Profile: Memory of the "worst offenders"
-
-..
-   -  System Utilization: Overall system utilization (needs W&B online)
+Thank you for contributing to Anemoi Training! Your efforts help improve
+the project for everyone.
