@@ -2,8 +2,8 @@
  Configuring the Training
 ##########################
 
-Anemoi training is set up in a way that you should be able to modify key
-components of both the models and training without changing the code.
+Anemoi training is designed so you can adjust key parts of the models
+and training process without needing to modify the underlying code.
 
 A basic introduction to the configuration system is provided in the
 `getting started <start/hydra-intro>`_ section. This section will go
