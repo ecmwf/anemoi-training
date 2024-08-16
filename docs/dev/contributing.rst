@@ -98,7 +98,7 @@ directory. Open `docs/_build/html/index.html` to view the documentation.
    ==============
 
 ..
-   We wrote a special profiler that uses Pytorch, Lightning, and memray to
+   We wrote a special profiler that uses PyTorch, Lightning, and memray to
 
 ..
    measure the performance of the code in it's current training state. Run
