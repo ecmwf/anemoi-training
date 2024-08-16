@@ -57,8 +57,8 @@ the config groups.:
 This will override the default model config with the transformer model.
 
 You can also override individual settings. For example, to change the
-learning rate from the default value of 0.625e-4 to 1e-3, you can use
-the following config:
+learning rate from the default value of 0.625e-4 to 1e-3, you can add
+the following to the config you're using:
 
 .. code:: yaml
 
@@ -75,6 +75,38 @@ You can also change the GPU count to whatever you have available:
 
 This matches the interface of the underlying defaults in Anemoi
 training.
+
+Example Config File
+===================
+
+Here is an example of a config file that changes the model to a
+transformer, the learning rate to 1e-3, and the number of GPUs to 1:
+
+.. code:: yaml
+
+   defaults:
+   - data: zarr
+   - dataloader: native_grid
+   - diagnostics: eval_rollout
+   - hardware: example
+   - graph: multi_scale
+   - model: transformer # Change from default group
+   - training: default
+   - _self_
+
+   hardware:
+      num_gpus_per_node: 1
+
+   training:
+      lr:
+         rate: 1e-3
+
+When we save this `example.yaml` file, we can run the training with this
+config using:
+
+.. code:: bash
+
+   anemoi-training train --config-name=example.yaml
 
 *******************************
  Command-line config overrides
