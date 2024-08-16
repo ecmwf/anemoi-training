@@ -32,12 +32,49 @@ These are group configs for each section. The options after the defaults
 are then used to override the configs, by assigning new features and
 keywords.
 
-For example to change from default GPU count:
+You can also find these defaults in other configs, like the
+``hardware``, which implements:
+
+.. code:: yaml
+
+   defaults:
+   - paths: example
+   - files: example
+
+*****************************
+ YAML-based config overrides
+*****************************
+
+The config files are written in YAML format. This allows for easy
+overrides of the default settings. For example, to change the model from
+the default GNN to a transformer, you can use the following config in
+the config groups.:
+
+.. code:: yaml
+
+   model: transformer
+
+This will override the default model config with the transformer model.
+
+You can also override individual settings. For example, to change the
+learning rate from the default value of 0.625e-4 to 1e-3, you can use
+the following config:
+
+.. code:: yaml
+
+   training:
+      lr:
+         rate: 1e-3
+
+You can also change the GPU count to whatever you have available:
 
 .. code:: yaml
 
    hardware:
        num_gpus_per_node: 1
+
+This matches the interface of the underlying defaults in Anemoi
+training.
 
 *******************************
  Command-line config overrides
