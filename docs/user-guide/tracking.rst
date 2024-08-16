@@ -2,13 +2,18 @@
  Tracking
 ##########
 
-By default anemoi-trainer uses MLflow to track the training process.
+MLflow is the default training tracker for Anemoi.
+
+*******************
+ MLflow quickstart
+*******************
+
 MLflow is enabled using the config option
 ``config.diagnostics.logger.mlflow.enabled`` and can be run offline
 (necessary if the compute nodes do not have access to the internet)
 using ``config.diagnostics.logger.mlflow.offline``.
 
-The MLflow interface to check the tracked experiments looks like this:
+The main MLflow interface looks like this:
 
 .. figure:: ../images/mlflow/mlflow_server.png
    :width: 500
@@ -16,8 +21,12 @@ The MLflow interface to check the tracked experiments looks like this:
 
    Example of MLflow server
 
-It is possible to compare the 'mlflow runs' between experiments and
-within the same experiment.
+Here you can see all tracked experiments and runs. A run typically
+consists of one completed training session, altough it is possible to
+extend runs by resuming them.
+
+It is possible to compare metrics of runs between experiments and within
+the same experiment.
 
 **NameSpaces**
 
@@ -83,7 +92,9 @@ correctly.
    :width: 500
    :align: center
 
-**Logging offline and syncing with an online server**
+***************************************************
+ Logging offline and syncing with an online server
+***************************************************
 
 When internet access is not available, as is sometimes the case on HPC
 compute nodes, MLflow can be configured to run in offline mode. Logs
