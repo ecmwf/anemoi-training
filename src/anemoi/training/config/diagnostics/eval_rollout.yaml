@@ -78,12 +78,12 @@ log:
   tensorboard:
     enabled: False
   mlflow:
-    enabled: True
+    enabled: False
     offline: False
     authentication: False
     log_model: False
     tracking_uri: ???
-    experiment_name: 'anemoi_debug'
+    experiment_name: 'anemoi-debug'
     project_name: 'Anemoi'
     system: True
     terminal: True
