@@ -37,6 +37,7 @@ from anemoi.utils.checkpoints import save_metadata
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities import rank_zero_only
+from pytorch_lightning.utilities.types import STEP_OUTPUT
 
 from anemoi.training.diagnostics.plots import init_plot_settings
 from anemoi.training.diagnostics.plots import plot_graph_features
@@ -728,6 +729,71 @@ class ParentUUIDCallback(Callback):
     ) -> None:
         del trainer  # unused
         pl_module.hparams["metadata"]["parent_uuid"] = checkpoint["hyper_parameters"]["metadata"]["uuid"]
+
+
+class MemorySnapshotRecorder(Callback):
+    """Record memory snapshot using torch.cuda._record_memory_history()."""
+
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.dirpath = Path(self.config.hardware.paths.profiler)
+
+        self.warmup = self.config.diagnostics.benchmark_profiler.snapshot.warmup
+        if not self.warmup:
+            self.warmup = 0
+        self.num_steps = (
+            self.config.diagnostics.benchmark_profiler.snapshot.steps + self.warmup
+        )  # be consistent with profiler scheduler
+        self.status = False
+
+        assert (
+            self.num_steps % self.config.dataloader.batch_size.training == 0
+        ), "Snapshot steps is not a multiple of batch size"
+        assert (
+            self.warmup % self.config.dataloader.batch_size.training == 0
+        ), "Snapshot Warmup steps is not a multiple of batch size"
+
+    @rank_zero_only
+    def _start_snapshot_recording(self):
+        LOGGER.info("Starting snapshot record_memory_history")
+        torch.cuda.memory._record_memory_history()
+        self.status = True
+
+    @rank_zero_only
+    def _save_snapshot(self):
+        self.memory_snapshot_fname = self.dirpath / "memory_snapshot.pickle"
+        try:
+            LOGGER.info("Saving memory snapshot to %s", self.memory_snapshot_fname)
+            torch.cuda.memory._dump_snapshot(f"{self.memory_snapshot_fname}")
+        except Exception as e:
+            LOGGER.error(f"Failed to capture memory snapshot {e}")
+
+    @rank_zero_only
+    def stop_record_memory_history(self) -> None:
+        LOGGER.info("Stopping snapshot record_memory_history")
+        torch.cuda.memory._record_memory_history(enabled=None)
+
+    def on_train_batch_start(
+        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any, batch_idx: int
+    ) -> None:
+        if trainer.global_step == self.warmup:
+            self._start_snapshot_recording()
+
+    def on_train_batch_end(
+        self,
+        trainer: "pl.Trainer",
+        pl_module: "pl.LightningModule",
+        outputs: STEP_OUTPUT,
+        batch: Any,
+        batch_idx: int,
+    ) -> None:
+        if trainer.global_step == self.num_steps:
+            if self.status is True:
+                self._save_snapshot()
+                self.stop_record_memory_history()
+            else:
+                LOGGER.info("Snapshot recording was not started so no snapshot was saved")
 
 
 class AnemoiCheckpoint(ModelCheckpoint):
