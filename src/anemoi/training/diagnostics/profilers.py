@@ -243,7 +243,7 @@ class MLFlowSystemSummarizer:
             metric = self.mlflow_client.get_metric_history(self.run_id, metric)
             avg_value = sum(m.value for m in metric) / len(metric)
             metric_name = self._clean_metric_name(metric[0].key)
-            rows.append({"metric": metric_name, "value": f"{avg_value}.2f"})
+            rows.append({"metric": metric_name, "value": f"{avg_value:.2f}"})
         return self._extract_gpu_metrics(pd.DataFrame(rows))
 
 
