@@ -818,7 +818,7 @@ class AnemoiCheckpoint(ModelCheckpoint):
 
     def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
         """Calls the strategy to remove the checkpoint file."""
-        trainer.strategy.remove_checkpoint(filepath)
+        super()._remove_checkpoint(trainer, filepath)
         trainer.strategy.remove_checkpoint(self._get_inference_checkpoint_filepath(filepath))
 
     def _get_inference_checkpoint_filepath(self, filepath: str) -> str:
