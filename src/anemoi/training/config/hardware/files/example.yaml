@@ -1,4 +1,5 @@
 dataset: ???
+forcing_dataset: ???
 graph: ???
 checkpoint:
   every_n_epochs: anemoi-by_epoch-epoch_{epoch:03d}-step_{step:06d}
