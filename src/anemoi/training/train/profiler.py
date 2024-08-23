@@ -39,6 +39,9 @@ console = Console(record=True, width=200)
 class AnemoiProfiler(AnemoiTrainer):
     """Profiling for Anemoi."""
 
+    def __init__(self, config: DictConfig) -> None:
+        super().__init__(config)
+
     def print_report(self, title: str, dataframe: pd.DataFrame, color: str = "white", emoji: str = "") -> None:
         if title == "Model Summary":
             console.print(f"[bold {color}]{title}[/bold {color}]", f":{emoji}:")
@@ -313,7 +316,7 @@ class AnemoiProfiler(AnemoiTrainer):
     def profiler(self) -> BenchmarkProfiler:
         return BenchmarkProfiler(self.config)
 
-    def update_paths(self) -> None:
+    def _update_paths(self) -> None:
         """Update the paths in the configuration."""
         super()._update_paths()
 
@@ -324,6 +327,7 @@ class AnemoiProfiler(AnemoiTrainer):
         elif self.config.training.fork_run_id:
             parent_run = self.config.training.fork_run_id
             self.config.hardware.paths.profiler = Path(self.config.hardware.paths.profiler, parent_run)
+        LOGGER.info("Profiler path: %s", self.config.hardware.paths.profiler)
 
     def _close_logger(self) -> None:
         if (self.config.diagnostics.log.wandb.enabled) and (not self.config.diagnostics.log.wandb.offline):
