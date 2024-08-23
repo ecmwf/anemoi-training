@@ -16,8 +16,9 @@ nodes:
   # Hidden nodes
   hidden:
     node_builder:
-      _target_: anemoi.graphs.nodes.LimitedAreaTriNodes # options: ZarrDatasetNodes, NPZFileNodes, TriNodes
-      resolution: 5 # grid resolution for npz (o32, o48, ...)
+      _target_: anemoi.graphs.nodes.StretchedTriNodes
+      lam_resolution: 5
+      global_resolution: 3
       reference_node_name: ${graph.data}
       mask_attr_name: cutout
 
