@@ -148,12 +148,14 @@ class GraphForecaster(pl.LightningModule):
         for key, idx in data_indices.internal_model.output.name_to_index.items():
             # Split pressure levels on "_" separator
             split = key.split("_")
-            if len(split) > 1 and split[1].isdigit():
+            if len(split) > 1 and split[-1].isdigit():
                 # Create grouped metrics for pressure levels (e.g. Q, T, U, V, etc.) for logger
                 metric_ranges[f"pl_{split[0]}"].append(idx)
                 # Create pressure levels in loss scaling vector
                 if split[0] in config.training.loss_scaling.pl:
-                    loss_scaling[idx] = config.training.loss_scaling.pl[split[0]] * pressure_level.scaler(int(split[1]))
+                    loss_scaling[idx] = config.training.loss_scaling.pl[split[0]] * pressure_level.scaler(
+                        int(split[-1]),
+                    )
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
             else:
@@ -219,9 +221,7 @@ class GraphForecaster(pl.LightningModule):
         del batch_idx
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         # for validation not normalized in-place because remappers cannot be applied in-place
-        batch = (
-            self.model.pre_processors(batch, in_place=False) if validation_mode else self.model.pre_processors(batch)
-        )
+        batch = self.model.pre_processors(batch, in_place=not validation_mode)
         metrics = {}
 
         # start rollout of preprocessed batch
