@@ -16,6 +16,11 @@ Keep it human-readable, your future self will thank you!
 
 - Introduction of remapper to anemoi-models leads to changes in the data indices and some preprocessors cannot be applied in-place anymore.
 
+#### Functionality
+
+- Enable the callback for plotting a histogram for variables containing NaNs
+- Enforce same binning for histograms comparing true data to predicted data
+
 ## [0.1.0 - Anemoi training - First release](https://github.com/ecmwf/anemoi-training/compare/x.x.x...0.1.0) - 2024-08-16
 
 ### Added
