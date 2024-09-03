@@ -20,7 +20,7 @@ Keep it human-readable, your future self will thank you!
 
 ### Fixed
 
-- Fix `TypeError` raised when trying to JSON serialise `datetime.timedelta` object
+- Fix `TypeError` raised when trying to JSON serialise `datetime.timedelta` object - [#43](https://github.com/ecmwf/anemoi-training/pull/43)
 
 ## [0.1.0 - Anemoi training - First release](https://github.com/ecmwf/anemoi-training/compare/x.x.x...0.1.0) - 2024-08-16
 
