@@ -403,10 +403,10 @@ class PlotLoss(BasePlotCallback):
             parameters_to_groups = unique_group_list[group_inverse]
             unique_group_list, group_inverse = np.unique(parameters_to_groups, return_inverse=True)
 
-            # sort paramters by groups
+            # sort parameters by groups
             sort_by_parameter_group = np.argsort(group_inverse, kind="stable")
 
-        # apply new order to paramters
+        # apply new order to parameters
         sorted_parameter_names = np.array(self.parameter_names)[sort_by_parameter_group]
         parameters_to_groups = parameters_to_groups[sort_by_parameter_group]
         unique_group_list, group_inverse, group_counts = np.unique(
@@ -458,9 +458,9 @@ class PlotLoss(BasePlotCallback):
         logger = trainer.logger
 
         parameter_names = list(pl_module.data_indices.internal_model.output.name_to_index.keys())
-        paramter_positions = list(pl_module.data_indices.internal_model.output.name_to_index.values())
+        parameter_positions = list(pl_module.data_indices.internal_model.output.name_to_index.values())
         # reorder parameter_names by position
-        self.parameter_names = [parameter_names[i] for i in np.argsort(paramter_positions)]
+        self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
 
         batch = pl_module.model.pre_processors(batch, in_place=False)
         for rollout_step in range(pl_module.rollout):
