@@ -27,24 +27,45 @@ diagnostic:
 - tp
 - cp
 
-normalizer:
-  default: "mean-std"
-  min-max:
-  max:
-  - "sdor"
-  - "slor"
-  - "z"
-  none:
-  - "cos_latitude"
-  - "cos_longitude"
-  - "sin_latitude"
-  - "sin_longitude"
-  - "cos_julian_day"
-  - "cos_local_time"
-  - "sin_julian_day"
-  - "sin_local_time"
-  - "insolation"
-  - "lsm"
+normalizers:
+  state:
+    default: "mean-std"
+    min-max:
+    max:
+      - "sdor"
+      - "slor"
+      - "z"
+    none:
+      - "cos_latitude"
+      - "cos_longitude"
+      - "sin_latitude"
+      - "sin_longitude"
+      - "cos_julian_day"
+      - "cos_local_time"
+      - "sin_julian_day"
+      - "sin_local_time"
+      - "cos_solar_zenith_angle"
+      - "lsm"
+
+  tendency:
+    default: "mean-std"
+    min-max:
+    max:
+      - "sdor"
+      - "slor"
+      - "z"
+    none:
+      - "cos_latitude"
+      - "cos_longitude"
+      - "sin_latitude"
+      - "sin_longitude"
+      - "cos_julian_day"
+      - "cos_local_time"
+      - "sin_julian_day"
+      - "sin_local_time"
+      - "cos_solar_zenith_angle"
+      - "lsm"
+
 
 imputer:
   default: "none"
@@ -52,13 +73,20 @@ imputer:
 # processors including imputers and normalizers are applied in order of definition
 processors:
   # example_imputer:
-  # _target_: anemoi.models.preprocessing.imputer.InputImputer
-  # _convert_: all
-  # config: ${data.imputer}
-  normalizer:
-    _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
-    _convert_: all
-    config: ${data.normalizer}
+    # _target_: anemoi.models.preprocessing.imputer.InputImputer
+    # _convert_: all
+    # config: ${data.imputer}
+  state:
+    normalizer:
+      _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
+      _convert_: all
+      config: ${data.normalizers.state}
+
+  tendency:
+    normalizer:
+      _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
+      _convert_: all
+      config: ${data.normalizers.tendency}
 
 # Values set in the code
 num_features: null # number of features in the forecast state

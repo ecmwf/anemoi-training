@@ -90,8 +90,8 @@ class BasePlotCallback(Callback, ABC):
         self.config = config
         self.save_basedir = config.hardware.paths.plots
         self.plot_frequency = config.diagnostics.plot.frequency
-        self.post_processors = None
-        self.pre_processors = None
+        self.post_processors_state = None
+        self.pre_processors_state = None
         self.latlons = None
         init_plot_settings()
 
@@ -195,40 +195,9 @@ class RolloutEval(Callback):
         pl_module: pl.LightningModule,
         batch: torch.Tensor,
     ) -> None:
-        loss = torch.zeros(1, dtype=batch.dtype, device=pl_module.device, requires_grad=False)
-        # NB! the batch is already normalized in-place - see pl_model.validation_step()
-        metrics = {}
-
-        # start rollout
-        x = batch[
-            :,
-            0 : pl_module.multi_step,
-            ...,
-            pl_module.data_indices.data.input.full,
-        ]  # (bs, multi_step, latlon, nvar)
-        assert (
-            batch.shape[1] >= self.rollout + pl_module.multi_step
-        ), "Batch length not sufficient for requested rollout length!"
-
         with torch.no_grad():
-            for rollout_step in range(self.rollout):
-                y_pred = pl_module(x)  # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-                y = batch[
-                    :,
-                    pl_module.multi_step + rollout_step,
-                    ...,
-                    pl_module.data_indices.data.output.full,
-                ]  # target, shape = (bs, latlon, nvar)
-                # y includes the auxiliary variables, so we must leave those out when computing the loss
-                loss += pl_module.loss(y_pred, y)
+            loss, metrics, _ = pl_module._step(batch, validation_mode=True, in_place_proc=False)
 
-                x = pl_module.advance_input(x, y_pred, batch, rollout_step)
-
-                metrics_next, _ = pl_module.calculate_val_metrics(y_pred, y, rollout_step)
-                metrics.update(metrics_next)
-
-            # scale loss
-            loss *= 1.0 / self.rollout
             self._log(pl_module, loss, metrics, batch.shape[0])
 
     def _log(self, pl_module: pl.LightningModule, loss: torch.Tensor, metrics: dict, bs: int) -> None:
@@ -533,9 +502,9 @@ class PlotSample(BasePlotCallback):
         # When running in Async mode, it might happen that in the last epoch these tensors
         # have been moved to the cpu (and then the denormalising would fail as the 'input_tensor' would be on CUDA
         # but internal ones would be on the cpu), The lines below allow to address this problem
-        if self.post_processors is None:
+        if self.post_processors_state is None:
             # Copy to be used across all the training cycle
-            self.post_processors = copy.deepcopy(pl_module.model.post_processors).cpu()
+            self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
         if self.latlons is None:
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
@@ -546,9 +515,9 @@ class PlotSample(BasePlotCallback):
             ...,
             pl_module.data_indices.data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors_state(input_tensor).numpy()
 
-        output_tensor = self.post_processors(
+        output_tensor = self.post_processors_state(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
         ).numpy()
@@ -624,9 +593,9 @@ class PlotAdditionalMetrics(BasePlotCallback):
         if self.pre_processors is None:
             # Copy to be used across all the training cycle
             self.pre_processors = copy.deepcopy(pl_module.model.pre_processors).cpu()
-        if self.post_processors is None:
+        if self.post_processors_state is None:
             # Copy to be used across all the training cycle
-            self.post_processors = copy.deepcopy(pl_module.model.post_processors).cpu()
+            self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
         if self.latlons is None:
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
@@ -637,8 +606,8 @@ class PlotAdditionalMetrics(BasePlotCallback):
             ...,
             pl_module.data_indices.data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
-        output_tensor = self.post_processors(
+        data = self.post_processors_state(input_tensor).numpy()
+        output_tensor = self.post_processors_state(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
         ).numpy()
