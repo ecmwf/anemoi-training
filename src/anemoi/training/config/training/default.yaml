@@ -56,6 +56,7 @@ lr:
 # in order to keep a constant global_lr
 # global_lr = local_lr * num_gpus_per_node * num_nodes / gpus_per_model
 
+# TODO: (@jakob-schloer / @jesper-dramsch): Ideas about how to allow default loss_scaling
 loss_scaling:
   default: 1
   pl:
@@ -83,3 +84,7 @@ pressure_level_scaler:
   _target_: anemoi.training.data.scaling.ReluPressureLevelScaler
   minimum: 0.2
   slope: 0.001
+
+tendency_mode: false
+
+num_saniity_val_steps: 4
