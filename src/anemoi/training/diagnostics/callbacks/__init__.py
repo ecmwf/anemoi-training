@@ -209,7 +209,7 @@ class RolloutEval(Callback):
             prog_bar=False,
             logger=pl_module.logger_enabled,
             batch_size=bs,
-            sync_dist=False,
+            sync_dist=True,
             rank_zero_only=True,
         )
         for mname, mvalue in metrics.items():
@@ -221,7 +221,7 @@ class RolloutEval(Callback):
                 prog_bar=False,
                 logger=pl_module.logger_enabled,
                 batch_size=bs,
-                sync_dist=False,
+                sync_dist=True,
                 rank_zero_only=True,
             )
 
