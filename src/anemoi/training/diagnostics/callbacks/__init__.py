@@ -590,9 +590,9 @@ class PlotAdditionalMetrics(BasePlotCallback):
         # When running in Async mode, it might happen that in the last epoch these tensors
         # have been moved to the cpu (and then the denormalising would fail as the 'input_tensor' would be on CUDA
         # but internal ones would be on the cpu), The lines below allow to address this problem
-        if self.pre_processors is None:
+        if self.pre_processors_state is None:
             # Copy to be used across all the training cycle
-            self.pre_processors = copy.deepcopy(pl_module.model.pre_processors).cpu()
+            self.pre_processors_state = copy.deepcopy(pl_module.model.pre_processors_state).cpu()
         if self.post_processors_state is None:
             # Copy to be used across all the training cycle
             self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
