@@ -13,10 +13,10 @@ import logging
 
 import torch
 from torch import nn
-
+from typing import Optional
 LOGGER = logging.getLogger(__name__)
 
-
+#TODO (rilwan-ade): remove the data_variances/tendency_variances and replace the name with feature_weights - then change loss_
 class WeightedMSELoss(nn.Module):
     """Latitude-weighted MSE loss."""
 
@@ -24,6 +24,7 @@ class WeightedMSELoss(nn.Module):
         self,
         node_weights: torch.Tensor,
         data_variances: torch.Tensor | None = None,
+        tendency_variances: Optional[torch.Tensor] = None,
         ignore_nans: bool | None = False,
     ) -> None:
         """Latitude- and (inverse-)variance-weighted MSE Loss.
@@ -34,6 +35,8 @@ class WeightedMSELoss(nn.Module):
             Weight of each node in the loss function
         data_variances : Optional[torch.Tensor], optional
             precomputed, per-variable stepwise variance estimate, by default None
+        tendency_variances : Optional[torch.Tensor], optional
+            precomputed, per-variable-level variance of time differences, by default None
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
 
@@ -46,6 +49,8 @@ class WeightedMSELoss(nn.Module):
         self.register_buffer("weights", node_weights, persistent=True)
         if data_variances is not None:
             self.register_buffer("ivar", data_variances, persistent=True)
+        if tendency_variances is not None:
+            self.register_buffer("tvar", tendency_variances, persistent=True)
 
     def forward(
         self,
