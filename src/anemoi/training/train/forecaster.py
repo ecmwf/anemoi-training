@@ -198,8 +198,6 @@ class GraphForecaster(pl.LightningModule):
                     LOGGER.debug("Parameter %s was not scaled.", key)
         
         if config.training.loss_scaling.inverse_variance_scaling:
-            # NOTE (jakob-schloer, ewan P ) : New implementation for variance weighting, worth testing how effective it is when no weighting is used
-            # NOTE (jakob-schloer) : When doing tendency training, we currently calc loss on state, but this inverse_variance_scaling would use the variance of the tendencies ??? is this GraphCast behaviour?
             variances = torch.from_numpy(self.model.statistics["stdev"][data_indices.data.output.full]) if not config.training.tendency_mode else torch.from_numpy(self.model.statistics_tendencies["stdev"][data_indices.data.output.full])
             feature_weights /= variances
             
