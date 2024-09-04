@@ -92,21 +92,22 @@ class GraphForecaster(pl.LightningModule):
         self.save_hyperparameters()
 
         self.latlons_data = graph_data[config.graph.data].x
-        self.loss_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
+        self.node_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        # TODO (rilwan-ade): restructure this so that as the feature weighting - it can be configurable loaded in from a "get_loss_scaling" function
-        # use method in other branch
         tendency_variance = (
             torch.from_numpy(self.model.statistics_tendencies["stdev"][self.data_indices.data.output.full])
             if self.model.tendency_mode
             else None
         )
+        
+        self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
+        self.feature_weights = self.get_feature_weights(config, data_indices)
 
-        self.metric_ranges, loss_scaling = self.metrics_loss_scaling(config, data_indices)
-        self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling, tendency_variances=tendency_variance)
-        self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
+        self.loss = WeightedMSELoss(node_weights=self.node_weights, feature_weights=self.feature_weights)
+        #NOTE (jakob-schloer, ewan P): In current implementation, there is no weighting on the grouped metrics - validation metrics calculated on groups use the non-normalized outputs - unequally weighted group metrics -> calculate group metrics on standardized outputs 
+        self.metrics = WeightedMSELoss(node_weights=self.node_weights, ignore_nans=True)
 
         if config.training.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
@@ -145,12 +146,39 @@ class GraphForecaster(pl.LightningModule):
         return self.model(x, self.model_comm_group)
 
     @staticmethod
-    def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
-        metric_ranges = defaultdict(list)
-        loss_scaling = (
-            np.ones((len(data_indices.data.output.full),), dtype=np.float32) * config.training.loss_scaling.default
-        )
+    def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> dict:
+        
+        val_metric_ranges = defaultdict(list)
 
+        for key, idx in data_indices.model.output.name_to_index.items():
+            split = key.split("_")
+            if len(split) > 1:
+                # Group metrics for pressure levels (e.g., Q, T, U, V, etc.)
+                val_metric_ranges[f"pl_{split[0]}"].append(idx)
+            else:
+                val_metric_ranges[f"sfc_{key}"].append(idx)
+
+            # Specific metrics from hydra to log in logger
+            if key in config.training.metrics:
+                val_metric_ranges[key] = [idx]
+
+        return val_metric_ranges
+      
+    def get_feature_weights(self, config: DictConfig, data_indices: IndexCollection ) -> torch.Tensor:
+        """
+        Calculates the feature weights for each output feature based on the configuration, data indices. User can specify weighting strategies based on pressure level, feature type, and inverse variance scaling. Any strategies provided are combined.
+
+        Parameters
+        ----------
+        config (DictConfig): A configuration object that contains the training parameters.
+        data_indices (IndexCollection): An object that contains the indices of the data.
+
+        Returns
+        -------
+        torch.Tensor: A tensor that contains the calculates weights for the feature dimension during loss computation.
+
+        """
+        feature_weights = np.ones((len(data_indices.data.output.full),), dtype=np.float32) * config.training.loss_scaling.default
         pressure_level = instantiate(config.training.pressure_level_scaler)
 
         LOGGER.info(
@@ -161,28 +189,26 @@ class GraphForecaster(pl.LightningModule):
         )
 
         for key, idx in data_indices.model.output.name_to_index.items():
-            # Split pressure levels on "_" separator
             split = key.split("_")
             if len(split) > 1:
-                # Create grouped metrics for pressure levels (e.g. Q, T, U, V, etc.) for logger
-                metric_ranges[f"pl_{split[0]}"].append(idx)
-                # Create pressure levels in loss scaling vector
-                if split[0] in config.training.loss_scaling.pl:
-                    loss_scaling[idx] = config.training.loss_scaling.pl[split[0]] * pressure_level.scaler(int(split[1]))
+                # Apply pressure level scaling
+                if split[0] in config.training.feature_weights.pl:
+                    feature_weights[idx] = config.training.loss_scaling.pl[split[0]] * pressure_level.scaler(int(split[1]))
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
             else:
-                metric_ranges[f"sfc_{key}"].append(idx)
-                # Create surface variables in loss scaling vector
-                if key in config.training.loss_scaling.sfc:
-                    loss_scaling[idx] = config.training.loss_scaling.sfc[key]
+                # Apply surface variable scaling
+                if key in config.training.feature_weights.sfc:
+                    feature_weights[idx] = config.training.loss_scaling.sfc[key]
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
-            # Create specific metrics from hydra to log in logger
-            if key in config.training.metrics:
-                metric_ranges[key] = [idx]
-        loss_scaling = torch.from_numpy(loss_scaling)
-        return metric_ranges, loss_scaling
+        
+        if config.training.loss_scaling.inverse_variance_scaling:
+            # NOTE (jakob-schloer, ewan P ) : New implementation for variance weighting, worth testing how effective it is when no weighting is used
+            variances = torch.from_numpy(self.model.statistics["stdev"][data_indices.data.output.full]) if not config.training.tendency_mode else torch.from_numpy(self.model.statistics_tendencies["stdev"][data_indices.data.output.full])
+            feature_weights /= variances
+            
+        return torch.from_numpy(feature_weights)
 
     def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:
         LOGGER.debug("set_model_comm_group: %s", model_comm_group)
@@ -222,8 +248,6 @@ class GraphForecaster(pl.LightningModule):
         return self.step_functions[self.prediction_mode](batch, batch_idx, validation_mode, in_place_proc)
     
     # NOTE (jakob-schloer): Observation on nomenclature - is this _step_residual function only residual if the "self.model" has a residual structure???
-    # NOTE (rilwan-adewoying): Naming problems can maybe be solved by moving alot of this tendency logic in _step_tendency to advance_input
-
     def _step_residual(
         self,
         batch: torch.Tensor,

@@ -23,16 +23,16 @@ class WeightedMSELoss(nn.Module):
     def __init__(
         self,
         node_weights: torch.Tensor,
-        data_variances: torch.Tensor | None = None,
-        tendency_variances: Optional[torch.Tensor] = None,
+        feature_weights: torch.Tensor,
         ignore_nans: bool | None = False,
     ) -> None:
-        """Latitude- and (inverse-)variance-weighted MSE Loss.
+        """Latitude- and feature-weighted MSE Loss.
 
         Parameters
         ----------
         node_weights : torch.Tensor of shape (N, )
             Weight of each node in the loss function
+        feature_weights : torch.Tensor of shape (N, )
         data_variances : Optional[torch.Tensor], optional
             precomputed, per-variable stepwise variance estimate, by default None
         tendency_variances : Optional[torch.Tensor], optional
@@ -46,11 +46,8 @@ class WeightedMSELoss(nn.Module):
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-        self.register_buffer("weights", node_weights, persistent=True)
-        if data_variances is not None:
-            self.register_buffer("ivar", data_variances, persistent=True)
-        if tendency_variances is not None:
-            self.register_buffer("tvar", tendency_variances, persistent=True)
+        self.register_buffer("node_weights", node_weights, persistent=True)
+        self.register_buffer("feature_weights", feature_weights, persistent=True)
 
     def forward(
         self,
@@ -77,20 +74,18 @@ class WeightedMSELoss(nn.Module):
         """
         out = torch.square(pred - target)
 
-        # Use variances if available
-        if hasattr(self, "ivar"):
-            out *= self.ivar
+        out = out * self.feature_weights
 
         # Squash by last dimension
         if squash:
             out = self.avg_function(out, dim=-1)
             # Weight by area
-            out *= self.weights.expand_as(out)
-            out /= self.sum_function(self.weights.expand_as(out))
+            out *= self.node_weights.expand_as(out)
+            out /= self.sum_function(self.node_weights.expand_as(out))
             return self.sum_function(out)
 
         # Weight by area
-        out *= self.weights[..., None].expand_as(out)
+        out *= self.node_weights[..., None].expand_as(out)
         # keep last dimension (variables) when summing weights
-        out /= self.sum_function(self.weights[..., None].expand_as(out), axis=(0, 1, 2))
+        out /= self.sum_function(self.node_weights[..., None].expand_as(out), axis=(0, 1, 2))
         return self.sum_function(out, axis=(0, 1, 2))
