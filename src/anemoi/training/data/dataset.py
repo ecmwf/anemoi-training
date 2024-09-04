@@ -32,6 +32,7 @@ class NativeGridDataset(IterableDataset):
         rollout: int = 1,
         multistep: int = 1,
         timeincrement: int = 1,
+        timestep: str = '6h',
         model_comm_group_rank: int = 0,
         model_comm_group_id: int = 0,
         model_comm_num_groups: int = 1,
@@ -48,6 +49,8 @@ class NativeGridDataset(IterableDataset):
             length of rollout window, by default 12
         timeincrement : int, optional
             time increment between samples, by default 1
+        timestep : int, optional
+            the time frequency of the samples, by default '6h'
         multistep : int, optional
             collate (t-1, ... t - multistep) into the input state vector, by default 1
         model_comm_group_rank : int, optional
@@ -68,6 +71,7 @@ class NativeGridDataset(IterableDataset):
 
         self.rollout = rollout
         self.timeincrement = timeincrement
+        self.timestep = timestep
 
         # lazy init
         self.n_samples_per_epoch_total: int = 0
@@ -94,6 +98,14 @@ class NativeGridDataset(IterableDataset):
     def statistics(self) -> dict:
         """Return dataset statistics."""
         return self.data.statistics
+
+    @cached_property
+    def statistics_tendencies(self) -> dict:
+        """Return dataset tendency statistics."""
+        # The statistics_tendencies are lazily loaded
+        if callable(self.data.statistics_tendencies):
+            self.data.statistics_tendencies = self.data.statistics_tendencies(self.timestep)
+        return self.data.statistics_tendencies
 
     @cached_property
     def metadata(self) -> dict:
