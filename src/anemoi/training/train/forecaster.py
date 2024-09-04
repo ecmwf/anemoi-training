@@ -95,12 +95,6 @@ class GraphForecaster(pl.LightningModule):
         self.node_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
-
-        tendency_variance = (
-            torch.from_numpy(self.model.statistics_tendencies["stdev"][self.data_indices.data.output.full])
-            if self.model.tendency_mode
-            else None
-        )
         
         self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
         self.feature_weights = self.get_feature_weights(config, data_indices)
