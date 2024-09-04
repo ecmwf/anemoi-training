@@ -52,6 +52,7 @@ Keep it human-readable, your future self will thank you!
 - Correct errors in callback plots
 - fix error in the default config
 - example slurm config
+- ability to configure preip-type plots
 
 ### Changed
 
