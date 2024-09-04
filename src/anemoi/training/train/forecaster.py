@@ -221,6 +221,9 @@ class GraphForecaster(pl.LightningModule):
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         return self.step_functions[self.prediction_mode](batch, batch_idx, validation_mode, in_place_proc)
     
+    # NOTE (jakob-schloer): Observation on nomenclature - is this _step_residual function only residual if the "self.model" has a residual structure???
+    # NOTE (rilwan-adewoying): Naming problems can maybe be solved by moving alot of this tendency logic in _step_tendency to advance_input
+
     def _step_residual(
         self,
         batch: torch.Tensor,
