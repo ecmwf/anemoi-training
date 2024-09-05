@@ -248,7 +248,7 @@ def plot_histogram(
     x: np.ndarray,
     y_true: np.ndarray,
     y_pred: np.ndarray,
-    precip_like_vars: set[str] | None = None,
+    precip_and_related_fields: set[str] | None = None,
 ) -> Figure:
     """Plots histogram.
 
@@ -265,8 +265,8 @@ def plot_histogram(
         Expected data of shape (lat*lon, nvar*level)
     y_pred : np.ndarray
         Predicted data of shape (lat*lon, nvar*level)
-    precip_like_vars : set, optional
-        Set of precipitation-like variables, by default {"tp", "cp"}
+    precip_and_related_fields : set, optional
+        Set of precipitation-like variables, by default {}
 
     Returns
     -------
@@ -274,8 +274,8 @@ def plot_histogram(
         The figure object handle.
 
     """
-    if precip_like_vars is None:
-        precip_like_vars = {"tp", "cp"}
+    if precip_and_related_fields is None:
+        precip_and_related_fields = {}
 
     n_plots_x, n_plots_y = len(parameters), 1
 
@@ -306,7 +306,7 @@ def plot_histogram(
             hist_yp, bins_yp = np.histogram(yp[~np.isnan(yp)], bins=100, range=[bin_min, bin_max])
 
         # Visualization trick for tp
-        if variable_name in precip_like_vars:
+        if variable_name in precip_and_related_fields:
             # in-place multiplication does not work here because variables are different numpy types
             hist_yt = hist_yt * bins_yt[:-1]
             hist_yp = hist_yp * bins_yp[:-1]
@@ -333,7 +333,7 @@ def plot_predicted_multilevel_flat_sample(
     x: np.ndarray,
     y_true: np.ndarray,
     y_pred: np.ndarray,
-    precip_like_vars: set[str] | None = None,
+    precip_and_related_fields: set[str] | None = None,
 ) -> Figure:
     """Plots data for one multilevel latlon-"flat" sample.
 
@@ -358,8 +358,8 @@ def plot_predicted_multilevel_flat_sample(
         Expected data of shape (lat*lon, nvar*level)
     y_pred : np.ndarray
         Predicted data of shape (lat*lon, nvar*level)
-    precip_like_vars : set, optional
-        Set of precipitation-like variables, by default {"tp", "cp"}
+    precip_and_related_fields : set, optional
+        Set of precipitation-like variables, by default {}
 
     Returns
     -------
@@ -392,10 +392,22 @@ def plot_predicted_multilevel_flat_sample(
                 variable_name,
                 clevels,
                 cmap_precip,
-                precip_like_vars,
+                precip_and_related_fields,
             )
         else:
-            plot_flat_sample(fig, ax, pc_lon, pc_lat, xt, yt, yp, variable_name, clevels, cmap_precip, precip_like_vars)
+            plot_flat_sample(
+                fig,
+                ax,
+                pc_lon,
+                pc_lat,
+                xt,
+                yt,
+                yp,
+                variable_name,
+                clevels,
+                cmap_precip,
+                precip_and_related_fields,
+            )
 
     return fig
 
@@ -411,7 +423,7 @@ def plot_flat_sample(
     vname: str,
     clevels: float,
     cmap_precip: str,
-    precip_like_vars: set[str] | None = None,
+    precip_and_related_fields: set[str] | None = None,
 ) -> None:
     """Plot a "flat" 1D sample.
 
@@ -439,13 +451,13 @@ def plot_flat_sample(
         Accumulation levels used for precipitation related plots
     cmap_precip: str
         Colors used for each accumulation level
-    precip_like_vars : set, optional
-        Set of precipitation-like variables, by default {"tp", "cp"}
+    precip_and_related_fields : set, optional
+        Set of precipitation-like variables, by default {}
 
     """
-    if precip_like_vars is None:
-        precip_like_vars = {"tp", "cp"}
-    if vname in precip_like_vars:
+    if precip_and_related_fields is None:
+        precip_and_related_fields = {}
+    if vname in precip_and_related_fields:
         # Create a custom colormap for precipitation
         nws_precip_colors = cmap_precip
         precip_colormap = ListedColormap(nws_precip_colors)

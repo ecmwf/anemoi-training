@@ -563,7 +563,7 @@ class PlotSample(BasePlotCallback):
                 data[0, ...].squeeze(),
                 data[rollout_step + 1, ...].squeeze(),
                 output_tensor[rollout_step, ...],
-                precip_like_vars=self.config.diagnostics.plot.precip_like_vars,
+                precip_and_related_fields=self.config.diagnostics.plot.precip_and_related_fields,
             )
 
             self._output_figure(
@@ -659,7 +659,7 @@ class PlotAdditionalMetrics(BasePlotCallback):
                     data[0, ...].squeeze(),
                     data[rollout_step + 1, ...].squeeze(),
                     output_tensor[rollout_step, ...],
-                    precip_like_vars=self.config.diagnostics.plot.precip_like_vars,
+                    precip_and_related_fields=self.config.diagnostics.plot.precip_and_related_fields,
                 )
 
                 self._output_figure(
