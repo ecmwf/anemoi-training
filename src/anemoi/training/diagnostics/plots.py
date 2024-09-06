@@ -248,7 +248,7 @@ def plot_histogram(
     x: np.ndarray,
     y_true: np.ndarray,
     y_pred: np.ndarray,
-    precip_and_related_fields: set[str] | None = None,
+    precip_and_related_fields: list | None = None,
 ) -> Figure:
     """Plots histogram.
 
@@ -265,8 +265,8 @@ def plot_histogram(
         Expected data of shape (lat*lon, nvar*level)
     y_pred : np.ndarray
         Predicted data of shape (lat*lon, nvar*level)
-    precip_and_related_fields : set, optional
-        Set of precipitation-like variables, by default {}
+    precip_and_related_fields : list, optional
+        Set of precipitation-like variables, by default []
 
     Returns
     -------
@@ -274,7 +274,7 @@ def plot_histogram(
         The figure object handle.
 
     """
-    precip_and_related_fields = precip_and_related_fields or {}
+    precip_and_related_fields = precip_and_related_fields or []
 
     n_plots_x, n_plots_y = len(parameters), 1
 
@@ -332,7 +332,7 @@ def plot_predicted_multilevel_flat_sample(
     x: np.ndarray,
     y_true: np.ndarray,
     y_pred: np.ndarray,
-    precip_and_related_fields: set[str] | None = None,
+    precip_and_related_fields: list | None = None,
 ) -> Figure:
     """Plots data for one multilevel latlon-"flat" sample.
 
@@ -357,8 +357,8 @@ def plot_predicted_multilevel_flat_sample(
         Expected data of shape (lat*lon, nvar*level)
     y_pred : np.ndarray
         Predicted data of shape (lat*lon, nvar*level)
-    precip_and_related_fields : set, optional
-        Set of precipitation-like variables, by default {}
+    precip_and_related_fields : list, optional
+        Set of precipitation-like variables, by default []
 
     Returns
     -------
@@ -422,7 +422,7 @@ def plot_flat_sample(
     vname: str,
     clevels: float,
     cmap_precip: str,
-    precip_and_related_fields: set[str] | None = None,
+    precip_and_related_fields: list | None = None,
 ) -> None:
     """Plot a "flat" 1D sample.
 
@@ -450,11 +450,11 @@ def plot_flat_sample(
         Accumulation levels used for precipitation related plots
     cmap_precip: str
         Colors used for each accumulation level
-    precip_and_related_fields : set, optional
-        Set of precipitation-like variables, by default {}
+    precip_and_related_fields : list, optional
+        Set of precipitation-like variables, by default []
 
     """
-    precip_and_related_fields = precip_and_related_fields or {}
+    precip_and_related_fields = precip_and_related_fields or []
     if vname in precip_and_related_fields:
         # Create a custom colormap for precipitation
         nws_precip_colors = cmap_precip
