@@ -198,7 +198,9 @@ class GraphForecaster(pl.LightningModule):
                     LOGGER.debug("Parameter %s was not scaled.", key)
         
         if config.training.loss_scaling.inverse_variance_scaling:
-            variances = torch.from_numpy(self.model.statistics["stdev"][data_indices.data.output.full]) if not config.training.tendency_mode else torch.from_numpy(self.model.statistics_tendencies["stdev"][data_indices.data.output.full])
+            # variances = torch.from_numpy(self.model.statistics["stdev"][data_indices.data.output.full]) if not config.training.tendency_mode else torch.from_numpy(self.model.statistics_tendencies["stdev"][data_indices.data.output.full])
+            # We take variances of tendencies for both state learning and residual learning.
+            variances = torch.from_numpy(self.model.statistics_tendencies["stdev"][data_indices.data.output.full])
             feature_weights /= variances
             
         return torch.from_numpy(feature_weights)
