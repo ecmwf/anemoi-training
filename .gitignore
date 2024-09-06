@@ -187,7 +187,7 @@ _build/
 _version.py
 outputs/
 
-default_jobscripts
-TODO.txt
+*TODO.txt
 src/anemoi/training/jobscripts/
-src/anemoi/training/config/gnnt_t_gnnt.yaml
+src/anemoi/training/config/private_*
+slurm_output/

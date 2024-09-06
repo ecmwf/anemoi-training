@@ -194,9 +194,10 @@ class RolloutEval(Callback):
         self,
         pl_module: pl.LightningModule,
         batch: torch.Tensor,
+        batch_idx: int,
     ) -> None:
         with torch.no_grad():
-            loss, metrics, _ = pl_module._step(batch, validation_mode=True, in_place_proc=False)
+            loss, metrics, _ = pl_module._step(batch, validation_mode=True, in_place_proc=False, batch_idx=batch_idx)
 
             self._log(pl_module, loss, metrics, batch.shape[0])
 
@@ -245,7 +246,7 @@ class RolloutEval(Callback):
             context = torch.autocast(device_type=batch.device.type, dtype=dtype) if dtype is not None else nullcontext()
 
             with context:
-                self._eval(pl_module, batch)
+                self._eval(pl_module, batch, batch_idx)
 
 
 class GraphTrainableFeaturesPlot(BasePlotCallback):

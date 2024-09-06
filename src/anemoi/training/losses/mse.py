@@ -16,7 +16,7 @@ from torch import nn
 from typing import Optional
 LOGGER = logging.getLogger(__name__)
 
-#TODO (rilwan-ade): remove the data_variances/tendency_variances and replace the name with feature_weights - then change loss_
+
 class WeightedMSELoss(nn.Module):
     """Latitude-weighted MSE loss."""
 
@@ -70,8 +70,8 @@ class WeightedMSELoss(nn.Module):
 
         """
         out = torch.square(pred - target)
-
-        out = out * self.feature_weights
+        if feature_scaling:
+            out = out * self.feature_weights
 
         # Squash by last dimension
         if squash:

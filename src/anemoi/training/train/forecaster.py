@@ -155,13 +155,14 @@ class GraphForecaster(pl.LightningModule):
             else:
                 val_metric_ranges[f"sfc_{key}"].append(idx)
 
-            # Specific features to calculate metrics for
-            if "all" in config.training.metrics:
-                val_metric_ranges.update( data_indices.model.output.name_to_index.items() )
-            else:
-                for key in config.training.metrics:
-                    val_metric_ranges[key] = [idx]
+            # Specific features to calculate metrics for    
+            if key in config.training.metrics:
+                val_metric_ranges[key] = [idx]
 
+        
+        if "all" in config.training.metrics:
+            val_metric_ranges.update( { k : [v] for k,v in data_indices.model.output.name_to_index.items() })
+            
         return val_metric_ranges
       
     def get_feature_weights(self, config: DictConfig, data_indices: IndexCollection ) -> torch.Tensor:
@@ -325,7 +326,6 @@ class GraphForecaster(pl.LightningModule):
             x = self.advance_input(x, y_pred, batch, rollout_step)
 
             if validation_mode:
-                # calculate_val_metrics requires processed inputs
                 metrics_next, _ = self.calculate_val_metrics(
                     None,
                     None,
@@ -352,8 +352,14 @@ class GraphForecaster(pl.LightningModule):
         if y_pred_postprocessed is None:
             y_pred_postprocessed = self.model.post_processors_state(y_pred, in_place=False)
 
-        for mkey, indices in self.metric_ranges.items():
-            metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred_postprocessed[..., indices], y_postprocessed[..., indices], feature_scaling=False)
+        for mkey, indices in self.val_metric_ranges.items():
+            
+            # for single metrics do no variable scaling and non processed data
+            if len(indices) == 1:    
+                metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred_postprocessed[..., indices], y_postprocessed[..., indices], feature_scaling=False)
+            else:
+                # for metrics over groups of vars used preprocessed data to adjust for potentially differing ranges for each variable in the group
+                metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred[..., indices], y[..., indices], feature_scaling=False)
 
         if enable_plot:
             y_preds.append(y_pred_postprocessed)
