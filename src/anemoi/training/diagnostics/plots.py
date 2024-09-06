@@ -274,8 +274,7 @@ def plot_histogram(
         The figure object handle.
 
     """
-    if precip_and_related_fields is None:
-        precip_and_related_fields = {}
+    precip_and_related_fields = precip_and_related_fields or {}
 
     n_plots_x, n_plots_y = len(parameters), 1
 
@@ -455,8 +454,7 @@ def plot_flat_sample(
         Set of precipitation-like variables, by default {}
 
     """
-    if precip_and_related_fields is None:
-        precip_and_related_fields = {}
+    precip_and_related_fields = precip_and_related_fields or {}
     if vname in precip_and_related_fields:
         # Create a custom colormap for precipitation
         nws_precip_colors = cmap_precip
