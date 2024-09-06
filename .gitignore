@@ -188,6 +188,7 @@ _version.py
 outputs/
 
 *TODO.txt
-src/anemoi/training/jobscripts/
 src/anemoi/training/config/private_*
 slurm_output/
+jobscripts/
+*ecsbatch*

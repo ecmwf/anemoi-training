@@ -204,7 +204,7 @@ class GraphForecaster(pl.LightningModule):
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
         
-        if config.training.feature_weighting.inverse_variance_scaling:
+        if config.training.feature_weighting.inverse_tendency_variance_scaling:
             variances = torch.from_numpy(self.model.statistics_tendencies["stdev"][data_indices.data.output.full])
             feature_weights /= variances
             
