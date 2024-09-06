@@ -109,10 +109,9 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     def statistics_tendencies(self) -> dict:
         # This is just a quick fix to work with datasets without stored tendency
         # statistics. This should be caught in anemoi-datasets.
-        if self.config.training.tendency_mode or self.config.training.feature_scaling.inverse_tendency_variance_scaling:
+        if self.config.training.tendency_mode or self.config.training.feature_weighting.inverse_tendency_variance_scaling:
             return self.ds_train.statistics_tendencies
         return None
-    
     @cached_property
     def metadata(self) -> dict:
         return self.ds_train.metadata
