@@ -266,7 +266,7 @@ def plot_histogram(
     y_pred : np.ndarray
         Predicted data of shape (lat*lon, nvar*level)
     precip_and_related_fields : list, optional
-        Set of precipitation-like variables, by default []
+        List of precipitation-like variables, by default []
 
     Returns
     -------
@@ -358,7 +358,7 @@ def plot_predicted_multilevel_flat_sample(
     y_pred : np.ndarray
         Predicted data of shape (lat*lon, nvar*level)
     precip_and_related_fields : list, optional
-        Set of precipitation-like variables, by default []
+        List of precipitation-like variables, by default []
 
     Returns
     -------
@@ -451,7 +451,7 @@ def plot_flat_sample(
     cmap_precip: str
         Colors used for each accumulation level
     precip_and_related_fields : list, optional
-        Set of precipitation-like variables, by default []
+        List of precipitation-like variables, by default []
 
     """
     precip_and_related_fields = precip_and_related_fields or []
