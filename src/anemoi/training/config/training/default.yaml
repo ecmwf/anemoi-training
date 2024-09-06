@@ -57,7 +57,7 @@ lr:
 # global_lr = local_lr * num_gpus_per_node * num_nodes / gpus_per_model
 
 # TODO: (@jakob-schloer / @jesper-dramsch): Ideas about how to allow default loss_scaling
-loss_scaling:
+feature_weighting:
   default: 1
   pl:
     q: 0.6 #1
@@ -76,10 +76,11 @@ loss_scaling:
   inverse_variance_scaling: False
 
 metrics:
-- z_500
-- t_850
-- u_850
-- v_850
+  - all
+# - z_500
+# - t_850
+# - u_850
+# - v_850
 
 pressure_level_scaler:
   _target_: anemoi.training.data.scaling.ReluPressureLevelScaler

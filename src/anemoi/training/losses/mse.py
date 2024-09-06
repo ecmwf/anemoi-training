@@ -33,10 +33,6 @@ class WeightedMSELoss(nn.Module):
         node_weights : torch.Tensor of shape (N, )
             Weight of each node in the loss function
         feature_weights : torch.Tensor of shape (N, )
-        data_variances : Optional[torch.Tensor], optional
-            precomputed, per-variable stepwise variance estimate, by default None
-        tendency_variances : Optional[torch.Tensor], optional
-            precomputed, per-variable-level variance of time differences, by default None
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
 
@@ -54,6 +50,7 @@ class WeightedMSELoss(nn.Module):
         pred: torch.Tensor,
         target: torch.Tensor,
         squash: bool = True,
+        feature_scaling: bool = True,
     ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 

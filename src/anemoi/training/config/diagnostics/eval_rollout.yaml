@@ -1,11 +1,11 @@
 ---
 eval:
-  enabled: False
-  # use this to evaluate the model over longer rollouts, every so many validation batches
-  rollout: 12
-  frequency: 20
-plot:
   enabled: True
+  # use this to evaluate the model over longer rollouts, every so many validation batches
+  rollout: 7
+  frequency: 50
+plot:
+  enabled: False
   asynchronous: True
   frequency: 750
   sample_idx: 0
@@ -54,12 +54,12 @@ profiler: False
 
 checkpoint:
   every_n_minutes:
-    save_frequency: 30 # Approximate, as this is checked at the end of training steps
+    save_frequency: 300 # Approximate, as this is checked at the end of training steps
     num_models_saved: 3 # If set to k, saves the 'last' k model weights in the training.
 
   every_n_epochs:
     save_frequency: 1
-    num_models_saved: -1 # If set to -1, all checkpoints are kept ensuring runs can be continued/forked at any point in the training process
+    num_models_saved: 3 # If set to -1, all checkpoints are kept ensuring runs can be continued/forked at any point in the training process
 
   every_n_train_steps:
     save_frequency: null # Does not scale with rollout

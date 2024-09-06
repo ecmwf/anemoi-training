@@ -44,6 +44,8 @@ def map_config_to_primitives(config: OmegaConf) -> dict:
         config = str(config)
     elif isinstance(config, datetime.date):
         config = config.isoformat()
+    elif isinstance(config, datetime.timedelta):
+        config = config.total_seconds()
     elif isinstance(config, (list, tuple)):
         config = [map_config_to_primitives(v) for v in config]
     elif isinstance(config, dict):

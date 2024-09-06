@@ -101,7 +101,7 @@ class GraphForecaster(pl.LightningModule):
 
         self.loss = WeightedMSELoss(node_weights=self.node_weights, feature_weights=self.feature_weights)
         #NOTE (jakob-schloer, ewan P): In current implementation, there is no weighting on the grouped metrics - validation metrics calculated on groups use the non-normalized outputs - unequally weighted group metrics -> calculate group metrics on standardized outputs 
-        self.metrics = WeightedMSELoss(node_weights=self.node_weights, ignore_nans=True)
+        self.metrics = WeightedMSELoss(node_weights=self.node_weights, feature_weights=self.feature_weights, ignore_nans=True)
 
         if config.training.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
@@ -152,9 +152,12 @@ class GraphForecaster(pl.LightningModule):
             else:
                 val_metric_ranges[f"sfc_{key}"].append(idx)
 
-            # Specific metrics from hydra to log in logger
-            if key in config.training.metrics:
-                val_metric_ranges[key] = [idx]
+            # Specific features to calculate metrics for
+            if "all" in config.training.metrics:
+                val_metric_ranges.update( data_indices.model.output.name_to_index.items() )
+            else:
+                for key in config.training.metrics:
+                    val_metric_ranges[key] = [idx]
 
         return val_metric_ranges
       
@@ -172,7 +175,7 @@ class GraphForecaster(pl.LightningModule):
         torch.Tensor: A tensor that contains the calculates weights for the feature dimension during loss computation.
 
         """
-        feature_weights = np.ones((len(data_indices.data.output.full),), dtype=np.float32) * config.training.loss_scaling.default
+        feature_weights = np.ones((len(data_indices.data.output.full),), dtype=np.float32) * config.training.feature_weighting.default
         pressure_level = instantiate(config.training.pressure_level_scaler)
 
         LOGGER.info(
@@ -186,19 +189,19 @@ class GraphForecaster(pl.LightningModule):
             split = key.split("_")
             if len(split) > 1:
                 # Apply pressure level scaling
-                if split[0] in config.training.feature_weights.pl:
-                    feature_weights[idx] = config.training.loss_scaling.pl[split[0]] * pressure_level.scaler(int(split[1]))
+                if split[0] in config.training.feature_weighting.pl:
+                    feature_weights[idx] = config.training.feature_weighting.pl[split[0]] * pressure_level.scaler(int(split[1]))
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
             else:
                 # Apply surface variable scaling
-                if key in config.training.feature_weights.sfc:
-                    feature_weights[idx] = config.training.loss_scaling.sfc[key]
+                if key in config.training.feature_weighting.sfc:
+                    feature_weights[idx] = config.training.feature_weighting.sfc[key]
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
         
-        if config.training.loss_scaling.inverse_variance_scaling:
-            variances = torch.from_numpy(self.model.statistics["stdev"][data_indices.data.output.full]) if not config.training.tendency_mode else torch.from_numpy(self.model.statistics_tendencies["stdev"][data_indices.data.output.full])
+        if config.training.feature_weighting.inverse_variance_scaling:
+            variances = torch.from_numpy(self.model.statistics_tendencies["stdev"][data_indices.data.output.full])
             feature_weights /= variances
             
         return torch.from_numpy(feature_weights)
@@ -347,7 +350,7 @@ class GraphForecaster(pl.LightningModule):
             y_pred_postprocessed = self.model.post_processors_state(y_pred, in_place=False)
 
         for mkey, indices in self.metric_ranges.items():
-            metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred_postprocessed[..., indices], y_postprocessed[..., indices])
+            metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred_postprocessed[..., indices], y_postprocessed[..., indices], feature_scaling=False)
 
         if enable_plot:
             y_preds.append(y_pred_postprocessed)

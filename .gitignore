@@ -186,3 +186,8 @@ _build/
 *.sync
 _version.py
 outputs/
+
+default_jobscripts
+TODO.txt
+src/anemoi/training/jobscripts/
+src/anemoi/training/config/gnnt_t_gnnt.yaml
