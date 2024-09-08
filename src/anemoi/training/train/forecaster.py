@@ -160,8 +160,13 @@ class GraphForecaster(pl.LightningModule):
                 val_metric_ranges[key] = [idx]
 
         
-        if "all" in config.training.metrics:
+        if "all_individual" in config.training.metrics:
             val_metric_ranges.update( { k : [v] for k,v in data_indices.model.output.name_to_index.items() })
+        
+        if "all_grouped" in config.training.metrics:
+            val_metric_ranges.update( 
+                { "all" : [v for v in data_indices.model.output.name_to_index.values() ] }
+            )
             
         return val_metric_ranges
       
@@ -347,15 +352,24 @@ class GraphForecaster(pl.LightningModule):
     def calculate_val_metrics(self, y_pred, y, rollout_step, enable_plot=False, y_pred_postprocessed=None, y_postprocessed=None):
         metrics = {}
         y_preds = []
+
+        assert y_pred is not None or y_pred_postprocessed is not None, "Either y_pred or y_pred_postprocessed must be provided"
+        assert y is not None or y_postprocessed is not None, "Either y or y_postprocessed must be provided"
+
         if y_postprocessed is None:
             y_postprocessed = self.model.post_processors_state(y, in_place=False)
         if y_pred_postprocessed is None:
             y_pred_postprocessed = self.model.post_processors_state(y_pred, in_place=False)
+        
+        if y_pred is None:
+            y_pred = self.model.pre_processors_state(y_pred_postprocessed, in_place=False, data_index=self.data_indices.data.output.full)
+        if y is None:
+            y = self.model.pre_processors_state(y_postprocessed, in_place=False, data_index=self.data_indices.data.output.full)
 
         for mkey, indices in self.val_metric_ranges.items():
             
             # for single metrics do no variable scaling and non processed data
-            if len(indices) == 1:    
+            if len(indices) == 1:
                 metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred_postprocessed[..., indices], y_postprocessed[..., indices], feature_scaling=False)
             else:
                 # for metrics over groups of vars used preprocessed data to adjust for potentially differing ranges for each variable in the group

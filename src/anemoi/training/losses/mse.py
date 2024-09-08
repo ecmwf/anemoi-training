@@ -77,12 +77,10 @@ class WeightedMSELoss(nn.Module):
         if squash:
             out = self.avg_function(out, dim=-1)
             # Weight by area
-            out *= self.node_weights.expand_as(out)
-            out /= self.sum_function(self.node_weights.expand_as(out))
+            out *= (self.node_weights / self.sum_function(self.node_weights))
             return self.sum_function(out)
 
         # Weight by area
-        out *= self.node_weights[..., None].expand_as(out)
         # keep last dimension (variables) when summing weights
-        out /= self.sum_function(self.node_weights[..., None].expand_as(out), axis=(0, 1, 2))
+        out *=  (self.node_weights[..., None] / self.sum_function(self.node_weights) )
         return self.sum_function(out, axis=(0, 1, 2))

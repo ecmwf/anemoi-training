@@ -77,7 +77,8 @@ feature_weighting:
   inverse_tendency_variance_scaling: False
 
 metrics:
-  - all
+  - all_individual
+  - all_grouped
 # - z_500
 # - t_850
 # - u_850
