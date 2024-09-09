@@ -63,6 +63,13 @@ class MlFlow(Command):
             default="anemoi-debug",
         )
         sync.add_argument(
+            "--authentication",
+            "-a",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help="The destination server requires authentication.",
+        )
+        sync.add_argument(
             "--export-deleted-runs",
             "-x",
             action="store_true",
@@ -89,6 +96,13 @@ class MlFlow(Command):
 
         if args.subcommand == "sync":
             from anemoi.training.utils.mlflow_sync import MlFlowSync
+
+            if args.authentication:
+                from anemoi.training.diagnostics.mlflow.auth import TokenAuth
+
+                auth = TokenAuth(url=args.destination)
+                auth.login()
+                auth.authenticate()
 
             log_level = "DEBUG" if args.verbose else "INFO"
 
