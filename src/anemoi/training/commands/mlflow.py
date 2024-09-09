@@ -45,6 +45,7 @@ class MlFlow(Command):
             "--source",
             "-s",
             help="The MLflow logs source directory.",
+            metavar="DIR",
             required=True,
             default=argparse.SUPPRESS,
         )
@@ -52,22 +53,31 @@ class MlFlow(Command):
             "--destination",
             "-d",
             help="The destination MLflow tracking URI.",
+            metavar="URI",
             required=True,
             default=argparse.SUPPRESS,
         )
-        sync.add_argument("--run-id", "-r", help="The run ID to sync.", required=True, default=argparse.SUPPRESS)
+        sync.add_argument(
+            "--run-id",
+            "-r",
+            help="The run ID to sync.",
+            metavar="ID",
+            required=True,
+            default=argparse.SUPPRESS,
+        )
         sync.add_argument(
             "--experiment-name",
             "-e",
             help="The experiment name to sync to.",
+            metavar="NAME",
             default="anemoi-debug",
         )
         sync.add_argument(
             "--authentication",
             "-a",
             action="store_true",
-            default=argparse.SUPPRESS,
             help="The destination server requires authentication.",
+            default=argparse.SUPPRESS,
         )
         sync.add_argument(
             "--export-deleted-runs",
