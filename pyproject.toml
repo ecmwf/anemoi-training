@@ -43,7 +43,7 @@ dynamic = [ "version" ]
 
 dependencies = [
   "anemoi-datasets>=0.4",
-  "anemoi-graphs@git+https://github.com/ecmwf/anemoi-graphs.git@8-stretched-grid-graphs",
+  "anemoi-graphs@git+https://github.com/ecmwf/anemoi-graphs.git@feature/8-stretched-grid-graphs",
   "anemoi-models",
   "anemoi-utils[provenance]>=0.3.10",
   "einops>=0.6.1",
