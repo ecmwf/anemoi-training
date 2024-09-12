@@ -83,8 +83,10 @@ class GraphForecaster(pl.LightningModule):
         self.step_functions = {
             "residual": self._step_residual,
             "tendency": self._step_tendency,
+            "tendency_loss": self._step_tendency_loss,
         }
-        self.prediction_mode = "tendency" if self.model.tendency_mode else "residual"
+        self.prediction_mode = config.training.prediction_mode
+        assert self.prediction_mode in self.step_functions, f"Invalid prediction mode: {self.prediction_mode}"
         LOGGER.info("Using stepping mode: %s", self.prediction_mode)
 
         self.data_indices = data_indices
@@ -96,18 +98,12 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
-        self.feature_weights = self.get_feature_weights(config, data_indices)
-
-        self.loss = WeightedMSELoss(node_weights=self.node_weights, feature_weights=self.feature_weights)
-        # NOTE (jakob-schloer, ewan P): In current implementation, there is no weighting on the grouped metrics
-        # - validation metrics calculated on groups use the non-normalized outputs - unequally weighted group metrics
-        # -> calculate group metrics on standardized outputs
-        self.metrics = WeightedMSELoss(
-            node_weights=self.node_weights,
-            feature_weights=self.feature_weights,
-            ignore_nans=True,
+        self.metric_ranges, self.metric_ranges_validation, self.feature_weights = self.metrics_loss_scaling(
+            config,
+            data_indices,
         )
+        self.loss = WeightedMSELoss(node_weights=self.node_weights, feature_weights=self.feature_weights)
+        self.metrics = WeightedMSELoss(node_weights=self.node_weights, feature_weights=None, ignore_nans=True)
 
         if config.training.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
@@ -148,54 +144,13 @@ class GraphForecaster(pl.LightningModule):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
 
-    @staticmethod
-    def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> dict:
-
-        val_metric_ranges = defaultdict(list)
-
-        for key, idx in data_indices.model.output.name_to_index.items():
-            split = key.split("_")
-            if len(split) > 1:
-                # Group metrics for pressure levels (e.g., Q, T, U, V, etc.)
-                val_metric_ranges[f"pl_{split[0]}"].append(idx)
-            else:
-                val_metric_ranges[f"sfc_{key}"].append(idx)
-
-            # Specific features to calculate metrics for
-            if key in config.training.metrics:
-                val_metric_ranges[key] = [idx]
-
-        if "all_individual" in config.training.metrics:
-            val_metric_ranges.update({k: [v] for k, v in data_indices.model.output.name_to_index.items()})
-
-        if "all_grouped" in config.training.metrics:
-            val_metric_ranges.update({"all": list(data_indices.model.output.name_to_index.values())})
-
-        return val_metric_ranges
-
-    def get_feature_weights(self, config: DictConfig, data_indices: IndexCollection) -> torch.Tensor:
-        """
-        Calculates the feature weights for each output feature based on the configuration, data indices.
-
-        User can specify weighting strategies based on pressure level, feature type, and inverse variance scaling.
-        Any strategies provided are combined.
-
-        Parameters
-        ----------
-        config: DictConfig
-            A configuration object that contains the training parameters.
-        data_indices: IndexCollection
-            An object that contains the indices of the data.
-
-        Returns
-        -------
-        torch.Tensor
-            A tensor that contains the calculates weights for the feature dimension during loss computation.
-
-        """
-        feature_weights = (
+    def metrics_loss_scaling(self, config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
+        metric_ranges = defaultdict(list)
+        metric_ranges_validation = defaultdict(list)
+        loss_scaling = (
             np.ones((len(data_indices.data.output.full),), dtype=np.float32) * config.training.feature_weighting.default
         )
+
         pressure_level = instantiate(config.training.pressure_level_scaler)
 
         LOGGER.info(
@@ -206,27 +161,48 @@ class GraphForecaster(pl.LightningModule):
         )
 
         for key, idx in data_indices.model.output.name_to_index.items():
+            # Split pressure levels on "_" separator
             split = key.split("_")
-            if len(split) > 1:
-                # Apply pressure level scaling
+            if len(split) > 1 and split[-1].isdigit():
+                # Create grouped metrics for pressure levels (e.g. Q, T, U, V, etc.) for logger
+                metric_ranges[f"pl_{split[0]}"].append(idx)
+                # Create pressure levels in loss scaling vector
                 if split[0] in config.training.feature_weighting.pl:
-                    feature_weights[idx] = config.training.feature_weighting.pl[split[0]] * pressure_level.scaler(
-                        int(split[1]),
+                    loss_scaling[idx] = config.training.feature_weighting.pl[split[0]] * pressure_level.scaler(
+                        int(split[-1]),
                     )
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
             else:
-                # Apply surface variable scaling
+                metric_ranges[f"sfc_{key}"].append(idx)
+                # Create surface variables in loss scaling vector
                 if key in config.training.feature_weighting.sfc:
-                    feature_weights[idx] = config.training.feature_weighting.sfc[key]
+                    loss_scaling[idx] = config.training.feature_weighting.sfc[key]
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
+            # Create specific metrics from hydra to log in logger
+            if key in config.training.metrics:
+                metric_ranges[key] = [idx]
 
+        # Weight the loss of each variable by the inverse variance of its tendencies
         if config.training.feature_weighting.inverse_tendency_variance_scaling:
             variances = self.model.statistics_tendencies["stdev"][data_indices.data.output.full]
-            feature_weights /= variances
+            loss_scaling /= variances
 
-        return torch.from_numpy(feature_weights)
+        loss_scaling = torch.from_numpy(loss_scaling)
+        # metric for validation, after postprocessing
+        for key, idx in data_indices.model.output.name_to_index.items():
+            # Split pressure levels on "_" separator
+            split = key.split("_")
+            if len(split) > 1 and split[1].isdigit():
+                # Create grouped metrics for pressure levels (e.g. Q, T, U, V, etc.) for logger
+                metric_ranges_validation[f"pl_{split[0]}"].append(idx)
+            else:
+                metric_ranges_validation[f"sfc_{key}"].append(idx)
+            # Create specific metrics from hydra to log in logger
+            if key in config.training.metrics:
+                metric_ranges_validation[key] = [idx]
+        return metric_ranges, metric_ranges_validation, loss_scaling
 
     def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:
         LOGGER.debug("set_model_comm_group: %s", model_comm_group)
@@ -362,6 +338,87 @@ class GraphForecaster(pl.LightningModule):
 
         return loss, metrics, y_preds
 
+    def _step_tendency_loss(
+        self,
+        batch: torch.Tensor,
+        batch_idx: int,
+        validation_mode: bool = False,
+        in_place_proc: bool = True,
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        del batch_idx, in_place_proc
+        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
+        metrics = {}
+
+        # Get batch tendencies from non processed batch
+        batch_tendency_target = self.compute_target_tendency(
+            batch[:, self.multi_step : self.multi_step + self.rollout, ...],
+            batch[:, self.multi_step - 1 : self.multi_step + self.rollout - 1, ...],
+        )
+
+        # state x is not processed)
+        x = batch[:, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, multi_step, latlon, nvar)
+
+        y_preds = []
+        for rollout_step in range(self.rollout):
+
+            # normalise inputs
+            x_in = self.model.pre_processors_state(x, in_place=False, data_index=self.data_indices.data.input.full)
+
+            # prediction (normalized tendency)
+            tendency_pred = self(x_in)
+
+            tendency_target = batch_tendency_target[:, rollout_step]
+
+            # calculate loss
+            loss += checkpoint(self.loss, tendency_pred, tendency_target, use_reentrant=False)
+
+            # re-construct non-processed predicted state
+            y_pred = self.model.add_tendency_to_state(x[:, -1, ...], tendency_pred)
+
+            # advance input using non-processed x, y_pred and batch
+            x = self.advance_input(x, y_pred, batch, rollout_step)
+
+            if validation_mode:
+                y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.data.output.full]
+
+                # calculate_val_metrics requires processed inputs
+                metrics_next, _ = self.calculate_val_metrics(
+                    None,
+                    None,
+                    rollout_step,
+                    self.enable_plot,
+                    y_pred_postprocessed=y_pred,
+                    y_postprocessed=y,
+                )
+
+                metrics.update(metrics_next)
+
+                y_preds.extend(
+                    self.model.pre_processors_state(
+                        y_pred,
+                        in_place=False,
+                        data_index=self.data_indices.data.output.full,
+                    ),
+                )
+        # scale loss
+        loss *= 1.0 / self.rollout
+        return loss, metrics, y_preds
+
+    def compute_target_tendency(self, x_t1: torch.Tensor, x_t0: torch.Tensor) -> torch.Tensor:
+        tendency = self.model.pre_processors_tendency(
+            x_t1[..., self.data_indices.data.output.full] - x_t0[..., self.data_indices.data.output.full],
+            in_place=False,
+            data_index=self.data_indices.data.output.full,
+        )
+        # diagnostic variables are taken from x_t1, normalised as full fields:
+        tendency[..., self.data_indices.model.output.diagnostic] = self.model.pre_processors_state(
+            x_t1[..., self.data_indices.data.output.diagnostic],
+            in_place=False,
+            data_index=self.data_indices.data.output.diagnostic,
+        )
+
+        return tendency
+
     def calculate_val_metrics(
         self,
         y_pred: torch.Tensor,
@@ -370,53 +427,22 @@ class GraphForecaster(pl.LightningModule):
         enable_plot: bool = False,
         y_pred_postprocessed: torch.Tensor = None,
         y_postprocessed: torch.Tensor = None,
-    ) -> tuple[Mapping[str, torch.Tensor], list[torch.Tensor]]:
+    ) -> tuple[dict, list]:
         metrics = {}
         y_preds = []
-
-        assert (
-            y_pred is not None or y_pred_postprocessed is not None
-        ), "Either y_pred or y_pred_postprocessed must be provided"
-        assert y is not None or y_postprocessed is not None, "Either y or y_postprocessed must be provided"
-
         if y_postprocessed is None:
             y_postprocessed = self.model.post_processors_state(y, in_place=False)
         if y_pred_postprocessed is None:
             y_pred_postprocessed = self.model.post_processors_state(y_pred, in_place=False)
 
-        if y_pred is None:
-            y_pred = self.model.pre_processors_state(
-                y_pred_postprocessed,
-                in_place=False,
-                data_index=self.data_indices.data.output.full,
+        for mkey, indices in self.metric_ranges_validation.items():
+            metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(
+                y_pred_postprocessed[..., indices],
+                y_postprocessed[..., indices],
             )
-        if y is None:
-            y = self.model.pre_processors_state(
-                y_postprocessed,
-                in_place=False,
-                data_index=self.data_indices.data.output.full,
-            )
-
-        for mkey, indices in self.val_metric_ranges.items():
-
-            # for single metrics do no variable scaling and non processed data
-            if len(indices) == 1:
-                metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(
-                    y_pred_postprocessed[..., indices],
-                    y_postprocessed[..., indices],
-                    feature_scaling=False,
-                )
-            else:
-                # for metrics over groups of vars used preprocessed data to adjust for
-                # potentially differing ranges for each variable in the group
-                metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(
-                    y_pred[..., indices],
-                    y[..., indices],
-                    feature_scaling=False,
-                )
 
         if enable_plot:
-            y_preds.append(y_pred_postprocessed)
+            y_preds.append(y_pred)
         return metrics, y_preds
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:

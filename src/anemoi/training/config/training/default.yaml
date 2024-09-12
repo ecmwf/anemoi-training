@@ -90,6 +90,7 @@ pressure_level_scaler:
   minimum: 0.2
   slope: 0.001
 
+prediction_mode: residual
 tendency_mode: false
 
 num_saniity_val_steps: 4

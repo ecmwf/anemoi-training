@@ -13,7 +13,7 @@ import logging
 
 import torch
 from torch import nn
-from typing import Optional
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -23,7 +23,7 @@ class WeightedMSELoss(nn.Module):
     def __init__(
         self,
         node_weights: torch.Tensor,
-        feature_weights: torch.Tensor,
+        feature_weights: torch.Tensor = None,
         ignore_nans: bool | None = False,
     ) -> None:
         """Latitude- and feature-weighted MSE Loss.
@@ -43,14 +43,14 @@ class WeightedMSELoss(nn.Module):
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
         self.register_buffer("node_weights", node_weights, persistent=True)
-        self.register_buffer("feature_weights", feature_weights, persistent=True)
+        if feature_weights is not None:
+            self.register_buffer("feature_weights", feature_weights, persistent=True)
 
     def forward(
         self,
         pred: torch.Tensor,
         target: torch.Tensor,
         squash: bool = True,
-        feature_scaling: bool = True,
     ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 
@@ -70,17 +70,19 @@ class WeightedMSELoss(nn.Module):
 
         """
         out = torch.square(pred - target)
-        if feature_scaling:
-            out = out * self.feature_weights
+        if hasattr(self, "feature_weights"):
+            out *= self.feature_weights
 
         # Squash by last dimension
         if squash:
             out = self.avg_function(out, dim=-1)
             # Weight by area
-            out *= (self.node_weights / self.sum_function(self.node_weights))
+            out *= self.node_weights.expand_as(out)
+            out /= self.sum_function(self.node_weights.expand_as(out))
             return self.sum_function(out)
 
         # Weight by area
+        out *= self.node_weights[..., None].expand_as(out)
         # keep last dimension (variables) when summing weights
-        out *=  (self.node_weights[..., None] / self.sum_function(self.node_weights) )
+        out /= self.sum_function(self.node_weights[..., None].expand_as(out), axis=(0, 1, 2))
         return self.sum_function(out, axis=(0, 1, 2))
