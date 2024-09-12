@@ -13,6 +13,9 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
+import torch
+from anemoi.models.layers.mapper import GraphEdgeMixin
+from matplotlib.collections import LineCollection
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import ListedColormap
 from matplotlib.colors import TwoSlopeNorm
@@ -25,6 +28,8 @@ from anemoi.training.diagnostics.maps import EquirectangularProjection
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
+    from anemoi.models.models.encoder_processor_decoder import AnemoiModelEncProcDec
+    from matplotlib.axes import Axes
 
 from dataclasses import dataclass
 
@@ -658,3 +663,185 @@ def plot_graph_features(
         scatter_plot(fig, ax_, lon=pc_lon, lat=pc_lat, data=features[..., i])
 
     return fig
+
+
+def plot_graph_node_features(model: AnemoiModelEncProcDec, force_global_view: bool = True) -> Figure:
+    """Plot trainable graph node features.
+
+    Parameters
+    ----------
+    model: AneomiModelEncProcDec
+        Model object
+    force_global_view : bool, optional
+        Show the entire globe, by default True.
+
+    Returns
+    -------
+    Figure
+        Figure object handle
+    """
+    meshes = [model.graph.hidden_name, *(set(model.encoders.keys()) | set(model.decoders.keys()))]
+    nrows = len(meshes)
+    ncols = min(model.trainable_tensors[m].trainable.shape[1] for m in meshes)
+    figsize = (ncols * 4, nrows * 3)
+    fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
+
+    for row, mesh in enumerate(meshes):
+        sincos_coords = getattr(model, f"latlons_{mesh}")
+        latlons = sincos_to_latlon(sincos_coords).cpu().numpy()
+        features = model.trainable_tensors[mesh].trainable.cpu().detach().numpy()
+
+        lat, lon = latlons[:, 0], latlons[:, 1]
+
+        for i in range(ncols):
+            ax_ = ax[row, i] if ncols > 1 else ax[row]
+            scatter_plot(
+                fig,
+                ax_,
+                lon,
+                lat,
+                features[..., i],
+                title=f"{mesh} trainable feature #{i + 1}",
+                force_global_view=force_global_view,
+            )
+
+    return fig
+
+
+def plot_graph_edge_features(
+    model: AnemoiModelEncProcDec,
+    q_extreme_limit: float = 0.05,
+    force_global_view: bool = True,
+) -> Figure:
+    """Plot trainable graph edge features.
+
+    Parameters
+    ----------
+    model: AneomiModelEncProcDec
+        Model object
+    q_extreme_limit : float, optional
+        Plot top & bottom quantile of edges trainable values, by default 0.05 (5%).
+    force_global_view : bool, optional
+        Show the entire globe, by default True.
+
+    Returns
+    -------
+    Figure
+        Figure object handle
+    """
+    trainable_modules = {}
+    for name, enc in model.encoders.items():
+        if isinstance(enc, GraphEdgeMixin):
+            trainable_modules[name, model.graph.hidden_name] = enc
+    if isinstance(model.processor, GraphEdgeMixin):
+        trainable_modules[model.graph.hidden_name, model.graph.hidden_name] = model.processor
+    for name, dec in model.decoders.items():
+        if isinstance(dec, GraphEdgeMixin):
+            trainable_modules[model.graph.hidden_name, name] = dec
+
+    ncols = min(module.trainable.trainable.shape[1] for module in trainable_modules.values())
+    nrows = len(trainable_modules)
+    figsize = (ncols * 4, nrows * 3)
+    fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
+
+    for row, ((src, dst), graph_mapper) in enumerate(trainable_modules.items()):
+        src_coords = sincos_to_latlon(getattr(model, f"latlons_{src}")).cpu().numpy()
+        dst_coords = sincos_to_latlon(getattr(model, f"latlons_{dst}")).cpu().numpy()
+        edge_index = graph_mapper.edge_index_base.cpu().numpy()
+        edge_features = graph_mapper.trainable.trainable.cpu().detach().numpy()
+
+        for i in range(ncols):
+            ax_ = ax[row, i] if ncols > 1 else ax[row]
+            feature = edge_features[..., i]
+
+            # Get mask of feature values over top and bottom percentiles
+            top_perc = np.quantile(feature, 1 - q_extreme_limit)
+            bottom_perc = np.quantile(feature, q_extreme_limit)
+
+            mask = (feature >= top_perc) | (feature <= bottom_perc)
+
+            edge_plot(
+                fig,
+                ax_,
+                src_coords[edge_index[0, mask]][:, ::-1],
+                dst_coords[edge_index[1, mask]][:, ::-1],
+                feature[mask],
+                title=f"{src} -> {dst} trainable feature #{i + 1}",
+                force_global_view=force_global_view,
+            )
+
+    return fig
+
+
+def sincos_to_latlon(sincos_coords: torch.Tensor) -> torch.Tensor:
+    """Get the lat/lon coordinates from the model.
+
+    Parameters
+    ----------
+    sincos_coords: torch.Tensor of shape (N, 4)
+        Sine and cosine of latitude and longitude coordinates.
+
+    Returns
+    -------
+    torch.Tensor of shape (N, 2)
+        Lat/lon coordinates.
+    """
+    ndim = sincos_coords.shape[1] // 2
+    sin_y, cos_y = sincos_coords[:, :ndim], sincos_coords[:, ndim:]
+    return torch.atan2(sin_y, cos_y)
+
+
+def edge_plot(
+    fig: Figure,
+    ax: Axes,
+    src_coords: np.ndarray,
+    dst_coords: np.ndarray,
+    data: np.ndarray,
+    cmap: str = "coolwarm",
+    title: str | None = None,
+    force_global_view: bool = True,
+) -> None:
+    """Lat-lon line plot.
+
+    Parameters
+    ----------
+    fig : _type_
+        Figure object handle
+    ax : _type_
+        Axis object handle
+    src_coords : np.ndarray of shape (num_edges, 2)
+        Source latitudes and longitudes.
+    dst_coords : np.ndarray of shape (num_edges, 2)
+        Destination latitudes and longitudes.
+    data : np.ndarray of shape (num_edges, 1)
+        Data to plot
+    cmap : str, optional
+        Colormap string from matplotlib, by default "viridis".
+    title : str, optional
+        Title for plot, by default None
+    force_global_view : bool, optional
+        Limit axis to [-pi, pi] and [-pi/2, pi/2], by default True. It show the whole world map.
+    """
+    edge_lines = np.stack([src_coords, dst_coords], axis=1)
+    lc = LineCollection(edge_lines, cmap=cmap, linewidths=1)
+    lc.set_array(data)
+
+    psc = ax.add_collection(lc)
+
+    if force_global_view:
+        ax.set_xlim((-np.pi, np.pi))
+        ax.set_ylim((-np.pi / 2, np.pi / 2))
+    else:
+        xmin, xmax = edge_lines[:, 0, 0].min(), edge_lines[:, 0, 0].max()
+        ymin, ymax = edge_lines[:, 1, 1].min(), edge_lines[:, 1, 1].max()
+        ax.set_xlim((xmin - 0.1, xmax + 0.1))
+        ax.set_ylim((ymin - 0.1, ymax + 0.1))
+
+    continents.plot_continents(ax)
+
+    if title is not None:
+        ax.set_title(title)
+
+    ax.set_aspect("auto", adjustable=None)
+    _hide_axes_ticks(ax)
+    fig.colorbar(psc, ax=ax)
