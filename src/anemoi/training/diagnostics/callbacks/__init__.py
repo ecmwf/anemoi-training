@@ -34,7 +34,7 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities import rank_zero_only
 
 from anemoi.training.diagnostics.plots import init_plot_settings
-from anemoi.training.diagnostics.plots import plot_graph_features
+from anemoi.training.diagnostics.plots import plot_graph_node_features
 from anemoi.training.diagnostics.plots import plot_histogram
 from anemoi.training.diagnostics.plots import plot_loss
 from anemoi.training.diagnostics.plots import plot_power_spectrum
@@ -297,47 +297,19 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
     def _plot(
         self,
         trainer: pl.Trainer,
-        latlons: np.ndarray,
-        features: np.ndarray,
-        epoch: int,
+        model: torch.nn.Module,
         tag: str,
         exp_log_tag: str,
     ) -> None:
-        fig = plot_graph_features(latlons, features)
-        self._output_figure(trainer.logger, fig, epoch=epoch, tag=tag, exp_log_tag=exp_log_tag)
+        fig = plot_graph_node_features(model)
+        self._output_figure(trainer.logger, fig, epoch=trainer.current_epoch, tag=tag, exp_log_tag=exp_log_tag)
 
     @rank_zero_only
     def on_validation_epoch_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
-
         model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
-        graph = pl_module.graph_data.cpu().detach()
-        epoch = trainer.current_epoch
 
-        if model.trainable_data is not None:
-            data_coords = np.rad2deg(graph[(self._graph_name_data, "to", self._graph_name_data)].ecoords_rad.numpy())
+        self.plot(trainer, model, tag="node_trainable_params", exp_log_tag="node_trainable_params")
 
-            self.plot(
-                trainer,
-                data_coords,
-                model.trainable_data.trainable.cpu().detach().numpy(),
-                epoch=epoch,
-                tag="trainable_data",
-                exp_log_tag="trainable_data",
-            )
-
-        if model.trainable_hidden is not None:
-            hidden_coords = np.rad2deg(
-                graph[(self._graph_name_hidden, "to", self._graph_name_hidden)].hcoords_rad.numpy(),
-            )
-
-            self.plot(
-                trainer,
-                hidden_coords,
-                model.trainable_hidden.trainable.cpu().detach().numpy(),
-                epoch=epoch,
-                tag="trainable_hidden",
-                exp_log_tag="trainable_hidden",
-            )
 
 
 class PlotLoss(BasePlotCallback):
@@ -600,6 +572,13 @@ class PlotAdditionalMetrics(BasePlotCallback):
         """
         super().__init__(config)
         self.sample_idx = self.config.diagnostics.plot.sample_idx
+        self.parameters_histogram = self.config.diagnostics.plot.parameters_histogram
+        self.parameters_spectrum = self.config.diagnostics.plot.parameters_spectrum
+        self.diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
+        if self.parameters_histogram is None:
+            self.parameters_histogram = []
+        if self.parameters_spectrum is None:
+            self.parameters_spectrum = []
 
     @rank_zero_only
     def _plot(
@@ -639,13 +618,12 @@ class PlotAdditionalMetrics(BasePlotCallback):
         ).numpy()
 
         for rollout_step in range(pl_module.rollout):
-            if self.config.diagnostics.plot.parameters_histogram is not None:
+            if len(self.parameters_histogram) > 0:
                 # Build dictionary of inidicies and parameters to be plotted
 
-                diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
                 plot_parameters_dict_histogram = {
-                    pl_module.data_indices.model.output.name_to_index[name]: (name, name not in diagnostics)
-                    for name in self.config.diagnostics.plot.parameters_histogram
+                    pl_module.data_indices.model.output.name_to_index[name]: (name, name not in self.diagnostics)
+                    for name in self.parameters_histogram
                 }
 
                 fig = plot_histogram(
@@ -663,13 +641,12 @@ class PlotAdditionalMetrics(BasePlotCallback):
                     exp_log_tag=f"val_pred_histo_rstep_{rollout_step:02d}_rank{local_rank:01d}",
                 )
 
-            if self.config.diagnostics.plot.parameters_spectrum is not None:
+            if len(self.parameters_spectrum) > 0:
                 # Build dictionary of inidicies and parameters to be plotted
-                diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
 
                 plot_parameters_dict_spectrum = {
-                    pl_module.data_indices.model.output.name_to_index[name]: (name, name not in diagnostics)
-                    for name in self.config.diagnostics.plot.parameters_spectrum
+                    pl_module.data_indices.model.output.name_to_index[name]: (name, name not in self.diagnostics)
+                    for name in self.parameters_spectrum
                 }
 
                 fig = plot_power_spectrum(

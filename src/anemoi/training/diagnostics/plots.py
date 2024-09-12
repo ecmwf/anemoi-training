@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import torch
 import logging
 from typing import TYPE_CHECKING
 
@@ -541,36 +542,62 @@ def scatter_plot(
     fig.colorbar(psc, ax=ax)
 
 
-def plot_graph_features(
-    latlons: np.ndarray,
-    features: np.ndarray,
-) -> Figure:
-    """Plot trainable graph features.
+def sincos_to_latlon(sincos_coords: torch.Tensor) -> torch.Tensor:
+    """Get the lat/lon coordinates from the model.
 
     Parameters
     ----------
-    latlons : np.ndarray
-        Latitudes and longitudes
-    features : np.ndarray
-        Trainable Features
+    sincos_coords: torch.Tensor of shape (N, 4)
+        Sine and cosine of latitude and longitude coordinates.
+
+    Returns
+    -------
+    torch.Tensor of shape (N, 2)
+        Lat/lon coordinates.
+    """
+    ndim = sincos_coords.shape[1] // 2
+    sin_y, cos_y = sincos_coords[:, :ndim], sincos_coords[:, ndim:]
+    return torch.atan2(sin_y, cos_y)
+
+
+def plot_graph_node_features(model, force_global_view: bool = True) -> Figure:
+    """Plot trainable graph node features.
+
+    Parameters
+    ----------
+    model:
+        Model object
+    force_global_view : bool, optional
+        Show the entire globe, by default True.
 
     Returns
     -------
     Figure
         Figure object handle
-
     """
-    nplots = features.shape[-1]
-    figsize = (nplots * 4, 3)
-    fig, ax = plt.subplots(1, nplots, figsize=figsize)
+    meshes = ["hidden", *(set(model.encoders.keys()) | set(model.decoders.keys()))]
+    nrows = len(meshes)
+    ncols = min([getattr(model, f"trainable_{m}").trainable.shape[1] for m in meshes])
+    figsize = (ncols * 4, nrows * 3)
+    fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
-    lat, lon = latlons[:, 0], latlons[:, 1]
+    for row, mesh in enumerate(meshes):
+        sincos_coords = getattr(model, f"latlons_{mesh}")
+        latlons = sincos_to_latlon(sincos_coords).cpu().numpy()
+        features = getattr(model, f"trainable_{mesh}").trainable.cpu().detach().numpy()
 
-    pc = EquirectangularProjection()
-    pc_lon, pc_lat = pc(lon, lat)
+        lat, lon = latlons[:, 0], latlons[:, 1]
 
-    for i in range(nplots):
-        ax_ = ax[i] if nplots > 1 else ax
-        scatter_plot(fig, ax_, lon=pc_lon, lat=pc_lat, data=features[..., i])
+        for i in range(ncols):
+            ax_ = ax[row, i] if ncols > 1 else ax[row]
+            scatter_plot(
+                fig,
+                ax_,
+                lon,
+                lat,
+                features[..., i],
+                title=f"{mesh} trainable feature #{i + 1}",
+                force_global_view=force_global_view,
+            )
 
     return fig
