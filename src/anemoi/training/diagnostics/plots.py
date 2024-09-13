@@ -644,7 +644,7 @@ def sincos_to_latlon(sincos_coords: torch.Tensor) -> torch.Tensor:
     return torch.atan2(sin_y, cos_y)
 
 
-def plot_graph_node_features(model, force_global_view: bool = True) -> Figure:
+def plot_graph_node_features(model, nodes_name: list[str], force_global_view: bool = True) -> Figure:
     """Plot trainable graph node features.
 
     Parameters
@@ -659,13 +659,12 @@ def plot_graph_node_features(model, force_global_view: bool = True) -> Figure:
     Figure
         Figure object handle
     """
-    meshes = ["hidden", *(set(model.encoders.keys()) | set(model.decoders.keys()))]
-    nrows = len(meshes)
-    ncols = min([getattr(model, f"trainable_{m}").trainable.shape[1] for m in meshes])
+    nrows = len(nodes_name)
+    ncols = min([getattr(model, f"trainable_{m}").trainable.shape[1] for m in nodes_name])
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
-    for row, mesh in enumerate(meshes):
+    for row, mesh in enumerate(nodes_name):
         sincos_coords = getattr(model, f"latlons_{mesh}")
         latlons = sincos_to_latlon(sincos_coords).cpu().numpy()
         features = getattr(model, f"trainable_{mesh}").trainable.cpu().detach().numpy()
@@ -677,11 +676,10 @@ def plot_graph_node_features(model, force_global_view: bool = True) -> Figure:
             scatter_plot(
                 fig,
                 ax_,
-                lon,
-                lat,
-                features[..., i],
+                lon=lon,
+                lat=lat,
+                data=features[..., i],
                 title=f"{mesh} trainable feature #{i + 1}",
-                force_global_view=force_global_view,
             )
 
     return fig

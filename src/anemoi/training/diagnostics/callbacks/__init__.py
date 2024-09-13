@@ -306,7 +306,7 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
         tag: str,
         exp_log_tag: str,
     ) -> None:
-        fig = plot_graph_node_features(model)
+        fig = plot_graph_node_features(model, [self._graph_name_data, self._graph_name_hidden])
         self._output_figure(trainer.logger, fig, epoch=trainer.current_epoch, tag=tag, exp_log_tag=exp_log_tag)
 
     @rank_zero_only
