@@ -665,31 +665,30 @@ def plot_graph_features(
     return fig
 
 
-def plot_graph_node_features(model: AnemoiModelEncProcDec, force_global_view: bool = True) -> Figure:
+def plot_graph_node_features(model: AnemoiModelEncProcDec) -> Figure:
     """Plot trainable graph node features.
 
     Parameters
     ----------
     model: AneomiModelEncProcDec
         Model object
-    force_global_view : bool, optional
-        Show the entire globe, by default True.
 
     Returns
     -------
     Figure
         Figure object handle
     """
-    meshes = [model.graph.hidden_name, *(set(model.encoders.keys()) | set(model.decoders.keys()))]
+    meshes = [model._graph_name_hidden, model._graph_name_data]
+    feature_list = [model.trainable_hidden.trainable, model.trainable_data.trainable]
     nrows = len(meshes)
-    ncols = min(model.trainable_tensors[m].trainable.shape[1] for m in meshes)
+    ncols = min(model.trainable_hidden.trainable.shape[1], model.trainable_data.trainable.shape[1])
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
     for row, mesh in enumerate(meshes):
         sincos_coords = getattr(model, f"latlons_{mesh}")
         latlons = sincos_to_latlon(sincos_coords).cpu().numpy()
-        features = model.trainable_tensors[mesh].trainable.cpu().detach().numpy()
+        features = feature_list[row].cpu().detach().numpy()
 
         lat, lon = latlons[:, 0], latlons[:, 1]
 
@@ -698,11 +697,10 @@ def plot_graph_node_features(model: AnemoiModelEncProcDec, force_global_view: bo
             scatter_plot(
                 fig,
                 ax_,
-                lon,
-                lat,
-                features[..., i],
+                lon=lon,
+                lat=lat,
+                data=features[..., i],
                 title=f"{mesh} trainable feature #{i + 1}",
-                force_global_view=force_global_view,
             )
 
     return fig
