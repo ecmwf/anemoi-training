@@ -39,7 +39,9 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities import rank_zero_only
 
 from anemoi.training.diagnostics.plots import init_plot_settings
+from anemoi.training.diagnostics.plots import plot_graph_edge_features
 from anemoi.training.diagnostics.plots import plot_graph_features
+from anemoi.training.diagnostics.plots import plot_graph_node_features
 from anemoi.training.diagnostics.plots import plot_histogram
 from anemoi.training.diagnostics.plots import plot_loss
 from anemoi.training.diagnostics.plots import plot_power_spectrum
@@ -92,6 +94,7 @@ class BasePlotCallback(Callback, ABC):
         self.plot_frequency = config.diagnostics.plot.frequency
         self.post_processors = None
         self.pre_processors = None
+        self.show_entire_globe = config.diagnostics.plot.get("show_entire_globe", True)
         self.latlons = None
         init_plot_settings()
 
@@ -279,69 +282,68 @@ class RolloutEval(Callback):
                 self._eval(pl_module, batch)
 
 
-class GraphTrainableFeaturesPlot(BasePlotCallback):
-    """Visualize the trainable features defined at the data and hidden graph nodes.
+class GraphNodeTrainableFeaturesPlot(BasePlotCallback):
+    """Trainable node features plot.
 
-    TODO: How best to visualize the learned edge embeddings? Offline, perhaps - using code from @Simon's notebook?
+    Visualize the trainable features defined at the ERA and H graphs, if any.
     """
 
-    def __init__(self, config: OmegaConf) -> None:
-        """Initialise the GraphTrainableFeaturesPlot callback.
-
-        Parameters
-        ----------
-        config : OmegaConf
-            Config object
-
-        """
+    def __init__(self, config):
         super().__init__(config)
-        self._graph_name_data = config.graph.data
-        self._graph_name_hidden = config.graph.hidden
+        self.epoch_freq = 10
 
     @rank_zero_only
     def _plot(
         self,
         trainer: pl.Trainer,
-        latlons: np.ndarray,
-        features: np.ndarray,
-        epoch: int,
+        model: torch.nn.Module,
         tag: str,
         exp_log_tag: str,
     ) -> None:
-        fig = plot_graph_features(latlons, features)
-        self._output_figure(trainer.logger, fig, epoch=epoch, tag=tag, exp_log_tag=exp_log_tag)
+        fig = plot_graph_node_features(model, force_global_view=self.show_entire_globe)
+        self._output_figure(trainer.logger, fig, epoch=trainer.current_epoch, tag=tag, exp_log_tag=exp_log_tag)
 
     @rank_zero_only
-    def on_validation_epoch_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+        if trainer.current_epoch % self.epoch_freq == 0 and pl_module.global_rank == 0:
+            model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
 
-        model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
-        graph = pl_module.graph_data.cpu().detach()
-        epoch = trainer.current_epoch
-
-        if model.trainable_data is not None:
-            data_coords = np.rad2deg(graph[(self._graph_name_data, "to", self._graph_name_data)].ecoords_rad.numpy())
-
-            self.plot(
+            self._plot(
                 trainer,
-                data_coords,
-                model.trainable_data.trainable.cpu().detach().numpy(),
-                epoch=epoch,
-                tag="trainable_data",
-                exp_log_tag="trainable_data",
+                model,
+                tag="node_trainable_params",
+                exp_log_tag="node_trainable_params",
             )
 
-        if model.trainable_hidden is not None:
-            hidden_coords = np.rad2deg(
-                graph[(self._graph_name_hidden, "to", self._graph_name_hidden)].hcoords_rad.numpy(),
-            )
 
-            self.plot(
+class GraphEdgeTrainableFeaturesPlot(BasePlotCallback):
+    """Trainable edge features plot.
+
+    Visualize the trainable features defined at the edges between meshes.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.epoch_freq = 10
+
+    def _plot(
+        self,
+        trainer: pl.Trainer,
+        model: torch.nn.Module,
+        tag: str,
+        exp_log_tag: str,
+    ) -> None:
+        fig = plot_graph_edge_features(model, force_global_view=self.show_entire_globe)
+        self._output_figure(trainer.logger, fig, epoch=trainer.current_epoch, tag=tag, exp_log_tag=exp_log_tag)
+
+    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+        if trainer.current_epoch % self.epoch_freq == 0 and pl_module.global_rank == 0:
+            model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
+            self._plot(
                 trainer,
-                hidden_coords,
-                model.trainable_hidden.trainable.cpu().detach().numpy(),
-                epoch=epoch,
-                tag="trainable_hidden",
-                exp_log_tag="trainable_hidden",
+                model,
+                tag="edge_trainable_params",
+                exp_log_tag="edge_trainable_params",
             )
 
 
@@ -1001,5 +1003,6 @@ def get_callbacks(config: DictConfig) -> list:  # noqa: C901
 
     if config.diagnostics.plot.learned_features:
         LOGGER.debug("Setting up a callback to plot the trainable graph node features ...")
-        trainer_callbacks.append(GraphTrainableFeaturesPlot(config))
+        trainer_callbacks.extend([GraphNodeTrainableFeaturesPlot(config), GraphEdgeTrainableFeaturesPlot(config)])
+
     return trainer_callbacks
