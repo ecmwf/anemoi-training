@@ -728,14 +728,14 @@ def plot_graph_edge_features(
         Figure object handle
     """
     trainable_modules = {}
-    for name, enc in model.encoders.items():
-        if isinstance(enc, GraphEdgeMixin):
-            trainable_modules[name, model.graph.hidden_name] = enc
+    # for name, enc in model.encoders.items():
+    if isinstance(model.encoder, GraphEdgeMixin):
+        trainable_modules[model._graph_name_data, model._graph_name_hidden] = model.encoder
     if isinstance(model.processor, GraphEdgeMixin):
-        trainable_modules[model.graph.hidden_name, model.graph.hidden_name] = model.processor
-    for name, dec in model.decoders.items():
-        if isinstance(dec, GraphEdgeMixin):
-            trainable_modules[model.graph.hidden_name, name] = dec
+        trainable_modules[model._graph_name_hidden, model._graph_name_hidden] = model.processor
+    # for name, dec in model.decoders.items():
+    if isinstance(model.decoder, GraphEdgeMixin):
+        trainable_modules[model._graph_name_hidden, model._graph_name_data] = model.decoder
 
     ncols = min(module.trainable.trainable.shape[1] for module in trainable_modules.values())
     nrows = len(trainable_modules)
