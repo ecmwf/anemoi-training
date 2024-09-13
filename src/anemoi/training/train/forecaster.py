@@ -65,13 +65,13 @@ class GraphForecaster(pl.LightningModule):
         """
         super().__init__()
 
-        graph_data = graph_data.to(self.device)
+        self.graph_data = graph_data.to(self.device)
 
         self.model = AnemoiModelInterface(
             statistics=statistics,
             data_indices=data_indices,
             metadata=metadata,
-            graph_data=graph_data,
+            graph_data=self.graph_data,
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
 
@@ -79,8 +79,8 @@ class GraphForecaster(pl.LightningModule):
 
         self.save_hyperparameters()
 
-        self.latlons_data = graph_data[config.graph.data].x
-        self.loss_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
+        self.latlons_data = self.graph_data[config.graph.data].x
+        self.loss_weights = self.graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
