@@ -81,8 +81,9 @@ class GraphForecaster(pl.LightningModule):
 
         # Flexible stepping function definition
         self.step_functions = {
-            "residual": self._step_residual,
+            "state": self._step_state,
             "tendency": self._step_tendency,
+            "tendency_norm": self._step_tendency_norm,
             "tendency_loss": self._step_tendency_loss,
         }
         self.prediction_mode = config.training.prediction_mode
@@ -243,16 +244,16 @@ class GraphForecaster(pl.LightningModule):
 
     # NOTE (jakob-schloer): Observation on nomenclature - is this _step_residual function
     # only residual if the "self.model" has a residual structure???
-    def _step_residual(
+    def _step_state(
         self,
         batch: torch.Tensor,
         batch_idx: int,
         validation_mode: bool = False,
         in_place_proc: bool = True,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
-        del batch_idx
+        del batch_idx, in_place_proc
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
-        batch = self.model.pre_processors_state(batch, in_place=in_place_proc)  # normalized in-place
+        batch = self.model.pre_processors_state(batch, in_place=False)  # normalized in-place
         metrics = {}
 
         # start rollout
@@ -338,6 +339,70 @@ class GraphForecaster(pl.LightningModule):
 
         return loss, metrics, y_preds
 
+    def _step_tendency_norm(
+        self,
+        batch: torch.Tensor,
+        batch_idx: int,
+        validation_mode: bool = False,
+        in_place_proc: bool = True,
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        """Remove after testing."""
+        del batch_idx, in_place_proc
+        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
+        metrics = {}
+
+        # x is non-processed state
+        x = batch[:, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, multi_step, latlon, nvar)
+
+        y_preds = []
+        for rollout_step in range(self.rollout):
+
+            # normalise inputs
+            x_in = self.model.pre_processors_state(x, in_place=False, data_index=self.data_indices.data.input.full)
+
+            # prediction (normalized tendency)
+            tendency_pred = self(x_in)
+
+            # re-construct non-processed predicted state
+            y_pred = self.model.add_tendency_to_state(x[:, -1, ...], tendency_pred)
+
+            # Target is full state
+            y_target = batch[:, self.multi_step + rollout_step, ..., self.data_indices.data.output.full]
+
+            # calculate loss
+            loss += checkpoint(
+                self.loss,
+                self.model.pre_processors_state(y_pred, in_place=False, data_index=self.data_indices.data.output.full),
+                self.model.pre_processors_state(
+                    y_target,
+                    in_place=False,
+                    data_index=self.data_indices.data.output.full,
+                ),
+                use_reentrant=False,
+            )
+
+            # advance input using non-processed x, y_pred and batch
+            x = self.advance_input(x, y_pred, batch, rollout_step)
+
+            if validation_mode:
+                metrics_next, _ = self.calculate_val_metrics(
+                    None,
+                    None,
+                    rollout_step,
+                    self.enable_plot,
+                    y_pred_postprocessed=y_pred,
+                    y_postprocessed=y_target,
+                )
+
+                metrics.update(metrics_next)
+
+                y_preds.extend(y_pred)
+
+        # scale loss
+        loss *= 1.0 / self.rollout
+
+        return loss, metrics, y_preds
+
     def _step_tendency_loss(
         self,
         batch: torch.Tensor,
@@ -345,6 +410,7 @@ class GraphForecaster(pl.LightningModule):
         validation_mode: bool = False,
         in_place_proc: bool = True,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        """Remove after testing."""
         del batch_idx, in_place_proc
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}
@@ -416,7 +482,6 @@ class GraphForecaster(pl.LightningModule):
             in_place=False,
             data_index=self.data_indices.data.output.diagnostic,
         )
-
         return tendency
 
     def calculate_val_metrics(
