@@ -111,14 +111,12 @@ class GraphForecaster(pl.LightningModule):
 
         self.multi_step = config.training.multistep_input
 
-        self.lr = config.training.lr.rate
-        if config.training.lr.scale_by_gpus:
-            self.lr *= (
-                config.hardware.num_nodes
-                * config.hardware.num_gpus_per_node
-                * config.training.lr.rate
-                / config.hardware.num_gpus_per_model
-            )
+        self.lr = (
+            config.hardware.num_nodes
+            * config.hardware.num_gpus_per_node
+            * config.training.lr.rate
+            / config.hardware.num_gpus_per_model
+        )
         self.lr_iterations = config.training.lr.iterations
         self.lr_min = config.training.lr.min
         self.rollout = config.training.rollout.start
