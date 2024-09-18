@@ -32,7 +32,7 @@ from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
-from anemoi.training.train.forecaster import GraphForecaster
+from anemoi.training.train.forecaster import ForecastingLightningModule
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
 
@@ -130,7 +130,7 @@ class AnemoiTrainer:
         )
 
     @cached_property
-    def model(self) -> GraphForecaster:
+    def model(self) -> ForecastingLightningModule:
         """Provide the model instance."""
         kwargs = {
             "config": self.config,
@@ -142,8 +142,8 @@ class AnemoiTrainer:
         }
         if self.load_weights_only:
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-            return GraphForecaster.load_from_checkpoint(self.last_checkpoint, **kwargs)
-        return GraphForecaster(**kwargs)
+            return ForecastingLightningModule.load_from_checkpoint(self.last_checkpoint, **kwargs)
+        return ForecastingLightningModule(**kwargs)
 
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:
@@ -203,9 +203,20 @@ class AnemoiTrainer:
         LOGGER.warning("Could not find last checkpoint: %s", checkpoint)
         return None
 
+    @property
+    def monitored_metrics(self) -> list[str]:
+        """Monitored metrics."""
+        monitored_metrics = []
+        if hasattr(self, "model"):
+            monitored_metrics.append(f"train/loss/{self.model.loss.log_name}")
+            monitored_metrics.append(f"val/loss/{self.model.loss.log_name}")
+        
+        return monitored_metrics
+
     @cached_property
     def callbacks(self) -> list[pl.callbacks.Callback]:
-        return get_callbacks(self.config)
+
+        return get_callbacks(self.config, self.monitored_metrics)
 
     @cached_property
     def metadata(self) -> dict:
@@ -280,16 +291,21 @@ class AnemoiTrainer:
         LOGGER.debug("Total number of auxiliary variables: %d", len(self.config.data.forcing))
 
         # Log learning rate multiplier when running single-node, multi-GPU and/or multi-node
-        total_number_of_model_instances = (
-            self.config.hardware.num_nodes
-            * self.config.hardware.num_gpus_per_node
-            / self.config.hardware.num_gpus_per_model
-        )
-        LOGGER.debug(
-            "Total GPU count / model group size: %d - NB: the learning rate will be scaled by this factor!",
-            total_number_of_model_instances,
-        )
+        if self.config.training.optimizer.scale_by_gpus:
+            total_number_of_model_instances = (
+                self.config.hardware.num_nodes
+                * self.config.hardware.num_gpus_per_node
+                / self.config.hardware.num_gpus_per_model
+            )
+            LOGGER.debug(
+                "Total GPU count / model group size: %d - NB: the learning rate will be scaled by this factor!",
+                total_number_of_model_instances,
+            )
+        else:
+            total_number_of_model_instances = 1
+        
         LOGGER.debug("Effective learning rate: %.3e", total_number_of_model_instances * self.config.training.lr.rate)
+
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
     def _update_paths(self) -> None:
@@ -328,11 +344,12 @@ class AnemoiTrainer:
             log_every_n_steps=self.config.diagnostics.log.interval,
             # run a fixed no of batches per epoch (helpful when debugging)
             limit_train_batches=self.config.dataloader.limit_batches.training,
-            limit_val_batches=self.config.dataloader.limit_batches.validation,
+            val_check_interval=self.config.training.val_check_interval,
             num_sanity_val_steps=self.config.training.num_sanity_val_steps,
             accumulate_grad_batches=self.config.training.accum_grad_batches,
             gradient_clip_val=self.config.training.gradient_clip.val,
             gradient_clip_algorithm=self.config.training.gradient_clip.algorithm,
+            num_sanity_val_steps=self.config.training.num_sanity_val_steps,
             # we have our own DDP-compliant sampler logic baked into the dataset
             use_distributed_sampler=False,
             profiler=self.profiler,
@@ -343,6 +360,7 @@ class AnemoiTrainer:
             self.model,
             datamodule=self.datamodule,
             ckpt_path=None if self.load_weights_only else self.last_checkpoint,
+            
         )
 
         if self.config.diagnostics.print_memory_summary:

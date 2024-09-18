@@ -1,36 +1,36 @@
 activation: GELU
-num_channels: 1024
+num_channels: 256
+no_latent_levels: 1 # Hierarchical VAE
+no_z_samples: 1 # No of Z samples
 
 lightning_module_type:
-  _target_: anemoi.training.train.ForecastingLightningModule
-  
+  _target_: aifs.train.autoencoder.GraphReconstructor
+
 processor:
-  _target_: anemoi.models.layers.processor.TransformerProcessor
+  _target_: aifs.layers.processor.TransformerProcessor
   _convert_: all
   activation: ${model.activation}
-  num_layers: 16
+  num_layers: 4
   num_chunks: 2
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
-  window_size: 512
-  dropout_p: 0.0 # GraphTransformer
+  window_size: 256
+  dropout_p: 0.01
+
 
 encoder:
-  _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
+  _target_: aifs.layers.mapper.GraphTransformerForwardMapper
   _convert_: all
   trainable_size: ${model.trainable_parameters.data2hidden}
-  sub_graph_edge_attributes: ${model.attributes.edges}
   activation: ${model.activation}
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
 
-
 decoder:
-  _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
+  _target_: aifs.layers.mapper.GraphTransformerBackwardMapper
   _convert_: all
   trainable_size: ${model.trainable_parameters.hidden2data}
-  sub_graph_edge_attributes: ${model.attributes.edges}
   activation: ${model.activation}
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
@@ -41,12 +41,3 @@ trainable_parameters:
   hidden: 8
   data2hidden: 8
   hidden2data: 8
-
-
-attributes:
-  edges:
-  - edge_length
-  - edge_dirs
-  nodes: []
-
-node_loss_weight: area_weight

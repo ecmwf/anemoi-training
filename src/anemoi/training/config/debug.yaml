@@ -28,5 +28,6 @@ dataloader:
   limit_batches:
     training: 100
     validation: 100
+  val_check_interval: 100
 training:
   max_epochs: 5

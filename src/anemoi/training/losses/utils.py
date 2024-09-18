@@ -14,6 +14,13 @@ import logging
 import torch
 from torch import nn
 
+from anemoi.training.distributed.utils import gather_tensor
+from typing import Optional 
+
+from torch.distributed import ProcessGroup
+import einops 
+import numpy as np 
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -51,3 +58,73 @@ def grad_scaler(
         (channels * channel_weights) / torch.sum(channel_weights, dim=-1, keepdim=True) * grad_in[0]
     )  # rescaled gradient
     return new_grad_in, grad_in[1]
+
+
+def gather_and_compute_loss(
+    y_pred: torch.Tensor,
+    y: torch.Tensor,
+    gather_matrix: torch.Tensor,
+    loss: torch.nn.Module,
+    ens_comm_group_size: int,
+    ens_comm_group: ProcessGroup,
+    return_pred_ens: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    """Gather the ensemble members from all devices in my group.
+
+    Eliminate duplicates (if any) and compute the loss.
+
+    Args:
+        y_pred: torch.Tensor
+            Predicted state tensor, calculated on self.device
+        y: torch.Tensor
+            Ground truth
+        gather_matrix: torch.Tensor
+            Matrix is used to average the contributions of individual ensemble members
+            gathered in the ensemble comm group
+        loss: torch.nn.Module
+            Loss function
+        ens_comm_group_size: int
+            Size of ensemble communication group
+        ens_comm_group: int
+            Process ensemble group
+        return_pred_ens: bool
+            Validation flag: if True, we return the predicted ensemble (post-gather)
+
+    Returns
+    -------
+        loss_inc:
+            Loss
+        y_pred_ens:
+            Predictions if validation mode
+    """
+    # step 1/ gather among all GPUs in the same ensemble group
+    y_pred_ens = gather_tensor(y_pred, dim=1, shapes=[y_pred.shape] * ens_comm_group_size, mgroup=ens_comm_group)
+
+    # step 2/ prune ensemble to get rid of the duplicates (if any) - uses the pre-built ensemble averaging matrix
+    assert gather_matrix is not None
+
+    y_pred_ens = einops.rearrange(y_pred_ens, "bs e latlon v -> bs v latlon e")  # ensemble dim must come last
+    y_pred_ens = y_pred_ens @ gather_matrix
+    y_pred_ens = einops.rearrange(y_pred_ens, "bs v latlon e -> bs e latlon v")  # reshape back to what it was
+
+    # step 3/ compute the loss
+    loss_inc = checkpoint(loss, y_pred_ens, y, squash=True, use_reentrant=False)
+
+    # during validation, we also return the pruned ensemble (from step 2) so we can run diagnostics
+    # an explicit cast is needed when running in mixed precision (i.e. with y_pred_ens.dtype == torch.(b)float16)
+    return loss_inc, y_pred_ens.to(dtype=y.dtype) if return_pred_ens else None
+
+def process_file(file_path):
+    npz_file = np.load(file_path, fix_imports=False)
+    return [npz_file[k] for k in npz_file]
+
+def buffered_arange(max):
+    if not hasattr(buffered_arange, "buf"):
+        buffered_arange.buf = torch.LongTensor()
+    if max > buffered_arange.buf.numel():
+        buffered_arange.buf.resize_(max)
+        torch.arange(max, out=buffered_arange.buf)
+    return buffered_arange.buf[:max]
+
+
+LOGGER

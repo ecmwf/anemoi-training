@@ -1,6 +1,9 @@
 activation: GELU
 num_channels: 512
 
+lightning_module_type:
+  _target_: anemoi.training.train.ForecastingLightningModule
+
 processor:
   _target_: anemoi.models.layers.processor.GNNProcessor
   _convert_: all

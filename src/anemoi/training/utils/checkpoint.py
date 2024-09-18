@@ -12,7 +12,7 @@ from pathlib import Path
 import torch
 from anemoi.utils.checkpoints import save_metadata
 
-from anemoi.training.train.forecaster import GraphForecaster
+from anemoi.training.train.forecaster import ForecastingLightningModule
 
 
 def load_and_prepare_model(lightning_checkpoint_path: str) -> tuple[torch.nn.Module, dict]:
@@ -29,7 +29,7 @@ def load_and_prepare_model(lightning_checkpoint_path: str) -> tuple[torch.nn.Mod
         pytorch model, metadata
 
     """
-    module = GraphForecaster.load_from_checkpoint(lightning_checkpoint_path)
+    module = ForecastingLightningModule.load_from_checkpoint(lightning_checkpoint_path)
     model = module.model
 
     metadata = dict(**model.metadata)

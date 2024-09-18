@@ -11,7 +11,7 @@ from _pytest.fixtures import SubRequest
 from anemoi.models.data_indices.collection import IndexCollection
 from omegaconf import DictConfig
 
-from anemoi.training.train.forecaster import GraphForecaster
+from anemoi.training.train.forecaster import ForecastingLightningModule
 
 
 @pytest.fixture
@@ -117,7 +117,7 @@ expected_polynomial_scaling = torch.Tensor(
 def test_loss_scaling_vals(fake_data: tuple[DictConfig, IndexCollection], expected_scaling: torch.Tensor) -> None:
     config, data_indices = fake_data
 
-    _, loss_scaling = GraphForecaster.metrics_loss_scaling(config, data_indices)
+    _, loss_scaling = ForecastingLightningModule.metrics_loss_scaling(config, data_indices)
 
     assert torch.allclose(loss_scaling, expected_scaling)
 
@@ -126,7 +126,7 @@ def test_loss_scaling_vals(fake_data: tuple[DictConfig, IndexCollection], expect
 def test_metric_range(fake_data: tuple[DictConfig, IndexCollection]) -> None:
     config, data_indices = fake_data
 
-    metric_range, _ = GraphForecaster.metrics_loss_scaling(config, data_indices)
+    metric_range, _ = ForecastingLightningModule.metrics_loss_scaling(config, data_indices)
 
     expected_metric_range = {
         "pl_y": [

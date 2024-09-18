@@ -36,6 +36,7 @@ class NativeGridDataset(IterableDataset):
         model_comm_group_rank: int = 0,
         model_comm_group_id: int = 0,
         model_comm_num_groups: int = 1,
+        model_comm_group_nworkers: int = 1,
         shuffle: bool = True,
         label: str = "generic",
     ) -> None:
@@ -81,6 +82,7 @@ class NativeGridDataset(IterableDataset):
         self.model_comm_group_rank = model_comm_group_rank
         self.model_comm_num_groups = model_comm_num_groups
         self.model_comm_group_id = model_comm_group_id
+        self.model_comm_group_nworkers = model_comm_group_nworkers
         self.global_rank = int(os.environ.get("SLURM_PROCID", "0"))
 
         # additional state vars (lazy init)
@@ -235,6 +237,20 @@ class NativeGridDataset(IterableDataset):
             self.ensemble_dim = 1
 
             yield torch.from_numpy(x)
+
+    def __len__(self) -> int:
+        # Calculation for __len__ of dataset should align to calculation used in per_worker_init
+
+        len_corrected = len(self.data) - (self.rollout + (self.multi_step - 1)) * self.timeincrement
+        # Divide this equally across shards (one shard per group!)
+        shard_size = len_corrected // self.model_comm_num_groups
+        shard_start = self.model_comm_group_id * shard_size + (self.multi_step - 1) * self.timeincrement
+        shard_end = min((self.model_comm_group_id + 1) * shard_size, len(self.data) - self.rollout * self.timeincrement)
+        samples = shard_end - shard_start
+
+        samples = (samples // self.model_comm_group_nworkers) * self.model_comm_group_nworkers
+
+        return samples
 
     def __repr__(self) -> str:
         return f"""

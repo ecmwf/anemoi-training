@@ -9,6 +9,7 @@
 # * This functionality will be restructured in the near future
 # * so for now callbacks are under __init__.py
 
+# TODO (Rilwan-Ade) Make sure that in logs we include epoch and step within epoch to circumvent having to figure out validation epoch
 from __future__ import annotations
 
 import copy
@@ -37,6 +38,7 @@ from anemoi.utils.checkpoints import save_metadata
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities import rank_zero_only
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 from anemoi.training.diagnostics.plots import init_plot_settings
 from anemoi.training.diagnostics.plots import plot_graph_features
@@ -45,13 +47,14 @@ from anemoi.training.diagnostics.plots import plot_loss
 from anemoi.training.diagnostics.plots import plot_power_spectrum
 from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
 
+from typing import Optional
+
 if TYPE_CHECKING:
     import pytorch_lightning as pl
     from omegaconf import DictConfig
     from omegaconf import OmegaConf
 
 LOGGER = logging.getLogger(__name__)
-
 
 class ParallelExecutor(ThreadPoolExecutor):
     """Wraps parallel execution and provides accurate information about errors.
@@ -77,7 +80,7 @@ class ParallelExecutor(ThreadPoolExecutor):
 class BasePlotCallback(Callback, ABC):
     """Factory for creating a callback that plots data to Experiment Logging."""
 
-    def __init__(self, config: OmegaConf) -> None:
+    def __init__(self, config: OmegaConf, val_dset_len=None, op_on:str = 'batch') -> None:
         """Initialise the BasePlotCallback abstract base class.
 
         Parameters
@@ -89,7 +92,7 @@ class BasePlotCallback(Callback, ABC):
         super().__init__()
         self.config = config
         self.save_basedir = config.hardware.paths.plots
-        self.plot_frequency = config.diagnostics.plot.frequency
+        self.plot_frequency = self.get_plot_frequency(config.diagnostics.plot.frequency, val_dset_len)
         self.post_processors_state = None
         self.pre_processors_state = None
         self.latlons = None
@@ -97,6 +100,9 @@ class BasePlotCallback(Callback, ABC):
 
         self.plot = self._plot
         self._executor = None
+
+        assert op_on in ['batch', 'epoch'], f"Operation on {op_on} not supported"
+        self.op_on = op_on
 
         if self.config.diagnostics.plot.asynchronous:
             self._executor = ParallelExecutor(max_workers=1)
@@ -108,7 +114,6 @@ class BasePlotCallback(Callback, ABC):
         self,
         logger: pl.loggers.base.LightningLoggerBase,
         fig: plt.Figure,
-        epoch: int,
         tag: str = "gnn",
         exp_log_tag: str = "val_pred_sample",
     ) -> None:
@@ -117,7 +122,7 @@ class BasePlotCallback(Callback, ABC):
             save_path = Path(
                 self.save_basedir,
                 "plots",
-                f"{tag}_epoch{epoch:03d}.png",
+                f"{tag}.png",
             )
 
             save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -167,86 +172,39 @@ class BasePlotCallback(Callback, ABC):
             LOGGER.exception("Critical error occurred in asynchronous plots.")
             sys.exit(1)
 
+    def get_plot_frequency(self, plot_frequency: float | int, val_dset_len: Optional[int]) -> int:
+        self.plot_frequency = None
 
-class RolloutEval(Callback):
-    """Evaluates the model performance over a (longer) rollout window."""
+        # If not operating on batch, just return
+        if self.op_on == "epoch":
+            assert isinstance(plot_frequency, int), "Plot frequency must be an integer when operating on epoch"
+            freq = plot_frequency
 
-    def __init__(self, config: OmegaConf) -> None:
-        """Initialize RolloutEval callback.
+        elif self.op_on == "batch":
+            
+            if isinstance(plot_frequency, int):
+                self.plot_frequency = plot_frequency
 
-        Parameters
-        ----------
-        config : dict
-            Dictionary with configuration settings
+            # If frequency is a float, calculate based on dataset length
+            elif isinstance(plot_frequency, float):
+                freq_rate = plot_frequency
 
-        """
-        super().__init__()
+                # Ensure validation dataset length is available
+                if val_dset_len is not None:
+                    freq = int(val_dset_len * freq_rate)
+                else:
+                    LOGGER.error(f"Plot frequency could not be determined for {self.__class__.__name__}")
+                    raise ValueError(f"Plot frequency could not be determined for {self.__class__.__name__}")
 
-        LOGGER.debug(
-            "Setting up RolloutEval callback with rollout = %d, frequency = %d ...",
-            config.diagnostics.eval.rollout,
-            config.diagnostics.eval.frequency,
-        )
-        self.rollout = config.diagnostics.eval.rollout
-        self.frequency = config.diagnostics.eval.frequency
+                # Ensure frequency is not lower than the minimum required
+                if freq < self.min_iter_to_plot:
+                    LOGGER.warning(f"Current plot frequency {freq} too low, setting to {self.min_iter_to_plot}")
+                    freq = max(self.min_iter_to_plot, freq)
 
-    def _eval(
-        self,
-        pl_module: pl.LightningModule,
-        batch: torch.Tensor,
-        batch_idx: int,
-    ) -> None:
-        with torch.no_grad():
-            loss, metrics, _ = pl_module._step(batch, validation_mode=True, in_place_proc=False, batch_idx=batch_idx)
+        return freq
 
-            self._log(pl_module, loss, metrics, batch.shape[0])
-
-    def _log(self, pl_module: pl.LightningModule, loss: torch.Tensor, metrics: dict, bs: int) -> None:
-        pl_module.log(
-            f"val_r{self.rollout}_wmse",
-            loss,
-            on_epoch=True,
-            on_step=True,
-            prog_bar=False,
-            logger=pl_module.logger_enabled,
-            batch_size=bs,
-            sync_dist=True,
-            rank_zero_only=True,
-        )
-        for mname, mvalue in metrics.items():
-            pl_module.log(
-                f"val_r{self.rollout}_" + mname,
-                mvalue,
-                on_epoch=True,
-                on_step=False,
-                prog_bar=False,
-                logger=pl_module.logger_enabled,
-                batch_size=bs,
-                sync_dist=True,
-                rank_zero_only=True,
-            )
-
-    @rank_zero_only
-    def on_validation_batch_end(
-        self,
-        trainer: pl.Trainer,
-        pl_module: pl.LightningModule,
-        outputs: list,
-        batch: torch.Tensor,
-        batch_idx: int,
-    ) -> None:
-        del outputs  # outputs are not used
-        if batch_idx % self.frequency == 0:
-            precision_mapping = {
-                "16-mixed": torch.float16,
-                "bf16-mixed": torch.bfloat16,
-            }
-            prec = trainer.precision
-            dtype = precision_mapping.get(prec)
-            context = torch.autocast(device_type=batch.device.type, dtype=dtype) if dtype is not None else nullcontext()
-
-            with context:
-                self._eval(pl_module, batch, batch_idx)
+    def op_on_this_batch(self, batch_idx ):
+        return ((batch_idx + 1) % self.plot_frequency) == 0
 
 
 class GraphTrainableFeaturesPlot(BasePlotCallback):
@@ -315,11 +273,11 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
             )
 
 
-class PlotLoss(BasePlotCallback):
+class LossBarPlot(BasePlotCallback):
     """Plots the unsqueezed loss over rollouts."""
 
-    def __init__(self, config: OmegaConf) -> None:
-        """Initialise the PlotLoss callback.
+    def __init__(self, config: OmegaConf, **kwargs) -> None:
+        """Initialise the LossBarPlot callback.
 
         Parameters
         ----------
@@ -327,7 +285,7 @@ class PlotLoss(BasePlotCallback):
             Object with configuration settings
 
         """
-        super().__init__(config)
+        super().__init__(config, **kwargs)
         self.parameter_names = None
         self.parameter_groups = self.config.diagnostics.plot.parameter_groups
         if self.parameter_groups is None:
@@ -441,7 +399,7 @@ class PlotLoss(BasePlotCallback):
         for rollout_step in range(pl_module.rollout):
             y_hat = outputs[1][rollout_step]
             y_true = batch[:, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.data.output.full]
-            loss = pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()
+            loss = pl_module.loss(y_hat, y_true, squash=False).mean(0).cpu().numpy()
 
             sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group
             fig = plot_loss(loss[sort_by_parameter_group], colors, xticks, legend_patches)
@@ -462,216 +420,7 @@ class PlotLoss(BasePlotCallback):
         batch: torch.Tensor,
         batch_idx: int,
     ) -> None:
-        if batch_idx % self.plot_frequency == 0:
-            self.plot(trainer, pl_module, outputs, batch, batch_idx, epoch=trainer.current_epoch)
-
-
-class PlotSample(BasePlotCallback):
-    """Plots a post-processed sample: input, target and prediction."""
-
-    def __init__(self, config: OmegaConf) -> None:
-        """Initialise the PlotSample callback.
-
-        Parameters
-        ----------
-        config : OmegaConf
-            Config object
-
-        """
-        super().__init__(config)
-        self.sample_idx = self.config.diagnostics.plot.sample_idx
-
-    @rank_zero_only
-    def _plot(
-        self,
-        trainer: pl.Trainer,
-        pl_module: pl.Lightning_module,
-        outputs: list[torch.Tensor],
-        batch: torch.Tensor,
-        batch_idx: int,
-        epoch: int,
-    ) -> None:
-        logger = trainer.logger
-
-        # Build dictionary of indices and parameters to be plotted
-        diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
-        plot_parameters_dict = {
-            pl_module.data_indices.model.output.name_to_index[name]: (name, name not in diagnostics)
-            for name in self.config.diagnostics.plot.parameters
-        }
-
-        # When running in Async mode, it might happen that in the last epoch these tensors
-        # have been moved to the cpu (and then the denormalising would fail as the 'input_tensor' would be on CUDA
-        # but internal ones would be on the cpu), The lines below allow to address this problem
-        if self.post_processors_state is None:
-            # Copy to be used across all the training cycle
-            self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
-        if self.latlons is None:
-            self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
-        local_rank = pl_module.local_rank
-
-        input_tensor = batch[
-            self.sample_idx,
-            pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
-            ...,
-            pl_module.data_indices.data.output.full,
-        ].cpu()
-        data = self.post_processors_state(input_tensor).numpy()
-
-        output_tensor = self.post_processors_state(
-            torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
-            in_place=False,
-        ).numpy()
-
-        for rollout_step in range(pl_module.rollout):
-            fig = plot_predicted_multilevel_flat_sample(
-                plot_parameters_dict,
-                self.config.diagnostics.plot.per_sample,
-                self.latlons,
-                self.config.diagnostics.plot.accumulation_levels_plot,
-                self.config.diagnostics.plot.cmap_accumulation,
-                data[0, ...].squeeze(),
-                data[rollout_step + 1, ...].squeeze(),
-                output_tensor[rollout_step, ...],
-            )
-
-            self._output_figure(
-                logger,
-                fig,
-                epoch=epoch,
-                tag=f"gnn_pred_val_sample_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
-                exp_log_tag=f"val_pred_sample_rstep{rollout_step:02d}_rank{local_rank:01d}",
-            )
-
-    def on_validation_batch_end(
-        self,
-        trainer: pl.Trainer,
-        pl_module: pl.Lightning_module,
-        outputs: list[torch.Tensor],
-        batch: torch.Tensor,
-        batch_idx: int,
-    ) -> None:
-        if batch_idx % self.plot_frequency == 0:
-            self.plot(trainer, pl_module, outputs, batch, batch_idx, epoch=trainer.current_epoch)
-
-
-class PlotAdditionalMetrics(BasePlotCallback):
-    """Plots TP related metric comparing target and prediction.
-
-    The actual increment (output - input) is plot for prognostic variables while the output is plot for diagnostic ones.
-
-    - Power Spectrum
-    - Histograms
-    """
-
-    def __init__(self, config: OmegaConf) -> None:
-        """Initialise the PlotAdditionalMetrics callback.
-
-        Parameters
-        ----------
-        config : OmegaConf
-            Config object
-
-        """
-        super().__init__(config)
-        self.sample_idx = self.config.diagnostics.plot.sample_idx
-
-    @rank_zero_only
-    def _plot(
-        self,
-        trainer: pl.Trainer,
-        pl_module: pl.LightningModule,
-        outputs: list,
-        batch: torch.Tensor,
-        batch_idx: int,
-        epoch: int,
-    ) -> None:
-        logger = trainer.logger
-
-        # When running in Async mode, it might happen that in the last epoch these tensors
-        # have been moved to the cpu (and then the denormalising would fail as the 'input_tensor' would be on CUDA
-        # but internal ones would be on the cpu), The lines below allow to address this problem
-        if self.pre_processors_state is None:
-            # Copy to be used across all the training cycle
-            self.pre_processors_state = copy.deepcopy(pl_module.model.pre_processors_state).cpu()
-        if self.post_processors_state is None:
-            # Copy to be used across all the training cycle
-            self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
-        if self.latlons is None:
-            self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
-        local_rank = pl_module.local_rank
-
-        input_tensor = batch[
-            self.sample_idx,
-            pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
-            ...,
-            pl_module.data_indices.data.output.full,
-        ].cpu()
-        data = self.post_processors_state(input_tensor).numpy()
-        output_tensor = self.post_processors_state(
-            torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
-            in_place=False,
-        ).numpy()
-
-        for rollout_step in range(pl_module.rollout):
-            if self.config.diagnostics.plot.parameters_histogram is not None:
-                # Build dictionary of inidicies and parameters to be plotted
-
-                diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
-                plot_parameters_dict_histogram = {
-                    pl_module.data_indices.model.output.name_to_index[name]: (name, name not in diagnostics)
-                    for name in self.config.diagnostics.plot.parameters_histogram
-                }
-
-                fig = plot_histogram(
-                    plot_parameters_dict_histogram,
-                    data[0, ...].squeeze(),
-                    data[rollout_step + 1, ...].squeeze(),
-                    output_tensor[rollout_step, ...],
-                )
-
-                self._output_figure(
-                    logger,
-                    fig,
-                    epoch=epoch,
-                    tag=f"gnn_pred_val_histo_rstep_{rollout_step:02d}_batch{batch_idx:04d}_rank0",
-                    exp_log_tag=f"val_pred_histo_rstep_{rollout_step:02d}_rank{local_rank:01d}",
-                )
-
-            if self.config.diagnostics.plot.parameters_spectrum is not None:
-                # Build dictionary of inidicies and parameters to be plotted
-                diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
-
-                plot_parameters_dict_spectrum = {
-                    pl_module.data_indices.model.output.name_to_index[name]: (name, name not in diagnostics)
-                    for name in self.config.diagnostics.plot.parameters_spectrum
-                }
-
-                fig = plot_power_spectrum(
-                    plot_parameters_dict_spectrum,
-                    self.latlons,
-                    data[0, ...].squeeze(),
-                    data[rollout_step + 1, ...].squeeze(),
-                    output_tensor[rollout_step, ...],
-                )
-
-                self._output_figure(
-                    logger,
-                    fig,
-                    epoch=epoch,
-                    tag=f"gnn_pred_val_spec_rstep_{rollout_step:02d}_batch{batch_idx:04d}_rank0",
-                    exp_log_tag=f"val_pred_spec_rstep_{rollout_step:02d}_rank{local_rank:01d}",
-                )
-
-    def on_validation_batch_end(
-        self,
-        trainer: pl.Trainer,
-        pl_module: pl.LightningModule,
-        outputs: list[torch.Tensor],
-        batch: torch.Tensor,
-        batch_idx: int,
-    ) -> None:
-        if batch_idx % self.plot_frequency == 0:
+        if self.op_on_this_batch(batch_idx):
             self.plot(trainer, pl_module, outputs, batch, batch_idx, epoch=trainer.current_epoch)
 
 
@@ -699,6 +448,39 @@ class ParentUUIDCallback(Callback):
         del trainer  # unused
         pl_module.hparams["metadata"]["parent_uuid"] = checkpoint["hyper_parameters"]["metadata"]["uuid"]
 
+class BaseLossMapPlot(BasePlotCallback):
+    # Plot the accumulated loss over a given Map for the validation epoch at regular intervals
+    def __init__(self, config, val_dset_len, **kwargs) -> None:
+        super().__init__(config, val_dset_len, **kwargs)
+        self.inner_subplots_kwargs = None
+        self.counter = 0
+
+    def on_validation_batch_end(
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs: Any,
+        batch: torch.Tensor,
+        batch_idx: int,
+    ) -> None:
+        if self.op_on_this_batch(batch_idx):
+            self.accumulate(trainer, pl_module, outputs)
+            self.counter += 1
+
+    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+        self._plot(trainer, pl_module)
+        self.reset()
+        self.counter = 0
+        torch.cuda.empty_cache()
+
+    def accumulate(self, trainer, pl_module, outputs) -> None:
+        raise NotImplementedError
+
+    def _plot(self, trainer, pl_module) -> None:
+        raise NotImplementedError
+
+    def reset(self) -> None:
+        raise NotImplementedError
 
 class AnemoiCheckpoint(ModelCheckpoint):
     """A checkpoint callback that saves the model after every validation epoch."""
@@ -853,114 +635,10 @@ class AnemoiCheckpoint(ModelCheckpoint):
                 logger.after_save_checkpoint(proxy(self))
 
 
-def get_callbacks(config: DictConfig) -> list:  # noqa: C901
-    """Setup callbacks for PyTorch Lightning trainer.
+class MemCleanupCallback(Callback):
+    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+        # This will be called after the ValidationCallback
+        self.cleanup()
 
-    Parameters
-    ----------
-    config : DictConfig
-        Job configuration
-
-    Returns
-    -------
-    List
-        A list of PyTorch Lightning callbacks
-
-    """
-    checkpoint_settings = {
-        "dirpath": config.hardware.paths.checkpoints,
-        "verbose": False,
-        # save weights, optimizer states, LR-schedule states, hyperparameters etc.
-        # https://pytorch-lightning.readthedocs.io/en/stable/common/checkpointing_basic.html#contents-of-a-checkpoint
-        "save_weights_only": False,
-        "auto_insert_metric_name": False,
-        # save after every validation epoch, if we've improved
-        "save_on_train_epoch_end": False,
-        "enable_version_counter": False,
-    }
-
-    ckpt_frequency_save_dict = {}
-    for key, frequency_dict in config.diagnostics.checkpoint.items():
-        frequency = frequency_dict["save_frequency"]
-        n_saved = frequency_dict["num_models_saved"]
-        if key == "every_n_minutes" and frequency_dict["save_frequency"] is not None:
-            target = "train_time_interval"
-            frequency = timedelta(minutes=frequency_dict["save_frequency"])
-        else:
-            target = key
-        ckpt_frequency_save_dict[target] = (config.hardware.files.checkpoint[key], frequency, n_saved)
-
-    trainer_callbacks = []
-    if not config.diagnostics.profiler:
-        for save_key, (name, save_frequency, save_n_models) in ckpt_frequency_save_dict.items():
-            if save_frequency is not None:
-                LOGGER.debug("Checkpoint callback at %s = %s ...", save_key, save_frequency)
-                trainer_callbacks.extend(
-                    # save_top_k: the save_top_k flag can either save the best or the last k checkpoints
-                    # depending on the monitor flag on ModelCheckpoint.
-                    # See https://lightning.ai/docs/pytorch/stable/common/checkpointing_intermediate.html for reference
-                    [
-                        AnemoiCheckpoint(
-                            config=config,
-                            filename=name,
-                            save_last=True,
-                            **{save_key: save_frequency},
-                            # if save_top_k == k, last k models saved; if save_top_k == -1, all models are saved
-                            save_top_k=save_n_models,
-                            monitor="step",
-                            mode="max",
-                            **checkpoint_settings,
-                        ),
-                    ],
-                )
-            else:
-                LOGGER.debug("Not setting up a checkpoint callback with %s", save_key)
-    else:
-        # the tensorboard logger + pytorch profiler cause pickling errors when writing checkpoints
-        LOGGER.warning("Profiling is enabled - will not write any training or inference model checkpoints!")
-
-    if any([config.diagnostics.log.wandb.enabled, config.diagnostics.log.mlflow.enabled]):
-        from pytorch_lightning.callbacks import LearningRateMonitor
-
-        trainer_callbacks.append(
-            LearningRateMonitor(
-                logging_interval="step",
-                log_momentum=False,
-            ),
-        )
-
-    if config.diagnostics.eval.enabled:
-        trainer_callbacks.append(RolloutEval(config))
-
-    if config.diagnostics.plot.enabled:
-        trainer_callbacks.extend(
-            [
-                PlotLoss(config),
-                PlotSample(config),
-            ],
-        )
-        if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
-            trainer_callbacks.extend([PlotAdditionalMetrics(config)])
-
-    if config.training.swa.enabled:
-        from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
-
-        trainer_callbacks.append(
-            StochasticWeightAveraging(
-                swa_lrs=config.training.swa.lr,
-                swa_epoch_start=min(
-                    int(0.75 * config.training.max_epochs),
-                    config.training.max_epochs - 1,
-                ),
-                annealing_epochs=max(int(0.25 * config.training.max_epochs), 1),
-                annealing_strategy="cos",
-                device=None,
-            ),
-        )
-
-    trainer_callbacks.append(ParentUUIDCallback(config))
-
-    if config.diagnostics.plot.learned_features:
-        LOGGER.debug("Setting up a callback to plot the trainable graph node features ...")
-        trainer_callbacks.append(GraphTrainableFeaturesPlot(config))
-    return trainer_callbacks
+    def cleanup(self):
+        torch.cuda.empty_cache()

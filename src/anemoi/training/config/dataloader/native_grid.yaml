@@ -24,9 +24,10 @@ batch_size:
 # if null then we run through all the batches
 limit_batches:
   training: null
-  validation: null
   test: 20
   predict: 20
+
+val_check_interval: 100
 
 # ============
 # Dataloader definitions

@@ -192,3 +192,5 @@ src/anemoi/training/config/private_*
 slurm_output/
 jobscripts/
 *ecsbatch*
+
+src/anemoi/training/config/**/private_*

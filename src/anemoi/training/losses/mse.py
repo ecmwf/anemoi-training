@@ -42,7 +42,7 @@ class WeightedMSELoss(nn.Module):
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-        self.register_buffer("node_weights", node_weights, persistent=True)
+        self.register_buffer("node_weights", node_weights[...,None], persistent=True)
         self.register_buffer("feature_weights", feature_weights, persistent=True)
 
     def forward(
@@ -50,37 +50,41 @@ class WeightedMSELoss(nn.Module):
         pred: torch.Tensor,
         target: torch.Tensor,
         squash: bool = True,
-        feature_scaling: bool = True,
+        feature_scale: bool = True,
+        feature_indices: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 
         Parameters
         ----------
         pred : torch.Tensor
-            Prediction tensor, shape (bs, lat*lon, n_outputs)
+            Prediction tensor, shape (bs, ens, (timesteps), lat*lon, n_mseputs)
         target : torch.Tensor
-            Target tensor, shape (bs, lat*lon, n_outputs)
+            Target tensor, shape (bs, (timesteps), lat*lon, n_mseputs)
         squash : bool, optional
-            Average last dimension, by default True
-
+            Reduce the spatial and feature dimensions
+        feature_scaling : bool, optional
+            Scale the loss by the feature weights
+        feature_indices: indices of the features to scale the loss by
         Returns
         -------
         torch.Tensor
             Weighted MSE loss
 
         """
-        out = torch.square(pred - target)
-        if feature_scaling:
-            out = out * self.feature_weights
+        mse = torch.square(pred.mean(dim=1) - target) 
+        
+        # Scale in feature dimension
+        if feature_scale:
+            mse = (mse * self.feature_weights) if feature_indices is None else (mse * self.feature_weights[..., feature_indices]) 
+            mse = mse * self.feature_weights.numel()
+            # Normalize by number of features
 
-        # Squash by last dimension
+        # Scale in spatial dimension
+        mse *= (self.node_weights / self.sum_function(self.node_weights))
+
+        # Squash - reduce spatial and feature dimensions
         if squash:
-            out = self.avg_function(out, dim=-1)
-            # Weight by area
-            out *= (self.node_weights / self.sum_function(self.node_weights))
-            return self.sum_function(out)
+            mse = self.sum_function(mse, axis=(-2,-1))
 
-        # Weight by area
-        # keep last dimension (variables) when summing weights
-        out *=  (self.node_weights[..., None] / self.sum_function(self.node_weights) )
-        return self.sum_function(out, axis=(0, 1, 2))
+        return self.avg_function(mse, axis=(0)) 
