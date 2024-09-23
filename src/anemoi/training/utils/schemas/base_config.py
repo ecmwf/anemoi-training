@@ -10,9 +10,11 @@
 
 from dataclasses import dataclass
 
+from .hardware import HardwareConfig
 from .training import TrainingConfig
 
 
 @dataclass
 class BaseConfig:
     training: TrainingConfig
+    hardware: HardwareConfig
