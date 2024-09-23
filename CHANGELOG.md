@@ -24,6 +24,7 @@ Keep it human-readable, your future self will thank you!
 - Enforce same binning for histograms comparing true data to predicted data
 - Fix: Inference checkpoints are now saved according the frequency settings defined in the config [#37](https://github.com/ecmwf/anemoi-training/pull/37)
 - Feature: Add configurable models [#50](https://github.com/ecmwf/anemoi-training/pulls/50)
+- Feature: Authentication support for mlflow sync - [#51](https://github.com/ecmwf/anemoi-training/pull/51)
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
 
 ### Fixed
@@ -34,7 +35,6 @@ Keep it human-readable, your future self will thank you!
 ### Changed
 
 - Updated configuration examples in documentation and corrected links - [#46](https://github.com/ecmwf/anemoi-training/pull/46)
-- Feature: Authentication support for mlflow sync
 
 ## [0.1.0 - Anemoi training - First release](https://github.com/ecmwf/anemoi-training/releases/tag/0.1.0) - 2024-08-16
 
