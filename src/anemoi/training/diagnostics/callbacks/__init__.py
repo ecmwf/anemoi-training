@@ -428,7 +428,9 @@ class PlotLoss(BasePlotCallback):
             LOGGER.warning("More than 20 groups detected, but colormap has only 20 colors.")
         # if all groups have count 1 use black color
         bar_color_per_group = (
-            "k" if not np.any(group_counts - 1) else plt.get_cmap(cmap)(np.linspace(0, 1, len(unique_group_list)))
+            np.tile("k", len(group_counts))
+            if not np.any(group_counts - 1)
+            else plt.get_cmap(cmap)(np.linspace(0, 1, len(unique_group_list)))
         )
 
         # set x-ticks

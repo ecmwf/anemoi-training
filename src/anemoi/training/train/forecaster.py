@@ -12,6 +12,7 @@ import math
 import os
 from collections import defaultdict
 from collections.abc import Mapping
+from functools import cached_property
 
 import numpy as np
 import pytorch_lightning as pl
@@ -88,7 +89,11 @@ class GraphForecaster(pl.LightningModule):
             config,
             data_indices,
         )
-        self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
+        self.loss = WeightedMSELoss(
+            node_weights=self.loss_weights,
+            data_variances=loss_scaling,
+            apply_variable_node_weights=True,
+        )
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
 
         if config.training.loss_gradient_scaling:
@@ -126,6 +131,11 @@ class GraphForecaster(pl.LightningModule):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
+
+    @cached_property
+    def training_weights_for_imputed_variables(self) -> torch.Tensor:
+        """Get the training weights for imputed variables."""
+        return self.model.pre_processors["example_imputer"].loss_weights_training
 
     @staticmethod
     def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
@@ -222,6 +232,11 @@ class GraphForecaster(pl.LightningModule):
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch = self.model.pre_processors(batch, in_place=not validation_mode)
+
+        # TODO(sara): inefficient to do this every step?
+        self.loss.update_variable_node_weights(
+            self.training_weights_for_imputed_variables[:, self.data_indices.internal_data.output.full],
+        )
         metrics = {}
 
         # start rollout of preprocessed batch
