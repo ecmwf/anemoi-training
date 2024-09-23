@@ -134,7 +134,10 @@ class GraphForecaster(pl.LightningModule):
 
     @cached_property
     def training_weights_for_imputed_variables(self) -> torch.Tensor:
-        """Get the training weights for imputed variables."""
+        LOGGER.info("EXECUTE cached property training_weights_for_imputed_variables, Should appear only once")
+        # TODO(sara): iterate of all pre-processors and check if they have a loss_weights_training attribute
+        # TODO(sara): what to do about the remappers??
+        # could we maybe apply the remapper to the loss_weights_training?
         return self.model.pre_processors["example_imputer"].loss_weights_training
 
     @staticmethod
