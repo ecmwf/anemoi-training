@@ -38,12 +38,14 @@ from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities import rank_zero_only
 
+from anemoi.training.diagnostics.plots import equirectangular_projection
 from anemoi.training.diagnostics.plots import init_plot_settings
 from anemoi.training.diagnostics.plots import plot_graph_features
 from anemoi.training.diagnostics.plots import plot_histogram
 from anemoi.training.diagnostics.plots import plot_loss
 from anemoi.training.diagnostics.plots import plot_power_spectrum
 from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
+from anemoi.training.diagnostics.plots import scatter_plot
 
 if TYPE_CHECKING:
     import pytorch_lightning as pl
@@ -292,14 +294,25 @@ class LongRolloutPlots(BasePlotCallback):
         """
         super().__init__(config)
 
-        LOGGER.debug(
-            "Setting up callback for plots with long rollout: rollout = %d, frequency = every %d epoch ...",
-            config.diagnostics.plot.longrollout.rollout,
-            config.diagnostics.plot.longrollout.frequency,
+        self.rollout = (
+            config.diagnostics.plot.longrollout.rollout
+            if config.diagnostics.plot.longrollout.get("enabled") and config.diagnostics.plot.longrollout.get("rollout")
+            else []
         )
-        self.rollout = config.diagnostics.plot.longrollout.rollout
+        self.video_rollout = (
+            config.diagnostics.plot.longrollout.video_rollout
+            if config.diagnostics.plot.longrollout.get("video_enabled")
+            and config.diagnostics.plot.longrollout.get("video_rollout")
+            else None
+        )
         self.eval_frequency = config.diagnostics.plot.longrollout.frequency
         self.sample_idx = self.config.diagnostics.plot.sample_idx
+        LOGGER.info(
+            "Setting up callback for plots with long rollout: rollout for plots = %s, rollout for video = %d, frequency = every %d epoch ...",
+            self.rollout,
+            self.video_rollout,
+            self.eval_frequency,
+        )
 
     @rank_zero_only
     def _plot(
@@ -352,9 +365,12 @@ class LongRolloutPlots(BasePlotCallback):
         ].cpu()
         data_0 = self.post_processors(input_tensor_0).numpy()
 
+        if self.video_rollout:
+            data_over_time = []
+
         # start rollout
         with torch.no_grad():
-            for rollout_step in range(max(self.rollout)):
+            for rollout_step in range(max(max(self.rollout), self.video_rollout)):
                 y_pred = pl_module(x)  # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
 
                 x = pl_module.advance_input(x, y_pred, batch, rollout_step)
@@ -393,6 +409,63 @@ class LongRolloutPlots(BasePlotCallback):
                         tag=f"gnn_pred_val_sample_rstep{rollout_step:03d}_batch{batch_idx:04d}_rank0",
                         exp_log_tag=f"val_pred_sample_rstep{rollout_step:03d}_rank{local_rank:01d}",
                     )
+                if self.video_rollout and rollout_step < self.video_rollout:
+                    # prepare predicted output tensors for video
+                    output_tensor = self.post_processors(
+                        y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu()
+                    ).numpy()
+
+                    data_over_time.append(output_tensor[0, 0, :, 0])
+
+        if self.video_rollout:
+            import matplotlib.animation as animation
+
+            pc_lat, pc_lon = equirectangular_projection(self.latlons)
+
+            # Function to update the scatter plot for each frame
+            def update(frame):  # , data
+                plt.clf()  # Clear the current figure
+                scatter_plot(fig, ax, lon=pc_lon, lat=pc_lat, data=data_over_time[frame], title=f"pred")
+                plt.title(f"Frame {frame + 1}")
+                return (ax,)
+
+            # Create the animation
+            num_frames = len(data_over_time)
+
+            # Prepare the figure
+            fig, ax = plt.subplots(figsize=(8, 6), dpi=72)
+            # Create an initial scatter plot to initialize scat
+            scat = scatter_plot(
+                fig, ax, lon=pc_lon, lat=pc_lat, data=data_over_time[0], title=f"pred"
+            )  # Initialize with the first frame
+
+            # Create the animation
+            anim = animation.FuncAnimation(
+                fig,
+                update,
+                frames=num_frames,
+                # fargs=data_over_time,  # Placeholder for scatter plot
+                interval=200,
+                blit=True,
+            )
+
+            print("WRITE GIF")
+
+            if self.save_basedir is not None:
+                save_path = Path(
+                    self.save_basedir,
+                    "plots",
+                    f"animation_epoch{epoch:03d}.gif",
+                )
+                print("PAAATTTHHH:", save_path)
+
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                anim.save(save_path, writer="pillow", fps=8)
+
+                if self.config.diagnostics.log.mlflow.enabled:
+                    run_id = logger.run_id
+                    logger.experiment.log_artifact(run_id, str(save_path))
+
         LOGGER.info(f"Time taken to plot samples after longer rollout: {int(time.time() - start_time)} seconds")
 
     @rank_zero_only
@@ -1113,6 +1186,8 @@ def get_callbacks(config: DictConfig) -> list:  # noqa: C901
             trainer_callbacks.extend([PlotAdditionalMetrics(config)])
         if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
             trainer_callbacks.extend([LongRolloutPlots(config)])
+        if config.diagnostics.plot.get("longrolloutvideo") and config.diagnostics.plot.longrolloutvideo.enabled:
+            trainer_callbacks.extend([LongRolloutVideo(config)])
 
     if config.training.swa.enabled:
         from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
