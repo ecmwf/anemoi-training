@@ -1111,7 +1111,7 @@ def get_callbacks(config: DictConfig) -> list:  # noqa: C901
         )
         if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
             trainer_callbacks.extend([PlotAdditionalMetrics(config)])
-        if config.diagnostics.plot.longrollout.enabled:
+        if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
             trainer_callbacks.extend([LongRolloutPlots(config)])
 
     if config.training.swa.enabled:
