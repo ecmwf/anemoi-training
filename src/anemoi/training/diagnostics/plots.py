@@ -613,8 +613,6 @@ def scatter_plot(
         norm=norm,
         rasterized=True,
     )
-    ax.set_xlim((-np.pi, np.pi))
-    ax.set_ylim((-np.pi / 2, np.pi / 2))
 
     continents.plot_continents(ax)
 
