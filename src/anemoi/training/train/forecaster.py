@@ -79,16 +79,17 @@ class GraphForecaster(pl.LightningModule):
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
 
-        # Flexible stepping function definition
+        # Prediction strategy can be either residual, state or tendency
+        self.prediction_strategy = config.training.prediction_strategy
         self.step_functions = {
             "state": self._step_state,
+            "residual": self._step_state,
             "tendency": self._step_tendency,
-            "tendency_norm": self._step_tendency_norm,
-            "tendency_loss": self._step_tendency_loss,
         }
-        self.prediction_mode = config.training.prediction_mode
-        assert self.prediction_mode in self.step_functions, f"Invalid prediction mode: {self.prediction_mode}"
-        LOGGER.info("Using stepping mode: %s", self.prediction_mode)
+        assert self.prediction_strategy in self.step_functions, f"Invalid prediction mode: {self.prediction_strategy}"
+        if self.prediction_strategy == "tendency":
+            assert statistics_tendencies is not None, "Tendency mode requires statistics_tendencies in dataset."
+        LOGGER.info("Using prediction strategy: %s", self.prediction_strategy)
 
         self.data_indices = data_indices
 
@@ -182,13 +183,8 @@ class GraphForecaster(pl.LightningModule):
             # Create specific metrics from hydra to log in logger
             if key in config.training.metrics:
                 metric_ranges[key] = [idx]
-
-        # Weight the loss of each variable by the inverse variance of its tendencies
-        if config.training.feature_weighting.inverse_tendency_variance_scaling:
-            variances = self.model.statistics_tendencies["stdev"][data_indices.data.output.full]
-            loss_scaling /= variances
-
         loss_scaling = torch.from_numpy(loss_scaling)
+
         # metric for validation, after postprocessing
         for key, idx in data_indices.model.output.name_to_index.items():
             # Split pressure levels on "_" separator
@@ -238,10 +234,8 @@ class GraphForecaster(pl.LightningModule):
         validation_mode: bool = False,
         in_place_proc: bool = True,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
-        return self.step_functions[self.prediction_mode](batch, batch_idx, validation_mode, in_place_proc)
+        return self.step_functions[self.prediction_strategy](batch, batch_idx, validation_mode, in_place_proc)
 
-    # NOTE (jakob-schloer): Observation on nomenclature - is this _step_residual function
-    # only residual if the "self.model" has a residual structure???
     def _step_state(
         self,
         batch: torch.Tensor,
@@ -249,6 +243,7 @@ class GraphForecaster(pl.LightningModule):
         validation_mode: bool = False,
         in_place_proc: bool = True,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        """Forward pass of trainer for state and residual prediction strategy."""
         del batch_idx, in_place_proc
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         batch = self.model.pre_processors_state(batch, in_place=False)  # normalized in-place
@@ -280,7 +275,6 @@ class GraphForecaster(pl.LightningModule):
 
         # scale loss
         loss *= 1.0 / self.rollout
-
         return loss, metrics, y_preds
 
     def _step_tendency(
@@ -290,125 +284,12 @@ class GraphForecaster(pl.LightningModule):
         validation_mode: bool = False,
         in_place_proc: bool = True,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
-        del batch_idx, in_place_proc
-        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
-        metrics = {}
+        """Forward pass of trainer for tendency prediction strategy.
 
-        # x is non-processed state
-        x = batch[:, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, multi_step, latlon, nvar)
-
-        y_preds = []
-        for rollout_step in range(self.rollout):
-
-            # normalise inputs
-            x_in = self.model.pre_processors_state(x, in_place=False, data_index=self.data_indices.data.input.full)
-
-            # prediction (normalized tendency)
-            tendency_pred = self(x_in)
-
-            # re-construct non-processed predicted state
-            y_pred = self.model.add_tendency_to_state(x[:, -1, ...], tendency_pred)
-
-            # Target is full state
-            y_target = batch[:, self.multi_step + rollout_step, ..., self.data_indices.data.output.full]
-
-            # calculate loss
-            loss += checkpoint(self.loss, y_pred, y_target, use_reentrant=False)
-
-            # advance input using non-processed x, y_pred and batch
-            x = self.advance_input(x, y_pred, batch, rollout_step)
-
-            if validation_mode:
-                metrics_next, _ = self.calculate_val_metrics(
-                    None,
-                    None,
-                    rollout_step,
-                    self.enable_plot,
-                    y_pred_postprocessed=y_pred,
-                    y_postprocessed=y_target,
-                )
-
-                metrics.update(metrics_next)
-
-                y_preds.extend(y_pred)
-
-        # scale loss
-        loss *= 1.0 / self.rollout
-
-        return loss, metrics, y_preds
-
-    def _step_tendency_norm(
-        self,
-        batch: torch.Tensor,
-        batch_idx: int,
-        validation_mode: bool = False,
-        in_place_proc: bool = True,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
-        """Remove after testing."""
-        del batch_idx, in_place_proc
-        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
-        metrics = {}
-
-        # x is non-processed state
-        x = batch[:, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, multi_step, latlon, nvar)
-
-        y_preds = []
-        for rollout_step in range(self.rollout):
-
-            # normalise inputs
-            x_in = self.model.pre_processors_state(x, in_place=False, data_index=self.data_indices.data.input.full)
-
-            # prediction (normalized tendency)
-            tendency_pred = self(x_in)
-
-            # re-construct non-processed predicted state
-            y_pred = self.model.add_tendency_to_state(x[:, -1, ...], tendency_pred)
-
-            # Target is full state
-            y_target = batch[:, self.multi_step + rollout_step, ..., self.data_indices.data.output.full]
-
-            # calculate loss
-            loss += checkpoint(
-                self.loss,
-                self.model.pre_processors_state(y_pred, in_place=False, data_index=self.data_indices.data.output.full),
-                self.model.pre_processors_state(
-                    y_target,
-                    in_place=False,
-                    data_index=self.data_indices.data.output.full,
-                ),
-                use_reentrant=False,
-            )
-
-            # advance input using non-processed x, y_pred and batch
-            x = self.advance_input(x, y_pred, batch, rollout_step)
-
-            if validation_mode:
-                metrics_next, _ = self.calculate_val_metrics(
-                    None,
-                    None,
-                    rollout_step,
-                    self.enable_plot,
-                    y_pred_postprocessed=y_pred,
-                    y_postprocessed=y_target,
-                )
-
-                metrics.update(metrics_next)
-
-                y_preds.extend(y_pred)
-
-        # scale loss
-        loss *= 1.0 / self.rollout
-
-        return loss, metrics, y_preds
-
-    def _step_tendency_loss(
-        self,
-        batch: torch.Tensor,
-        batch_idx: int,
-        validation_mode: bool = False,
-        in_place_proc: bool = True,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
-        """Remove after testing."""
+        y_pred = model(x_t0)
+        y_target = x_t1 - x_t0
+        loss(y_pred, y_target)
+        """
         del batch_idx, in_place_proc
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}

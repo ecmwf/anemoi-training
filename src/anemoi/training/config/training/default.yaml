@@ -74,7 +74,6 @@ feature_weighting:
     2d: 0.5
     tp: 0.025
     cp: 0.0025
-  inverse_tendency_variance_scaling: False
 
 metrics:
   - all_individual
@@ -89,7 +88,7 @@ pressure_level_scaler:
   minimum: 0.2
   slope: 0.001
 
-prediction_mode: residual
-tendency_mode: false
+# Prediction strategy can be either 'tendency', 'residual' or 'state'
+prediction_strategy: residual
 
 num_saniity_val_steps: 4
