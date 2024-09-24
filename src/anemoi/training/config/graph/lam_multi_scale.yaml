@@ -12,6 +12,7 @@ nodes:
       lam_dataset: ${hardware.paths.data}/${hardware.files.dataset}
       forcing_dataset: ${hardware.paths.data}/${hardware.files.forcing_dataset}
       thinning: 25
+      #forcing_area: ???  # (north, west, south, east). It only works with feature/support-forcing-area-in-cutout
     attributes: ${graph.attributes.nodes}
   # Hidden nodes
   hidden:
