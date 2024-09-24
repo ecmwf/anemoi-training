@@ -11,13 +11,14 @@
 from dataclasses import dataclass
 from typing import Any
 
+from .data import DataConfig
 from .hardware import HardwareConfig
 from .training import TrainingConfig
 
 
 @dataclass
 class BaseConfig:
-    data: Any
+    data: DataConfig
     dataloader: Any
     diagnostics: Any
     hardware: HardwareConfig
