@@ -40,16 +40,19 @@ CALLBACK_DICT: dict[str, type[Callback]] = {
 }
 
 # Callbacks to add according to flags in the config
-CONFIG_ENABLED_CALLBACKS: dict[list[str] | str, list[type[Callback]] | type[Callback]] = {
-    ["diagnostics.log.wandb.enabled", "diagnostics.log.mlflow.enabled"]: LearningRateMonitor,
-    "diagnostics.eval.enabled": RolloutEval,
-    "diagnostics.plot.enabled": [
-        PlotLoss,
-        PlotSample,
-    ],
-    "training.swa.enabled": StochasticWeightAveraging,
-    "diagnostics.plot.learned_features": GraphTrainableFeaturesPlot,
-}
+CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str, list[type[Callback]] | type[Callback]]] = [
+    (["diagnostics.log.wandb.enabled", "diagnostics.log.mlflow.enabled"], LearningRateMonitor),
+    ("diagnostics.eval.enabled", RolloutEval),
+    (
+        "diagnostics.plot.enabled",
+        [
+            PlotLoss,
+            PlotSample,
+        ],
+    ),
+    ("training.swa.enabled", StochasticWeightAveraging),
+    ("diagnostics.plot.learned_features", GraphTrainableFeaturesPlot),
+]
 
 
 def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint] | None:
@@ -111,7 +114,7 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
     """Get callbacks that are enabled in the config as according to CONFIG_ENABLED_CALLBACKS"""
     callbacks = []
 
-    for enable_key, callback_list in CONFIG_ENABLED_CALLBACKS.items():
+    for enable_key, callback_list in CONFIG_ENABLED_CALLBACKS:
         if isinstance(enable_key, list):
             if not any(config.get(key, False) for key in enable_key):
                 continue
