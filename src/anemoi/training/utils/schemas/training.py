@@ -43,22 +43,22 @@ class LR:
 
 @dataclass
 class PressureLevel:
-    q: float = 0.6
-    t: float = 6
-    u: float = 0.8
-    v: float = 0.5
-    w: float = 0.001
-    z: float = 12
+    q: float | None = 0.6
+    t: float | None = 6
+    u: float | None = 0.8
+    v: float | None = 0.5
+    w: float | None = 0.001
+    z: float | None = 12
 
 
 @dataclass
 class Surface:
-    sp: float = 10
-    u10: float = 0.1
-    v10: float = 0.1
-    d2: float = 0.5
-    tp: float = 0.025
-    cp: float = 0.0025
+    sp: float | None = 10
+    u10: float | None = 0.1
+    v10: float | None = 0.1
+    d2: float | None = 0.5
+    tp: float | None = 0.025
+    cp: float | None = 0.0025
 
 
 @dataclass
