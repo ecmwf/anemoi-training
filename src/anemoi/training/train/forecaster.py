@@ -92,7 +92,7 @@ class GraphForecaster(pl.LightningModule):
         self.loss = WeightedMSELoss(
             node_weights=self.loss_weights,
             data_variances=loss_scaling,
-            apply_variable_node_weights=True,
+            apply_variable_node_mask=True,
         )
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
 
@@ -133,12 +133,20 @@ class GraphForecaster(pl.LightningModule):
         return self.model(x, self.model_comm_group)
 
     @cached_property
-    def training_weights_for_imputed_variables(self) -> torch.Tensor:
+    def training_weights_for_imputed_variables(self) -> None:
         LOGGER.info("EXECUTE cached property training_weights_for_imputed_variables, Should appear only once")
         # TODO(sara): iterate of all pre-processors and check if they have a loss_weights_training attribute
         # TODO(sara): what to do about the remappers??
         # could we maybe apply the remapper to the loss_weights_training?
-        return self.model.pre_processors["example_imputer"].loss_weights_training
+        loss_weights_mask = torch.ones_like(self.loss.variable_node_mask)
+        for pre_processor in self.model.pre_processors.processors.values():
+            if hasattr(pre_processor, "loss_weights_training"):
+                loss_weights_mask = loss_weights_mask * pre_processor.loss_weights_training
+
+        self.loss.update_variable_node_mask(
+            loss_weights_mask
+        )
+        return None
 
     @staticmethod
     def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
@@ -236,10 +244,9 @@ class GraphForecaster(pl.LightningModule):
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch = self.model.pre_processors(batch, in_place=not validation_mode)
 
-        # TODO(sara): inefficient to do this every step?
-        self.loss.update_variable_node_weights(
-            self.training_weights_for_imputed_variables[:, self.data_indices.internal_data.output.full],
-        )
+        # TODO(sara): Does this actually work? 
+        self.training_weights_for_imputed_variables
+
         metrics = {}
 
         # start rollout of preprocessed batch

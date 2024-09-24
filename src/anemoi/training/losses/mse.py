@@ -25,7 +25,7 @@ class WeightedMSELoss(nn.Module):
         node_weights: torch.Tensor,
         data_variances: torch.Tensor | None = None,
         ignore_nans: bool | None = False,
-        apply_variable_node_weights: bool | None = False,
+        apply_variable_node_mask: bool | None = False,
     ) -> None:
         """Latitude- and (inverse-)variance-weighted MSE Loss.
 
@@ -44,11 +44,11 @@ class WeightedMSELoss(nn.Module):
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-        self.apply_variable_node_weights = apply_variable_node_weights
+        self.apply_variable_node_mask = apply_variable_node_mask
         # register_buffer:
         #   1. save the tensor to the model
         #   2. make sure that the tensor is moved to the same device as the model
-        self.register_buffer("variable_node_weights", torch.ones(1), persistent=True)
+        self.register_buffer("variable_node_mask", torch.ones(1), persistent=True)
         self.register_buffer("weights", node_weights, persistent=True)
         if data_variances is not None:
             self.register_buffer("ivar", data_variances, persistent=True)
@@ -82,8 +82,8 @@ class WeightedMSELoss(nn.Module):
         if hasattr(self, "ivar"):
             out *= self.ivar
 
-        if self.apply_variable_node_weights:
-            out = self.variable_node_weights * out
+        if self.apply_variable_node_mask:
+            out = self.variable_node_mask * out
 
         # Squash by last dimension
         if squash:
@@ -99,6 +99,6 @@ class WeightedMSELoss(nn.Module):
         out /= self.sum_function(self.weights[..., None].expand_as(out), axis=(0, 1, 2))
         return self.sum_function(out, axis=(0, 1, 2))
 
-    def update_variable_node_weights(self, variable_node_weights: torch.tensor) -> None:
+    def update_variable_node_mask(self, variable_node_mask: torch.tensor) -> None:
         """Update the variable node weights."""
-        self.variable_node_weights = variable_node_weights
+        self.variable_node_mask = variable_node_mask
