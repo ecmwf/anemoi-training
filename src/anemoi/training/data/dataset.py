@@ -222,7 +222,11 @@ class NativeGridDataset(IterableDataset):
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
 
-            yield torch.from_numpy(x)
+            if self.model_comm_group_rank == 0: 
+                yield torch.from_numpy(x)
+            else:
+                # yield dummy data only with shape information for non-root ranks
+                yield torch.tensor(x.shape, dtype=torch.long)
 
     def __repr__(self) -> str:
         return f"""

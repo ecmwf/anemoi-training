@@ -219,9 +219,19 @@ class GraphForecaster(pl.LightningModule):
         validation_mode: bool = False,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         del batch_idx
+
+        # preprocess batch and broadcast from gpu0 to model comm group
+        if self.model_comm_group_rank == 0: # note that this defaults to 0 if model_comm_group is None
+            # for validation not normalized in-place because remappers cannot be applied in-place
+            batch = self.model.pre_processors(batch, in_place=not validation_mode)
+        else: 
+            shape = (batch.shape[0],) + tuple(batch[0].tolist())
+            batch = torch.zeros(shape, device=self.device)
+
+        if self.model_comm_group is not None:
+            torch.distributed.broadcast(batch, src=0, group=self.model_comm_group)
+
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
-        # for validation not normalized in-place because remappers cannot be applied in-place
-        batch = self.model.pre_processors(batch, in_place=not validation_mode)
         metrics = {}
 
         # start rollout of preprocessed batch
