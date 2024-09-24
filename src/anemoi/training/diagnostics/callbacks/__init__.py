@@ -308,7 +308,7 @@ class LongRolloutPlots(BasePlotCallback):
         self.eval_frequency = config.diagnostics.plot.longrollout.frequency
         self.sample_idx = self.config.diagnostics.plot.sample_idx
         LOGGER.info(
-            "Setting up callback for plots with long rollout: rollout for plots = %s, rollout for video = %d, frequency = every %d epoch ...",
+            "Setting up callback for plots with long rollout: rollout for plots = %s, rollout for video = %s, frequency = every %d epoch ...",
             self.rollout,
             self.video_rollout,
             self.eval_frequency,
@@ -417,54 +417,55 @@ class LongRolloutPlots(BasePlotCallback):
 
                     data_over_time.append(output_tensor[0, 0, :, 0])
 
-        if self.video_rollout:
-            import matplotlib.animation as animation
+            if self.video_rollout:
+                import matplotlib.animation as animation
 
-            pc_lat, pc_lon = equirectangular_projection(self.latlons)
+                pc_lat, pc_lon = equirectangular_projection(self.latlons)
 
-            # Function to update the scatter plot for each frame
-            def update(frame):  # , data
-                plt.clf()  # Clear the current figure
-                scatter_plot(fig, ax, lon=pc_lon, lat=pc_lat, data=data_over_time[frame], title=f"pred")
-                plt.title(f"Frame {frame + 1}")
-                return (ax,)
+                # Create the animation
+                # Create a list to store the frames (artists)
+                frames = []
 
-            # Create the animation
-            num_frames = len(data_over_time)
+                # Loop through the data and create the scatter plot for each frame
+                for frame_num, frame_data in enumerate(data_over_time):
+                    # Prepare the figure
+                    fig, ax = plt.subplots(figsize=(8, 6), dpi=72)
+                    scatter_plot(fig, ax, lon=pc_lon, lat=pc_lat, data=frame_data, title=f"pred")
+                    frames.append([fig])  # Append the scatter plot as a list of artists
+                    if self.save_basedir is not None:
+                        save_path = Path(
+                            self.save_basedir,
+                            "plots",
+                            f"animation_epoch{epoch:03d}_{frame_num}.png",
+                        )
+                        print("PAAATTTHHH:", save_path)
 
-            # Prepare the figure
-            fig, ax = plt.subplots(figsize=(8, 6), dpi=72)
-            # Create an initial scatter plot to initialize scat
-            scat = scatter_plot(
-                fig, ax, lon=pc_lon, lat=pc_lat, data=data_over_time[0], title=f"pred"
-            )  # Initialize with the first frame
+                        save_path.parent.mkdir(parents=True, exist_ok=True)
+                        fig.savefig(save_path, dpi=100, bbox_inches="tight")
 
-            # Create the animation
-            anim = animation.FuncAnimation(
-                fig,
-                update,
-                frames=num_frames,
-                # fargs=data_over_time,  # Placeholder for scatter plot
-                interval=200,
-                blit=True,
-            )
+                        if self.config.diagnostics.log.mlflow.enabled:
+                            run_id = logger.run_id
+                            logger.experiment.log_artifact(run_id, str(save_path))
 
-            print("WRITE GIF")
+                # Create the animation using ArtistAnimation
+                anim = animation.ArtistAnimation(fig, frames, interval=200, blit=True)
 
-            if self.save_basedir is not None:
-                save_path = Path(
-                    self.save_basedir,
-                    "plots",
-                    f"animation_epoch{epoch:03d}.gif",
-                )
-                print("PAAATTTHHH:", save_path)
+                print("WRITE GIF")
 
-                save_path.parent.mkdir(parents=True, exist_ok=True)
-                anim.save(save_path, writer="pillow", fps=8)
+                if self.save_basedir is not None:
+                    save_path = Path(
+                        self.save_basedir,
+                        "plots",
+                        f"animation_epoch{epoch:03d}.gif",
+                    )
+                    print("PAAATTTHHH:", save_path)
 
-                if self.config.diagnostics.log.mlflow.enabled:
-                    run_id = logger.run_id
-                    logger.experiment.log_artifact(run_id, str(save_path))
+                    save_path.parent.mkdir(parents=True, exist_ok=True)
+                    anim.save(save_path, writer="pillow", fps=8)
+
+                    if self.config.diagnostics.log.mlflow.enabled:
+                        run_id = logger.run_id
+                        logger.experiment.log_artifact(run_id, str(save_path))
 
         LOGGER.info(f"Time taken to plot samples after longer rollout: {int(time.time() - start_time)} seconds")
 
