@@ -9,6 +9,7 @@
 
 
 from dataclasses import dataclass
+from typing import Any
 
 from .hardware import HardwareConfig
 from .training import TrainingConfig
@@ -16,5 +17,10 @@ from .training import TrainingConfig
 
 @dataclass
 class BaseConfig:
-    training: TrainingConfig
+    data: Any
+    dataloader: Any
+    diagnostics: Any
     hardware: HardwareConfig
+    graph: Any
+    model: Any
+    training: TrainingConfig
