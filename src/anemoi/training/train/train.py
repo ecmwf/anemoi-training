@@ -40,6 +40,8 @@ from anemoi.training.utils.schemas.base_config import BaseConfig
 from anemoi.training.utils.schemas.data import DataConfig
 from anemoi.training.utils.schemas.hardware import HardwareConfig
 from anemoi.training.utils.schemas.models.gnn import GNNConfig
+from anemoi.training.utils.schemas.models.graph_transformer import GraphTransformerConfig
+from anemoi.training.utils.schemas.models.transformer import TransformerConfig
 from anemoi.training.utils.schemas.training import TrainingConfig
 from anemoi.training.utils.seeding import get_base_seed
 
@@ -54,6 +56,8 @@ cs.store(group="training", name="training", node=TrainingConfig)
 cs.store(group="hardware", name="hardware", node=HardwareConfig)
 cs.store(group="data", name="data", node=DataConfig)
 cs.store(group="models", name="gnn", node=GNNConfig)
+cs.store(group="models", name="transformer", node=TransformerConfig)
+cs.store(group="models", name="graph_transformer", node=GraphTransformerConfig)
 
 
 class AnemoiTrainer:
