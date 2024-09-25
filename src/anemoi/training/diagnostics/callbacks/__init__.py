@@ -11,6 +11,8 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from hydra.utils import instantiate
+
 from anemoi.training.diagnostics.callbacks.checkpointing import AnemoiCheckpoint
 from anemoi.training.diagnostics.callbacks.evaluation import RolloutEval
 from anemoi.training.diagnostics.callbacks.id import ParentUUIDCallback
@@ -20,7 +22,6 @@ from anemoi.training.diagnostics.callbacks.plotting import LongRolloutPlots
 from anemoi.training.diagnostics.callbacks.plotting import PlotAdditionalMetrics
 from anemoi.training.diagnostics.callbacks.plotting import PlotLoss
 from anemoi.training.diagnostics.callbacks.plotting import PlotSample
-from anemoi.training.diagnostics.callbacks.weights import StochasticWeightAveraging
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -28,16 +29,6 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
-# Dictionary of available callbacks
-CALLBACK_DICT: dict[str, type[Callback]] = {
-    "RolloutEval": RolloutEval,
-    "LongRolloutPlots": LongRolloutPlots,
-    "GraphTrainableFeaturesPlot": GraphTrainableFeaturesPlot,
-    "PlotLoss": PlotLoss,
-    "PlotSample": PlotSample,
-    "PlotAdditionalMetrics": PlotAdditionalMetrics,
-    "ParentUUIDCallback": ParentUUIDCallback,
-}
 
 # Callbacks to add according to flags in the config
 CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str, list[type[Callback]] | type[Callback]]] = [
@@ -50,7 +41,6 @@ CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str, list[type[Callback]] | typ
             PlotSample,
         ],
     ),
-    ("training.swa.enabled", StochasticWeightAveraging),
     ("diagnostics.plot.learned_features", GraphTrainableFeaturesPlot),
 ]
 
@@ -111,7 +101,11 @@ def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint] | Non
 
 
 def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
-    """Get callbacks that are enabled in the config as according to CONFIG_ENABLED_CALLBACKS"""
+    """Get callbacks that are enabled in the config as according to CONFIG_ENABLED_CALLBACKS
+
+    Provides backwards compatibility
+
+    """
     callbacks = []
 
     for enable_key, callback_list in CONFIG_ENABLED_CALLBACKS:
@@ -126,13 +120,34 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
         else:
             callbacks.append(callback_list(config))
 
+    if config.diagnostics.plot.enabled:
+        if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
+            callbacks.extend([PlotAdditionalMetrics(config)])
+        if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
+            callbacks.extend([LongRolloutPlots(config)])
+
     return callbacks
 
 
 def get_callbacks(config: DictConfig) -> list:  # noqa: C901
     """Setup callbacks for PyTorch Lightning trainer.
 
-    Set config.diagnostics.callbacks to a list of callback names to enable them.
+    Set `config.diagnostics.callbacks` to a list of callback configurations
+    in hydra form.
+
+    E.g.:
+    ```
+    callbacks:
+        swa: _target_: pytorch_lightning.callbacks.stochastic_weight_avg.StochasticWeightAveraging
+                swa_lr: 1e-4
+                swa_epoch_start: 123
+                annealing_epochs: 5
+                annealing_strategy: cos
+                device: null
+    ```
+
+    Set `config.diagnostics.plot_callbacks` to a list of plotting callback configurations
+    will only be added if `config.diagnostics.plot.enabled` is set to True.
 
     Parameters
     ----------
@@ -147,26 +162,27 @@ def get_callbacks(config: DictConfig) -> list:  # noqa: C901
     """
 
     trainer_callbacks: list[Callback] = []
+
+    # Get Checkpoint callback
     checkpoint_callback = _get_checkpoint_callback(config)
     if checkpoint_callback is not None:
         trainer_callbacks.extend(checkpoint_callback)
 
-    requested_callbacks = config.diagnostics.get("callbacks", [])
+    # Base callbacks
+    for callback in config.diagnostics.get("callbacks", []):
+        # Instantiate new callbacks
+        trainer_callbacks.append(instantiate(callback))
 
-    for callback in requested_callbacks:
-        if callback in CALLBACK_DICT:
-            trainer_callbacks.append(CALLBACK_DICT[callback](config))
-        else:
-            LOGGER.error(f"Callback {callback} not found in CALLBACK_DICT\n{list(CALLBACK_DICT.keys())}")
+    # Plotting callbacks
+    if config.diagnostics.plot.enabled:
+        for callback in config.diagnostics.get("plot_callbacks", []):
+            # Instantiate new callbacks
+            trainer_callbacks.append(instantiate(callback))
 
+    # Extend with backward compatible callbacks
     trainer_callbacks.extend(_get_config_enabled_callbacks(config))
 
-    if config.diagnostics.plot.enabled:
-        if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
-            trainer_callbacks.extend([PlotAdditionalMetrics(config)])
-        if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
-            trainer_callbacks.extend([LongRolloutPlots(config)])
-
+    # Parent UUID callback
     trainer_callbacks.append(ParentUUIDCallback(config))
 
     return trainer_callbacks
