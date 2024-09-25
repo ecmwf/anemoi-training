@@ -70,6 +70,12 @@ checkpoint:
     save_frequency: null # Does not scale with rollout
     num_models_saved: 0
 
+callbacks:
+  # Add callbacks here
+
+plot_callbacks:
+  # Add extra plot callbacks here
+
 log:
   wandb:
     enabled: False
