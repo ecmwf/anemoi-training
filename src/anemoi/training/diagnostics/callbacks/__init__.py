@@ -86,7 +86,7 @@ def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint] | Non
                             mode="max",
                             **checkpoint_settings,
                         ),
-                    ],
+                    ]
                 )
             else:
                 LOGGER.debug("Not setting up a checkpoint callback with %s", save_key)
