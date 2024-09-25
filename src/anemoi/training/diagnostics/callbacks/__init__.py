@@ -91,7 +91,6 @@ class BasePlotCallback(Callback, ABC):
         self.save_basedir = config.hardware.paths.plots
         self.plot_frequency = config.diagnostics.plot.frequency
         self.post_processors_state = None
-        self.pre_processors_state = None
         self.latlons = None
         init_plot_settings()
 
@@ -265,88 +264,8 @@ class LongRolloutPlots(BasePlotCallback):
         self.eval_frequency = config.diagnostics.plot.longrollout.frequency
         self.sample_idx = self.config.diagnostics.plot.sample_idx
 
-    @rank_zero_only
-    def _plot_updated(
-        self,
-        trainer,
-        pl_module: pl.LightningModule,
-        batch: torch.Tensor,
-        batch_idx,
-        epoch,
-    ) -> None:
-        """Updated plotting logic which has to be tested.
-
-        TODO (jakob): Test this and replace all plotting functions with this logic.
-        """
-        start_time = time.time()
-        logger = trainer.logger
-
-        # Build dictionary of inidicies and parameters to be plotted
-        plot_parameters_dict = {
-            pl_module.data_indices.model.output.name_to_index[name]: (
-                name,
-                name not in self.config.data.get("diagnostic", []),
-            )
-            for name in self.config.diagnostics.plot.parameters
-        }
-        if self.latlons is None:
-            self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
-        local_rank = pl_module.local_rank
-
-        x_initial_condition = (
-            batch[
-                self.sample_idx,
-                pl_module.multi_step - 1,
-                ...,
-                pl_module.data_indices.data.output.full,
-            ]
-            .cpu()
-            .numpy()
-        )
-
-        x_in = batch[:, 0 : pl_module.multi_step - 1, ...]
-        for rollout_step in range(max(self.rollout)):
-            x_pred = pl_module.model.predict_step(x_in)
-            x_in = pl_module.advance_input(x_in, x_pred, batch, rollout_step)
-
-            x_target_np = (
-                batch[
-                    self.sample_idx,
-                    pl_module.multi_step + rollout_step,  # (pl_module.multi_step - 1) + (rollout_step + 1)
-                    ...,
-                    pl_module.data_indices.data.output.full,
-                ]
-                .cpu()
-                .numpy()
-            )
-            x_pred_np = (
-                x_pred[
-                    self.sample_idx : self.sample_idx + 1,
-                    ...,
-                    pl_module.data_indices.data.output.full,
-                ]
-                .cpu()
-                .numpy()
-            )
-
-            fig = plot_predicted_multilevel_flat_sample(
-                plot_parameters_dict,
-                self.config.diagnostics.plot.per_sample,
-                self.latlons,
-                self.config.diagnostics.plot.get("accumulation_levels_plot", None),
-                self.config.diagnostics.plot.get("cmap_accumulation", None),
-                x_initial_condition.squeeze(),
-                x_target_np.squeeze(),
-                x_target_np[0, 0, :, :],  # rolloutstep, first member
-            )
-
-            self._output_figure(
-                logger,
-                fig,
-                epoch=epoch,
-                tag=f"gnn_pred_val_sample_rstep{rollout_step:03d}_batch{batch_idx:04d}_rank0",
-                exp_log_tag=f"val_pred_sample_rstep{rollout_step:03d}_rank{local_rank:01d}",
-            )
+        if config.training.prediction_strategy == "tendency":
+            LOGGER.warning("LongRolloutPlots callback is not supported for 'tendency' prediction strategy.")
 
     @rank_zero_only
     def _plot(
@@ -371,14 +290,15 @@ class LongRolloutPlots(BasePlotCallback):
             for name in self.config.diagnostics.plot.parameters
         }
 
-        if self.post_processors is None:
+        if self.post_processors_state is None:
             # Copy to be used across all the training cycle
-            self.post_processors = copy.deepcopy(pl_module.model.post_processors).cpu()
+            self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
+
         if self.latlons is None:
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
 
-        batch = pl_module.model.pre_processors(batch, in_place=False)
+        batch = pl_module.model.pre_processors_state(batch, in_place=False)
         # prepare input tensor for rollout from preprocessed batch
         x = batch[
             :,
@@ -397,7 +317,7 @@ class LongRolloutPlots(BasePlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data_0 = self.post_processors(input_tensor_0).numpy()
+        data_0 = self.post_processors_state(input_tensor_0).numpy()
 
         # start rollout
         with torch.no_grad():
@@ -414,10 +334,10 @@ class LongRolloutPlots(BasePlotCallback):
                         ...,
                         pl_module.data_indices.internal_data.output.full,
                     ].cpu()
-                    data_rollout_step = self.post_processors(input_tensor_rollout_step).numpy()
+                    data_rollout_step = self.post_processors_state(input_tensor_rollout_step).numpy()
 
                     # prepare predicted output tensor for plotting
-                    output_tensor = self.post_processors(
+                    output_tensor = self.post_processors_state(
                         y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu()
                     ).numpy()
 
@@ -645,7 +565,7 @@ class PlotLoss(BasePlotCallback):
         # reorder parameter_names by position
         self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
 
-        batch = pl_module.model.pre_processors(batch, in_place=False)
+        batch = pl_module.model.pre_processors_state(batch, in_place=False)
         for rollout_step in range(pl_module.rollout):
             y_hat = outputs[1][rollout_step]
             y_true = batch[
@@ -722,7 +642,7 @@ class PlotSample(BasePlotCallback):
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
 
-        batch = pl_module.model.pre_processors(batch, in_place=False)
+        batch = pl_module.model.pre_processors_state(batch, in_place=False)
         input_tensor = batch[
             self.sample_idx,
             pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
@@ -807,16 +727,13 @@ class PlotAdditionalMetrics(BasePlotCallback):
         # When running in Async mode, it might happen that in the last epoch these tensors
         # have been moved to the cpu (and then the denormalising would fail as the 'input_tensor' would be on CUDA
         # but internal ones would be on the cpu), The lines below allow to address this problem
-        if self.pre_processors_state is None:
-            # Copy to be used across all the training cycle
-            self.pre_processors_state = copy.deepcopy(pl_module.model.pre_processors_state).cpu()
         if self.post_processors_state is None:
             # Copy to be used across all the training cycle
             self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
         if self.latlons is None:
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
-        batch = pl_module.model.pre_processors(batch, in_place=False)
+        batch = pl_module.model.pre_processors_state(batch, in_place=False)
         input_tensor = batch[
             self.sample_idx,
             pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
