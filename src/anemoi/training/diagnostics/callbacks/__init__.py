@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 
+import matplotlib
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -313,6 +314,11 @@ class LongRolloutPlots(BasePlotCallback):
             self.video_rollout,
             self.eval_frequency,
         )
+        # find the maximum rollout length
+        if len(self.rollout) == 0:
+            self.max_rollout = 0
+        if self.video_rollout:
+            self.max_rollout = max(self.max_rollout, self.video_rollout)
 
     @rank_zero_only
     def _plot(
@@ -353,7 +359,7 @@ class LongRolloutPlots(BasePlotCallback):
             pl_module.data_indices.internal_data.input.full,
         ]  # (bs, multi_step, latlon, nvar)
         assert (
-            batch.shape[1] >= max(self.rollout) + pl_module.multi_step
+            batch.shape[1] >= self.max_rollout + pl_module.multi_step
         ), "Batch length not sufficient for requested rollout length!"
 
         # prepare input tensor for plotting
@@ -367,10 +373,13 @@ class LongRolloutPlots(BasePlotCallback):
 
         if self.video_rollout:
             data_over_time = []
+            # collect min and max values for each variable for the colorbar
+            vmin = np.inf * np.ones(len(plot_parameters_dict))
+            vmax = -1 * np.inf * np.ones(len(plot_parameters_dict))
 
         # start rollout
         with torch.no_grad():
-            for rollout_step in range(max(max(self.rollout), self.video_rollout)):
+            for rollout_step in range(self.max_rollout):
                 y_pred = pl_module(x)  # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
 
                 x = pl_module.advance_input(x, y_pred, batch, rollout_step)
@@ -414,63 +423,93 @@ class LongRolloutPlots(BasePlotCallback):
                     output_tensor = self.post_processors(
                         y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu()
                     ).numpy()
-
-                    data_over_time.append(output_tensor[0, 0, :, 0])
+                    data_over_time.append(output_tensor[0, 0, :, np.array(list(plot_parameters_dict.keys()))])
+                    vmin = np.minimum(vmin, np.nanmin(data_over_time[-1], axis=1))
+                    vmax = np.maximum(vmax, np.nanmax(data_over_time[-1], axis=1))
 
             if self.video_rollout:
                 import matplotlib.animation as animation
 
                 pc_lat, pc_lon = equirectangular_projection(self.latlons)
 
-                # Create the animation
-                # Create a list to store the frames (artists)
-                frames = []
+                for idx, (variable_idx, (variable_name, _)) in enumerate(plot_parameters_dict.items()):
 
-                # Loop through the data and create the scatter plot for each frame
-                for frame_num, frame_data in enumerate(data_over_time):
+                    cmap = "viridis"
+                    if variable_name == "mwd":
+                        cmap = "twilight"
+                    # Create the animation
+                    # Create a list to store the frames (artists)
+                    frames = []
                     # Prepare the figure
-                    fig, ax = plt.subplots(figsize=(8, 6), dpi=72)
-                    scatter_plot(fig, ax, lon=pc_lon, lat=pc_lat, data=frame_data, title=f"pred")
-                    frames.append([fig])  # Append the scatter plot as a list of artists
+                    fig, ax = plt.subplots(figsize=(10, 6), dpi=72)
+                    # Create initial data and colorbar
+                    scatter_frame = ax.scatter(
+                        pc_lon,
+                        pc_lat,
+                        c=data_0[0, :, variable_idx],
+                        cmap=cmap,
+                        s=5,
+                        alpha=1.0,
+                        rasterized=True,
+                        vmin=np.nanmin(data_0[0, :, variable_idx]),  # vmin[idx],
+                        vmax=np.nanmax(data_0[0, :, variable_idx]),  # vmax[idx],
+                    )
+                    ax.set_xlim((-np.pi, np.pi))
+                    ax.set_ylim((-np.pi / 2, np.pi / 2))
+                    from anemoi.training.diagnostics.maps import Coastlines
+                    from anemoi.training.diagnostics.plots import _hide_axes_ticks
+
+                    continents = Coastlines()
+                    continents.plot_continents(ax)
+                    ax.set_aspect("auto", adjustable=None)
+                    _hide_axes_ticks(ax)
+                    ax.set_title(f"{variable_name}")
+                    colorbar = fig.colorbar(scatter_frame, ax=ax)
+                    frames.append([scatter_frame])
+
+                    # Loop through the data and create the scatter plot for each frame
+                    for frame_num, frame_data in enumerate(data_over_time):
+                        scatter_frame = ax.scatter(
+                            pc_lon,
+                            pc_lat,
+                            c=frame_data[idx],
+                            cmap=cmap,
+                            s=5,
+                            alpha=1.0,
+                            rasterized=True,
+                            vmin=np.nanmin(data_0[0, :, variable_idx]),  # vmin[idx],
+                            vmax=np.nanmax(data_0[0, :, variable_idx]),  # vmax[idx],
+                        )
+                        ax.set_xlim((-np.pi, np.pi))
+                        ax.set_ylim((-np.pi / 2, np.pi / 2))
+                        continents.plot_continents(ax)
+                        ax.set_aspect("auto", adjustable=None)
+                        _hide_axes_ticks(ax)
+                        frames.append([scatter_frame])  # Each frame contains a list of artists (images)
+
+                    # Create the animation using ArtistAnimation
+                    anim = animation.ArtistAnimation(fig, frames, interval=400, blit=True)
+
                     if self.save_basedir is not None:
                         save_path = Path(
                             self.save_basedir,
                             "plots",
-                            f"animation_epoch{epoch:03d}_{frame_num}.png",
+                            f"gnn_pred_val_animation_{variable_name}_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0_epoch{epoch:03d}.gif",
                         )
-                        print("PAAATTTHHH:", save_path)
 
                         save_path.parent.mkdir(parents=True, exist_ok=True)
-                        fig.savefig(save_path, dpi=100, bbox_inches="tight")
+                        anim.save(save_path, writer="pillow", fps=8)
 
                         if self.config.diagnostics.log.mlflow.enabled:
                             run_id = logger.run_id
                             logger.experiment.log_artifact(run_id, str(save_path))
 
-                # Create the animation using ArtistAnimation
-                anim = animation.ArtistAnimation(fig, frames, interval=200, blit=True)
-
-                print("WRITE GIF")
-
-                if self.save_basedir is not None:
-                    save_path = Path(
-                        self.save_basedir,
-                        "plots",
-                        f"animation_epoch{epoch:03d}.gif",
-                    )
-                    print("PAAATTTHHH:", save_path)
-
-                    save_path.parent.mkdir(parents=True, exist_ok=True)
-                    anim.save(save_path, writer="pillow", fps=8)
-
-                    if self.config.diagnostics.log.mlflow.enabled:
-                        run_id = logger.run_id
-                        logger.experiment.log_artifact(run_id, str(save_path))
-
-        LOGGER.info(f"Time taken to plot samples after longer rollout: {int(time.time() - start_time)} seconds")
+        LOGGER.info(f"Time taken to plot/animate samples after longer rollout: {int(time.time() - start_time)} seconds")
 
     @rank_zero_only
     def on_validation_batch_end(self, trainer, pl_module, output, batch, batch_idx) -> None:
+        # cannot use validation-output-tensor here, since it only contains as many timesteps as the validation batchsize
+        del output
         if (batch_idx) % self.plot_frequency == 0 and (trainer.current_epoch + 1) % self.eval_frequency == 0:
             precision_mapping = {
                 "16-mixed": torch.float16,
@@ -1185,10 +1224,10 @@ def get_callbacks(config: DictConfig) -> list:  # noqa: C901
         )
         if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
             trainer_callbacks.extend([PlotAdditionalMetrics(config)])
-        if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
+        if config.diagnostics.plot.get("longrollout") and (
+            config.diagnostics.plot.longrollout.enabled or config.diagnostics.plot.longrollout.video_enabled
+        ):
             trainer_callbacks.extend([LongRolloutPlots(config)])
-        if config.diagnostics.plot.get("longrolloutvideo") and config.diagnostics.plot.longrolloutvideo.enabled:
-            trainer_callbacks.extend([LongRolloutVideo(config)])
 
     if config.training.swa.enabled:
         from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
