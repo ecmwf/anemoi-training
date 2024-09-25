@@ -160,7 +160,7 @@ class GraphForecaster(pl.LightningModule):
             pressure_level.minimum,
         )
 
-        for key, idx in data_indices.model.output.name_to_index.items():
+        for key, idx in data_indices.internal_model.output.name_to_index.items():
             # Split pressure levels on "_" separator
             split = key.split("_")
             if len(split) > 1 and split[-1].isdigit():
@@ -184,7 +184,6 @@ class GraphForecaster(pl.LightningModule):
             if key in config.training.metrics:
                 metric_ranges[key] = [idx]
         loss_scaling = torch.from_numpy(loss_scaling)
-
         # metric for validation, after postprocessing
         for key, idx in data_indices.model.output.name_to_index.items():
             # Split pressure levels on "_" separator
@@ -213,17 +212,18 @@ class GraphForecaster(pl.LightningModule):
         x = x.roll(-1, dims=1)
 
         # Get prognostic variables
-        x[:, -1, :, :, self.data_indices.model.input.prognostic] = y_pred[
+        x[:, -1, :, :, self.data_indices.internal_model.input.prognostic] = y_pred[
             ...,
-            self.data_indices.model.output.prognostic,
+            self.data_indices.internal_model.output.prognostic,
         ]
 
         # get new "constants" needed for time-varying fields
-        x[:, -1, :, :, self.data_indices.model.input.forcing] = batch[
+        x[:, -1, :, :, self.data_indices.internal_model.input.forcing] = batch[
             :,
             self.multi_step + rollout_step,
-            ...,
-            self.data_indices.data.input.forcing,
+            :,
+            :,
+            self.data_indices.internal_data.input.forcing,
         ]
         return x
 
@@ -233,8 +233,15 @@ class GraphForecaster(pl.LightningModule):
         batch_idx: int,
         validation_mode: bool = False,
         in_place_proc: bool = True,
+        use_checkpoint: bool = True,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
-        return self.step_functions[self.prediction_strategy](batch, batch_idx, validation_mode, in_place_proc)
+        return self.step_functions[self.prediction_strategy](
+            batch,
+            batch_idx,
+            validation_mode,
+            in_place_proc,
+            use_checkpoint,
+        )
 
     def _step_state(
         self,
@@ -242,24 +249,34 @@ class GraphForecaster(pl.LightningModule):
         batch_idx: int,
         validation_mode: bool = False,
         in_place_proc: bool = True,
+        use_checkpoint: bool = True,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         """Forward pass of trainer for state and residual prediction strategy."""
         del batch_idx, in_place_proc
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
-        batch = self.model.pre_processors_state(batch, in_place=False)  # normalized in-place
+        batch = self.model.pre_processors_state(batch, in_place=not validation_mode)  # normalized in-place
         metrics = {}
 
-        # start rollout
-        x = batch[:, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, multi_step, latlon, nvar)
+        # start rollout of preprocessed batch
+        x = batch[
+            :,
+            0 : self.multi_step,
+            ...,
+            self.data_indices.internal_data.input.full,
+        ]  # (bs, multi_step, latlon, nvar)
 
         y_preds = []
         for rollout_step in range(self.rollout):
             # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
             y_pred = self(x)
 
-            y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.data.output.full]
+            y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss += checkpoint(self.loss, y_pred, y, use_reentrant=False)
+
+            if use_checkpoint:
+                loss += checkpoint(self.loss, y_pred, y, use_reentrant=False)
+            else:
+                loss += self.loss(y_pred, y)
 
             x = self.advance_input(x, y_pred, batch, rollout_step)
 
@@ -283,6 +300,7 @@ class GraphForecaster(pl.LightningModule):
         batch_idx: int,
         validation_mode: bool = False,
         in_place_proc: bool = True,
+        use_checkpoint: bool = True,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         """Forward pass of trainer for tendency prediction strategy.
 
@@ -315,7 +333,10 @@ class GraphForecaster(pl.LightningModule):
             tendency_target = batch_tendency_target[:, rollout_step]
 
             # calculate loss
-            loss += checkpoint(self.loss, tendency_pred, tendency_target, use_reentrant=False)
+            if use_checkpoint:
+                loss += checkpoint(self.loss, tendency_pred, tendency_target, use_reentrant=False)
+            else:
+                loss += self.loss(tendency_pred, tendency_target)
 
             # re-construct non-processed predicted state
             y_pred = self.model.add_tendency_to_state(x[:, -1, ...], tendency_pred)

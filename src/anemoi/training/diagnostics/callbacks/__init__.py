@@ -189,17 +189,7 @@ class RolloutEval(Callback):
         )
         self.rollout = config.diagnostics.eval.rollout
         self.frequency = config.diagnostics.eval.frequency
-
-    def _eval(
-        self,
-        pl_module: pl.LightningModule,
-        batch: torch.Tensor,
-        batch_idx: int,
-    ) -> None:
-        with torch.no_grad():
-            loss, metrics, _ = pl_module._step(batch, validation_mode=True, in_place_proc=False, batch_idx=batch_idx)
-
-            self._log(pl_module, loss, metrics, batch.shape[0])
+        self.prediction_strategy = config.training.prediction_strategy
 
     def _log(self, pl_module: pl.LightningModule, loss: torch.Tensor, metrics: dict, bs: int) -> None:
         pl_module.log(
@@ -246,7 +236,225 @@ class RolloutEval(Callback):
             context = torch.autocast(device_type=batch.device.type, dtype=dtype) if dtype is not None else nullcontext()
 
             with context:
-                self._eval(pl_module, batch, batch_idx)
+                with torch.no_grad():
+                    loss, metrics, y_preds = pl_module._step(
+                        batch, batch_idx, validation_mode=True, in_place_proc=False, use_checkpoint=False
+                    )
+                    self._log(pl_module, loss, metrics, batch.shape[0])
+
+
+class LongRolloutPlots(BasePlotCallback):
+    """Evaluates the model performance over a (longer) rollout window."""
+
+    def __init__(self, config) -> None:
+        """Initialize RolloutEval callback.
+
+        Parameters
+        ----------
+        config : dict
+            Dictionary with configuration settings
+        """
+        super().__init__(config)
+
+        LOGGER.debug(
+            "Setting up callback for plots with long rollout: rollout = %d, frequency = every %d epoch ...",
+            config.diagnostics.plot.longrollout.rollout,
+            config.diagnostics.plot.longrollout.frequency,
+        )
+        self.rollout = config.diagnostics.plot.longrollout.rollout
+        self.eval_frequency = config.diagnostics.plot.longrollout.frequency
+        self.sample_idx = self.config.diagnostics.plot.sample_idx
+
+    @rank_zero_only
+    def _plot_updated(
+        self,
+        trainer,
+        pl_module: pl.LightningModule,
+        batch: torch.Tensor,
+        batch_idx,
+        epoch,
+    ) -> None:
+        """Updated plotting logic which has to be tested.
+
+        TODO (jakob): Test this and replace all plotting functions with this logic.
+        """
+        start_time = time.time()
+        logger = trainer.logger
+
+        # Build dictionary of inidicies and parameters to be plotted
+        plot_parameters_dict = {
+            pl_module.data_indices.model.output.name_to_index[name]: (
+                name,
+                name not in self.config.data.get("diagnostic", []),
+            )
+            for name in self.config.diagnostics.plot.parameters
+        }
+        if self.latlons is None:
+            self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
+        local_rank = pl_module.local_rank
+
+        x_initial_condition = (
+            batch[
+                self.sample_idx,
+                pl_module.multi_step - 1,
+                ...,
+                pl_module.data_indices.data.output.full,
+            ]
+            .cpu()
+            .numpy()
+        )
+
+        x_in = batch[:, 0 : pl_module.multi_step - 1, ...]
+        for rollout_step in range(max(self.rollout)):
+            x_pred = pl_module.model.predict_step(x_in)
+            x_in = pl_module.advance_input(x_in, x_pred, batch, rollout_step)
+
+            x_target_np = (
+                batch[
+                    self.sample_idx,
+                    pl_module.multi_step + rollout_step,  # (pl_module.multi_step - 1) + (rollout_step + 1)
+                    ...,
+                    pl_module.data_indices.data.output.full,
+                ]
+                .cpu()
+                .numpy()
+            )
+            x_pred_np = (
+                x_pred[
+                    self.sample_idx : self.sample_idx + 1,
+                    ...,
+                    pl_module.data_indices.data.output.full,
+                ]
+                .cpu()
+                .numpy()
+            )
+
+            fig = plot_predicted_multilevel_flat_sample(
+                plot_parameters_dict,
+                self.config.diagnostics.plot.per_sample,
+                self.latlons,
+                self.config.diagnostics.plot.get("accumulation_levels_plot", None),
+                self.config.diagnostics.plot.get("cmap_accumulation", None),
+                x_initial_condition.squeeze(),
+                x_target_np.squeeze(),
+                x_target_np[0, 0, :, :],  # rolloutstep, first member
+            )
+
+            self._output_figure(
+                logger,
+                fig,
+                epoch=epoch,
+                tag=f"gnn_pred_val_sample_rstep{rollout_step:03d}_batch{batch_idx:04d}_rank0",
+                exp_log_tag=f"val_pred_sample_rstep{rollout_step:03d}_rank{local_rank:01d}",
+            )
+
+    @rank_zero_only
+    def _plot(
+        self,
+        trainer,
+        pl_module: pl.LightningModule,
+        batch: torch.Tensor,
+        batch_idx,
+        epoch,
+    ) -> None:
+
+        start_time = time.time()
+
+        logger = trainer.logger
+
+        # Build dictionary of inidicies and parameters to be plotted
+        plot_parameters_dict = {
+            pl_module.data_indices.model.output.name_to_index[name]: (
+                name,
+                name not in self.config.data.get("diagnostic", []),
+            )
+            for name in self.config.diagnostics.plot.parameters
+        }
+
+        if self.post_processors is None:
+            # Copy to be used across all the training cycle
+            self.post_processors = copy.deepcopy(pl_module.model.post_processors).cpu()
+        if self.latlons is None:
+            self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
+        local_rank = pl_module.local_rank
+
+        batch = pl_module.model.pre_processors(batch, in_place=False)
+        # prepare input tensor for rollout from preprocessed batch
+        x = batch[
+            :,
+            0 : pl_module.multi_step,
+            ...,
+            pl_module.data_indices.internal_data.input.full,
+        ]  # (bs, multi_step, latlon, nvar)
+        assert (
+            batch.shape[1] >= max(self.rollout) + pl_module.multi_step
+        ), "Batch length not sufficient for requested rollout length!"
+
+        # prepare input tensor for plotting
+        input_tensor_0 = batch[
+            self.sample_idx,
+            pl_module.multi_step - 1,
+            ...,
+            pl_module.data_indices.internal_data.output.full,
+        ].cpu()
+        data_0 = self.post_processors(input_tensor_0).numpy()
+
+        # start rollout
+        with torch.no_grad():
+            for rollout_step in range(max(self.rollout)):
+                y_pred = pl_module(x)  # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
+
+                x = pl_module.advance_input(x, y_pred, batch, rollout_step)
+
+                if (rollout_step + 1) in self.rollout:
+                    # prepare true output tensor for plotting
+                    input_tensor_rollout_step = batch[
+                        self.sample_idx,
+                        pl_module.multi_step + rollout_step,  # (pl_module.multi_step - 1) + (rollout_step + 1)
+                        ...,
+                        pl_module.data_indices.internal_data.output.full,
+                    ].cpu()
+                    data_rollout_step = self.post_processors(input_tensor_rollout_step).numpy()
+
+                    # prepare predicted output tensor for plotting
+                    output_tensor = self.post_processors(
+                        y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu()
+                    ).numpy()
+
+                    fig = plot_predicted_multilevel_flat_sample(
+                        plot_parameters_dict,
+                        self.config.diagnostics.plot.per_sample,
+                        self.latlons,
+                        self.config.diagnostics.plot.get("accumulation_levels_plot", None),
+                        self.config.diagnostics.plot.get("cmap_accumulation", None),
+                        data_0.squeeze(),
+                        data_rollout_step.squeeze(),
+                        output_tensor[0, 0, :, :],  # rolloutstep, first member
+                        # force_global_view=self.show_entire_globe,
+                    )
+
+                    self._output_figure(
+                        logger,
+                        fig,
+                        epoch=epoch,
+                        tag=f"gnn_pred_val_sample_rstep{rollout_step:03d}_batch{batch_idx:04d}_rank0",
+                        exp_log_tag=f"val_pred_sample_rstep{rollout_step:03d}_rank{local_rank:01d}",
+                    )
+        LOGGER.info(f"Time taken to plot samples after longer rollout: {int(time.time() - start_time)} seconds")
+
+    @rank_zero_only
+    def on_validation_batch_end(self, trainer, pl_module, output, batch, batch_idx) -> None:
+        if (batch_idx) % self.plot_frequency == 0 and (trainer.current_epoch + 1) % self.eval_frequency == 0:
+            precision_mapping = {
+                "16-mixed": torch.float16,
+                "bf16-mixed": torch.bfloat16,
+            }
+            prec = trainer.precision
+            dtype = precision_mapping.get(prec)
+            context = torch.autocast(device_type=batch.device.type, dtype=dtype) if dtype is not None else nullcontext()
+
+            with context:
+                self._plot(trainer, pl_module, batch, batch_idx, epoch=trainer.current_epoch)
 
 
 class GraphTrainableFeaturesPlot(BasePlotCallback):
@@ -378,10 +586,10 @@ class PlotLoss(BasePlotCallback):
             parameters_to_groups = unique_group_list[group_inverse]
             unique_group_list, group_inverse = np.unique(parameters_to_groups, return_inverse=True)
 
-            # sort paramters by groups
+            # sort parameters by groups
             sort_by_parameter_group = np.argsort(group_inverse, kind="stable")
 
-        # apply new order to paramters
+        # apply new order to parameters
         sorted_parameter_names = np.array(self.parameter_names)[sort_by_parameter_group]
         parameters_to_groups = parameters_to_groups[sort_by_parameter_group]
         unique_group_list, group_inverse, group_counts = np.unique(
@@ -390,15 +598,15 @@ class PlotLoss(BasePlotCallback):
             return_counts=True,
         )
 
-        LOGGER.info("Order of parameters in loss histogram: %s", sorted_parameter_names)
-
         # get a color per group and project to parameter list
         cmap = "tab10" if len(unique_group_list) <= 10 else "tab20"
         if len(unique_group_list) > 20:
             LOGGER.warning("More than 20 groups detected, but colormap has only 20 colors.")
         # if all groups have count 1 use black color
         bar_color_per_group = (
-            "k" if not np.any(group_counts - 1) else plt.get_cmap(cmap)(np.linspace(0, 1, len(unique_group_list)))
+            np.tile("k", len(group_counts))
+            if not np.any(group_counts - 1)
+            else plt.get_cmap(cmap)(np.linspace(0, 1, len(unique_group_list)))
         )
 
         # set x-ticks
@@ -430,17 +638,19 @@ class PlotLoss(BasePlotCallback):
         batch_idx: int,
         epoch: int,
     ) -> None:
-        del batch_idx  # unused
         logger = trainer.logger
 
-        parameter_names = list(pl_module.data_indices.model.output.name_to_index.keys())
-        paramter_positions = list(pl_module.data_indices.model.output.name_to_index.values())
+        parameter_names = list(pl_module.data_indices.internal_model.output.name_to_index.keys())
+        parameter_positions = list(pl_module.data_indices.internal_model.output.name_to_index.values())
         # reorder parameter_names by position
-        self.parameter_names = [parameter_names[i] for i in np.argsort(paramter_positions)]
+        self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
 
+        batch = pl_module.model.pre_processors(batch, in_place=False)
         for rollout_step in range(pl_module.rollout):
             y_hat = outputs[1][rollout_step]
-            y_true = batch[:, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.data.output.full]
+            y_true = batch[
+                :, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.internal_data.output.full
+            ]
             loss = pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()
 
             sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group
@@ -480,6 +690,8 @@ class PlotSample(BasePlotCallback):
         """
         super().__init__(config)
         self.sample_idx = self.config.diagnostics.plot.sample_idx
+        self.precip_and_related_fields = self.config.diagnostics.plot.precip_and_related_fields
+        LOGGER.info(f"Using defined accumulation colormap for fields: {self.precip_and_related_fields}")
 
     @rank_zero_only
     def _plot(
@@ -510,11 +722,12 @@ class PlotSample(BasePlotCallback):
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
 
+        batch = pl_module.model.pre_processors(batch, in_place=False)
         input_tensor = batch[
             self.sample_idx,
             pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
             ...,
-            pl_module.data_indices.data.output.full,
+            pl_module.data_indices.internal_data.output.full,
         ].cpu()
         data = self.post_processors_state(input_tensor).numpy()
 
@@ -533,6 +746,7 @@ class PlotSample(BasePlotCallback):
                 data[0, ...].squeeze(),
                 data[rollout_step + 1, ...].squeeze(),
                 output_tensor[rollout_step, ...],
+                precip_and_related_fields=self.precip_and_related_fields,
             )
 
             self._output_figure(
@@ -575,6 +789,8 @@ class PlotAdditionalMetrics(BasePlotCallback):
         """
         super().__init__(config)
         self.sample_idx = self.config.diagnostics.plot.sample_idx
+        self.precip_and_related_fields = self.config.diagnostics.plot.precip_and_related_fields
+        LOGGER.info(f"Using precip histogram plotting method for fields: {self.precip_and_related_fields}")
 
     @rank_zero_only
     def _plot(
@@ -600,12 +816,12 @@ class PlotAdditionalMetrics(BasePlotCallback):
         if self.latlons is None:
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
-
+        batch = pl_module.model.pre_processors(batch, in_place=False)
         input_tensor = batch[
             self.sample_idx,
             pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
             ...,
-            pl_module.data_indices.data.output.full,
+            pl_module.data_indices.internal_data.output.full,
         ].cpu()
         data = self.post_processors_state(input_tensor).numpy()
         output_tensor = self.post_processors_state(
@@ -628,6 +844,7 @@ class PlotAdditionalMetrics(BasePlotCallback):
                     data[0, ...].squeeze(),
                     data[rollout_step + 1, ...].squeeze(),
                     output_tensor[rollout_step, ...],
+                    precip_and_related_fields=self.precip_and_related_fields,
                 )
 
                 self._output_figure(
@@ -941,6 +1158,8 @@ def get_callbacks(config: DictConfig) -> list:  # noqa: C901
         )
         if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
             trainer_callbacks.extend([PlotAdditionalMetrics(config)])
+        if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
+            trainer_callbacks.extend([LongRolloutPlots(config)])
 
     if config.training.swa.enabled:
         from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
