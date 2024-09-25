@@ -13,15 +13,11 @@ from typing import TYPE_CHECKING
 
 from hydra.utils import instantiate
 
+from anemoi.training.diagnostics.callbacks import plotting
 from anemoi.training.diagnostics.callbacks.checkpointing import AnemoiCheckpoint
 from anemoi.training.diagnostics.callbacks.evaluation import RolloutEval
 from anemoi.training.diagnostics.callbacks.id import ParentUUIDCallback
 from anemoi.training.diagnostics.callbacks.learning_rate import LearningRateMonitor
-from anemoi.training.diagnostics.callbacks.plotting import GraphTrainableFeaturesPlot
-from anemoi.training.diagnostics.callbacks.plotting import LongRolloutPlots
-from anemoi.training.diagnostics.callbacks.plotting import PlotAdditionalMetrics
-from anemoi.training.diagnostics.callbacks.plotting import PlotLoss
-from anemoi.training.diagnostics.callbacks.plotting import PlotSample
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -37,11 +33,11 @@ CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str, list[type[Callback]] | typ
     (
         "diagnostics.plot.enabled",
         [
-            PlotLoss,
-            PlotSample,
+            plotting.PlotLoss,
+            plotting.PlotSample,
         ],
     ),
-    ("diagnostics.plot.learned_features", GraphTrainableFeaturesPlot),
+    ("diagnostics.plot.learned_features", plotting.GraphTrainableFeaturesPlot),
 ]
 
 
@@ -122,14 +118,14 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
 
     if config.diagnostics.plot.enabled:
         if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
-            callbacks.extend([PlotAdditionalMetrics(config)])
+            callbacks.extend([plotting.PlotAdditionalMetrics(config)])
         if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
-            callbacks.extend([LongRolloutPlots(config)])
+            callbacks.extend([plotting.LongRolloutPlots(config)])
 
     return callbacks
 
 
-def get_callbacks(config: DictConfig) -> list:  # noqa: C901
+def get_callbacks(config: DictConfig) -> list[Callback]:  # noqa: C901
     """Setup callbacks for PyTorch Lightning trainer.
 
     Set `config.diagnostics.callbacks` to a list of callback configurations
@@ -156,7 +152,7 @@ def get_callbacks(config: DictConfig) -> list:  # noqa: C901
 
     Returns
     -------
-    List
+    List[Callback]
         A list of PyTorch Lightning callbacks
 
     """
@@ -186,3 +182,6 @@ def get_callbacks(config: DictConfig) -> list:  # noqa: C901
     trainer_callbacks.append(ParentUUIDCallback(config))
 
     return trainer_callbacks
+
+
+__all__ = ["get_callbacks", "RolloutEval", "LearningRateMonitor", "plotting"]
