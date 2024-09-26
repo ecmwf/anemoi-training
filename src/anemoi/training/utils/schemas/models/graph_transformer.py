@@ -11,10 +11,8 @@
 from dataclasses import dataclass
 from dataclasses import field
 
-
-@dataclass
-class Model:
-    _target_: str = "anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"
+from .base_model import BaseModelConfig
+from .gnn import TrainableParametersGNN
 
 
 @dataclass
@@ -52,28 +50,8 @@ class Decoder(ModelComponent):
 
 
 @dataclass
-class TrainableParameters:
-    data: int = 8
-    hidden: int = 8
-    data2hidden: int = 8
-    hidden2data: int = 8
-    hidden2hidden: int = 8
-
-
-@dataclass
-class Attributes:
-    edges: list[str] = field(default_factory=lambda: ["edge_length", "edge_dirs"])
-    nodes: list[str] = field(default_factory=list)
-
-
-@dataclass
-class GraphTransformerConfig:
-    activation: str = "GELU"
-    num_channels: int = 512
-    model: Model = field(default_factory=Model)
+class GraphTransformerConfig(BaseModelConfig):
     processor: Processor = field(default_factory=Processor)
     encoder: Encoder = field(default_factory=Encoder)
     decoder: Decoder = field(default_factory=Decoder)
-    trainable_parameters: TrainableParameters = field(default_factory=TrainableParameters)
-    attributes: Attributes = field(default_factory=Attributes)
-    node_loss_weight: str = "area_weight"
+    trainable_parameters: TrainableParametersGNN = field(default_factory=TrainableParametersGNN)

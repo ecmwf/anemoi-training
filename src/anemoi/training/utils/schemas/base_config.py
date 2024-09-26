@@ -13,7 +13,7 @@ from typing import Any
 
 from .data import DataConfig
 from .hardware import HardwareConfig
-from .models.gnn import GNNConfig
+from .models.base_model import BaseModelConfig
 from .training import TrainingConfig
 
 
@@ -24,5 +24,5 @@ class BaseConfig:
     diagnostics: Any
     hardware: HardwareConfig
     graph: Any
-    model: GNNConfig
+    model: BaseModelConfig
     training: TrainingConfig

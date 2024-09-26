@@ -39,6 +39,7 @@ from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.schemas.base_config import BaseConfig
 from anemoi.training.utils.schemas.data import DataConfig
 from anemoi.training.utils.schemas.hardware import HardwareConfig
+from anemoi.training.utils.schemas.models.base_model import BaseModelConfig
 from anemoi.training.utils.schemas.models.gnn import GNNConfig
 from anemoi.training.utils.schemas.models.graph_transformer import GraphTransformerConfig
 from anemoi.training.utils.schemas.models.transformer import TransformerConfig
@@ -55,9 +56,10 @@ cs.store(name="base_config", node=BaseConfig)
 cs.store(group="training", name="training", node=TrainingConfig)
 cs.store(group="hardware", name="hardware", node=HardwareConfig)
 cs.store(group="data", name="data", node=DataConfig)
-cs.store(group="models", name="gnn", node=GNNConfig)
-cs.store(group="models", name="transformer", node=TransformerConfig)
-cs.store(group="models", name="graph_transformer", node=GraphTransformerConfig)
+cs.store(group="model", name="gnn", node=GNNConfig)
+cs.store(group="model", name="base_model", node=BaseModelConfig)
+cs.store(group="model", name="transformer", node=TransformerConfig)
+cs.store(group="model", name="graphtransformer", node=GraphTransformerConfig)
 
 
 class AnemoiTrainer:
