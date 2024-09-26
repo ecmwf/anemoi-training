@@ -100,15 +100,22 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
     """Get callbacks that are enabled in the config as according to CONFIG_ENABLED_CALLBACKS
 
     Provides backwards compatibility
-
     """
     callbacks = []
 
+    def nestedget(conf: DictConfig, key, default):
+        keys = key.split(".")
+        for k in keys:
+            conf = conf.get(k, default)
+            if not isinstance(conf, dict):
+                break
+        return conf
+
     for enable_key, callback_list in CONFIG_ENABLED_CALLBACKS:
         if isinstance(enable_key, list):
-            if not any(config.get(key, False) for key in enable_key):
+            if not any(nestedget(config, key, False) for key in enable_key):
                 continue
-        elif not config.get(enable_key, False):
+        elif not nestedget(config, enable_key, False):
             continue
 
         if isinstance(callback_list, list):
@@ -118,9 +125,9 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
 
     if config.diagnostics.plot.enabled:
         if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
-            callbacks.extend([plotting.PlotAdditionalMetrics(config)])
+            callbacks.append(plotting.PlotAdditionalMetrics(config))
         if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
-            callbacks.extend([plotting.LongRolloutPlots(config)])
+            callbacks.append(plotting.LongRolloutPlots(config))
 
     return callbacks
 
