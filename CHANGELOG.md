@@ -26,11 +26,13 @@ Keep it human-readable, your future self will thank you!
 - Feature: Add configurable models [#50](https://github.com/ecmwf/anemoi-training/pulls/50)
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
 - Long rollout plots and videos (GIFS)
+- Long Rollout Plots
 
 ### Fixed
 
 - Fix `TypeError` raised when trying to JSON serialise `datetime.timedelta` object - [#43](https://github.com/ecmwf/anemoi-training/pull/43)
 - Bugfixes for CI (#56)
+- Show correct subcommand in MLFlow - Addresses [#39](https://github.com/ecmwf/anemoi-training/issues/39) in [#61](https://github.com/ecmwf/anemoi-training/pull/61)
 
 ### Changed
 
