@@ -135,17 +135,15 @@ class GraphForecaster(pl.LightningModule):
     @cached_property
     def training_weights_for_imputed_variables(self) -> None:
         LOGGER.info("EXECUTE cached property training_weights_for_imputed_variables, Should appear only once")
-        # TODO(sara): iterate of all pre-processors and check if they have a loss_weights_training attribute
-        # TODO(sara): what to do about the remappers??
-        # could we maybe apply the remapper to the loss_weights_training?
         loss_weights_mask = torch.ones_like(self.loss.variable_node_mask)
+        # iterate over all pre-processors and check if they have a loss_mask_training attribute
         for pre_processor in self.model.pre_processors.processors.values():
-            if hasattr(pre_processor, "loss_weights_training"):
-                loss_weights_mask = loss_weights_mask * pre_processor.loss_weights_training
-
-        self.loss.update_variable_node_mask(
-            loss_weights_mask
-        )
+            if hasattr(pre_processor, "loss_mask_training"):
+                loss_weights_mask = loss_weights_mask * pre_processor.loss_mask_training
+            # if transform_loss_mask function exists for preprocessor apply it
+            if hasattr(pre_processor, "transform_loss_mask"):
+                loss_weights_mask = pre_processor.transform_loss_mask(loss_weights_mask)
+        self.loss.update_variable_node_mask(loss_weights_mask)
         return None
 
     @staticmethod
@@ -244,7 +242,6 @@ class GraphForecaster(pl.LightningModule):
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch = self.model.pre_processors(batch, in_place=not validation_mode)
 
-        # TODO(sara): Does this actually work? 
         self.training_weights_for_imputed_variables
 
         metrics = {}
