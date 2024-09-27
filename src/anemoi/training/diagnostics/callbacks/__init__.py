@@ -12,6 +12,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from hydra.utils import instantiate
+from omegaconf import DictConfig
 
 from anemoi.training.diagnostics.callbacks import plotting
 from anemoi.training.diagnostics.callbacks.checkpointing import AnemoiCheckpoint
@@ -20,7 +21,6 @@ from anemoi.training.diagnostics.callbacks.id import ParentUUIDCallback
 from anemoi.training.diagnostics.callbacks.learning_rate import LearningRateMonitor
 
 if TYPE_CHECKING:
-    from omegaconf import DictConfig
     from pytorch_lightning.callbacks import Callback
 
 LOGGER = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
         keys = key.split(".")
         for k in keys:
             conf = conf.get(k, default)
-            if not isinstance(conf, dict):
+            if not isinstance(conf, DictConfig):
                 break
         return conf
 
