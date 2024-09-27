@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 
+import matplotlib.animation as animation
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -38,12 +39,14 @@ from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities import rank_zero_only
 
+from anemoi.training.diagnostics.plots import equirectangular_projection
 from anemoi.training.diagnostics.plots import init_plot_settings
 from anemoi.training.diagnostics.plots import plot_graph_features
 from anemoi.training.diagnostics.plots import plot_histogram
 from anemoi.training.diagnostics.plots import plot_loss
 from anemoi.training.diagnostics.plots import plot_power_spectrum
 from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
+from anemoi.training.diagnostics.plots import scatter_plot
 
 if TYPE_CHECKING:
     import pytorch_lightning as pl
@@ -132,6 +135,33 @@ class BasePlotCallback(Callback, ABC):
                 logger.experiment.log_artifact(run_id, str(save_path))
 
         plt.close(fig)  # cleanup
+
+    @rank_zero_only
+    def _output_gif(
+        self,
+        logger: pl.loggers.base.LightningLoggerBase,
+        anim: animation.ArtistAnimation,
+        epoch: int,
+        tag: str = "gnn",
+        exp_log_tag: str = "val_pred_sample",
+    ) -> None:
+        """Animation output: save to file and/or display in notebook."""
+        if self.save_basedir is not None:
+            save_path = Path(
+                self.save_basedir,
+                "plots",
+                f"{tag}_epoch{epoch:03d}.gif",
+            )
+
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            anim.save(save_path, writer="pillow", fps=8)
+
+            if self.config.diagnostics.log.wandb.enabled:
+                LOGGER.warning("Saving gif animations not tested for wandb.")
+
+            if self.config.diagnostics.log.mlflow.enabled:
+                run_id = logger.run_id
+                logger.experiment.log_artifact(run_id, str(save_path))
 
     def teardown(self, trainer: pl.Trainer, pl_module: pl.LightningModule, stage: str) -> None:
         """Method is called to close the threads."""
@@ -292,14 +322,32 @@ class LongRolloutPlots(BasePlotCallback):
         """
         super().__init__(config)
 
-        LOGGER.debug(
-            "Setting up callback for plots with long rollout: rollout = %d, frequency = every %d epoch ...",
-            config.diagnostics.plot.longrollout.rollout,
-            config.diagnostics.plot.longrollout.frequency,
+        # retrieve rollout steps from configuration files
+        self.rollout = (
+            config.diagnostics.plot.longrollout.rollout
+            if config.diagnostics.plot.longrollout.get("enabled") and config.diagnostics.plot.longrollout.get("rollout")
+            else []
         )
-        self.rollout = config.diagnostics.plot.longrollout.rollout
+        self.video_rollout = (
+            config.diagnostics.plot.longrollout.video_rollout
+            if config.diagnostics.plot.longrollout.get("video_enabled")
+            and config.diagnostics.plot.longrollout.get("video_rollout")
+            else None
+        )
+        # find the maximum rollout length
+        if len(self.rollout) == 0:
+            self.max_rollout = 0
+        if self.video_rollout:
+            self.max_rollout = max(self.max_rollout, self.video_rollout)
+        # retrieve other configurations
         self.eval_frequency = config.diagnostics.plot.longrollout.frequency
         self.sample_idx = self.config.diagnostics.plot.sample_idx
+        LOGGER.info(
+            "Setting up callback for plots with long rollout: rollout for plots = %s, rollout for video = %s, frequency = every %d epoch ...",
+            self.rollout,
+            self.video_rollout,
+            self.eval_frequency,
+        )
 
     @rank_zero_only
     def _plot(
@@ -340,7 +388,7 @@ class LongRolloutPlots(BasePlotCallback):
             pl_module.data_indices.internal_data.input.full,
         ]  # (bs, multi_step, latlon, nvar)
         assert (
-            batch.shape[1] >= max(self.rollout) + pl_module.multi_step
+            batch.shape[1] >= self.max_rollout + pl_module.multi_step
         ), "Batch length not sufficient for requested rollout length!"
 
         # prepare input tensor for plotting
@@ -352,13 +400,20 @@ class LongRolloutPlots(BasePlotCallback):
         ].cpu()
         data_0 = self.post_processors(input_tensor_0).numpy()
 
+        if self.video_rollout:
+            data_over_time = []
+            # collect min and max values for each variable for the colorbar
+            vmin = np.inf * np.ones(len(plot_parameters_dict))
+            vmax = -1 * np.inf * np.ones(len(plot_parameters_dict))
+
         # start rollout
         with torch.no_grad():
-            for rollout_step in range(max(self.rollout)):
+            for rollout_step in range(self.max_rollout):
                 y_pred = pl_module(x)  # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
 
                 x = pl_module.advance_input(x, y_pred, batch, rollout_step)
 
+                # plot only if the current rollout step is in the list of rollout steps
                 if (rollout_step + 1) in self.rollout:
                     # prepare true output tensor for plotting
                     input_tensor_rollout_step = batch[
@@ -393,10 +448,93 @@ class LongRolloutPlots(BasePlotCallback):
                         tag=f"gnn_pred_val_sample_rstep{rollout_step:03d}_batch{batch_idx:04d}_rank0",
                         exp_log_tag=f"val_pred_sample_rstep{rollout_step:03d}_rank{local_rank:01d}",
                     )
-        LOGGER.info(f"Time taken to plot samples after longer rollout: {int(time.time() - start_time)} seconds")
+
+                # save forecasted variable fields if video rollout is enabled
+                if self.video_rollout and rollout_step < self.video_rollout:
+                    # prepare predicted output tensors for video
+                    output_tensor = self.post_processors(
+                        y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu()
+                    ).numpy()
+                    data_over_time.append(output_tensor[0, 0, :, np.array(list(plot_parameters_dict.keys()))])
+                    # update min and max values for each variable for the colorbar
+                    vmin = np.minimum(vmin, np.nanmin(data_over_time[-1], axis=1))
+                    vmax = np.maximum(vmax, np.nanmax(data_over_time[-1], axis=1))
+
+            if self.video_rollout:
+                pc_lat, pc_lon = equirectangular_projection(self.latlons)
+                for idx, (variable_idx, (variable_name, _)) in enumerate(plot_parameters_dict.items()):
+                    # Create the animation
+                    # Create a list to store the frames (artists)
+                    frames = []
+                    # Prepare the figure
+                    fig, ax = plt.subplots(figsize=(10, 6), dpi=72)
+                    cmap = "viridis"
+                    if variable_name == "mwd":
+                        cmap = "twilight"
+
+                    # Function to create the scatter plot for each frame
+                    def get_scatter_frame(data, cmap="viridis", vmin=None, vmax=None):
+                        """Create a scatter plot for a single frame."""
+                        scatter_frame = ax.scatter(
+                            pc_lon,
+                            pc_lat,
+                            c=data,
+                            cmap=cmap,
+                            s=5,
+                            alpha=1.0,
+                            rasterized=True,
+                            vmin=vmin,
+                            vmax=vmax,
+                        )
+                        ax.set_xlim((-np.pi, np.pi))
+                        ax.set_ylim((-np.pi / 2, np.pi / 2))
+                        from anemoi.training.diagnostics.maps import Coastlines
+                        from anemoi.training.diagnostics.plots import _hide_axes_ticks
+
+                        continents = Coastlines()
+                        continents.plot_continents(ax)
+                        ax.set_aspect("auto", adjustable=None)
+                        _hide_axes_ticks(ax)
+                        return scatter_frame
+
+                    # Create initial data and colorbar
+                    scatter_frame = get_scatter_frame(
+                        data_0[0, :, variable_idx],
+                        cmap=cmap,
+                        vmin=vmin[idx],  # np.nanmin(data_0[0, :, variable_idx]),
+                        vmax=vmax[idx],  # np.nanmax(data_0[0, :, variable_idx]),
+                    )
+                    ax.set_title(f"{variable_name}")
+                    colorbar = fig.colorbar(scatter_frame, ax=ax)
+                    frames.append([scatter_frame])
+
+                    # Loop through the data and create the scatter plot for each frame
+                    for frame_data in data_over_time:
+                        scatter_frame = get_scatter_frame(
+                            frame_data[idx],
+                            cmap=cmap,
+                            vmin=vmin[idx],  # np.nanmin(data_0[0, :, variable_idx]),
+                            vmax=vmax[idx],  # np.nanmax(data_0[0, :, variable_idx]),
+                        )
+                        frames.append([scatter_frame])  # Each frame contains a list of artists (images)
+
+                    # Create the animation using ArtistAnimation
+                    anim = animation.ArtistAnimation(fig, frames, interval=400, blit=True)
+
+                    self._output_gif(
+                        logger,
+                        anim,
+                        epoch=epoch,
+                        tag=f"gnn_pred_val_animation_{variable_name}_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
+                        exp_log_tag=f"val_pred_sample_rstep{rollout_step:03d}_rank{local_rank:01d}",
+                    )
+
+        LOGGER.info(f"Time taken to plot/animate samples for longer rollout: {int(time.time() - start_time)} seconds")
 
     @rank_zero_only
     def on_validation_batch_end(self, trainer, pl_module, output, batch, batch_idx) -> None:
+        # cannot use validation-output-tensor here, since it only contains as many timesteps as the validation batchsize
+        del output
         if (batch_idx) % self.plot_frequency == 0 and (trainer.current_epoch + 1) % self.eval_frequency == 0:
             precision_mapping = {
                 "16-mixed": torch.float16,
@@ -1111,7 +1249,9 @@ def get_callbacks(config: DictConfig) -> list:  # noqa: C901
         )
         if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
             trainer_callbacks.extend([PlotAdditionalMetrics(config)])
-        if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
+        if config.diagnostics.plot.get("longrollout") and (
+            config.diagnostics.plot.longrollout.enabled or config.diagnostics.plot.longrollout.video_enabled
+        ):
             trainer_callbacks.extend([LongRolloutPlots(config)])
 
     if config.training.swa.enabled:

@@ -40,6 +40,13 @@ class LatLonData:
     data: np.ndarray
 
 
+def equirectangular_projection(latlons: np.array) -> np.array:
+    pc = EquirectangularProjection()
+    lat, lon = latlons[:, 0], latlons[:, 1]
+    pc_lon, pc_lat = pc(lon, lat)
+    return pc_lat, pc_lon
+
+
 def init_plot_settings() -> None:
     """Initialize matplotlib plot settings."""
     small_font_size = 8
@@ -150,9 +157,8 @@ def plot_power_spectrum(
     figsize = (n_plots_y * 4, n_plots_x * 3)
     fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize)
 
-    pc = EquirectangularProjection()
-    lat, lon = latlons[:, 0], latlons[:, 1]
-    pc_lon, pc_lat = pc(lon, lat)
+    pc_lat, pc_lon = equirectangular_projection(latlons)
+
     pc_lon = np.array(pc_lon)
     pc_lat = np.array(pc_lat)
     # Calculate delta_lon and delta_lat on the projected grid
@@ -371,9 +377,7 @@ def plot_predicted_multilevel_flat_sample(
     figsize = (n_plots_y * 4, n_plots_x * 3)
     fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize)
 
-    pc = EquirectangularProjection()
-    lat, lon = latlons[:, 0], latlons[:, 1]
-    pc_lon, pc_lat = pc(lon, lat)
+    pc_lat, pc_lon = equirectangular_projection(latlons)
 
     for plot_idx, (variable_idx, (variable_name, output_only)) in enumerate(parameters.items()):
         xt = x[..., variable_idx].squeeze() * int(output_only)
@@ -648,10 +652,7 @@ def plot_graph_features(
     figsize = (nplots * 4, 3)
     fig, ax = plt.subplots(1, nplots, figsize=figsize)
 
-    lat, lon = latlons[:, 0], latlons[:, 1]
-
-    pc = EquirectangularProjection()
-    pc_lon, pc_lat = pc(lon, lat)
+    pc_lat, pc_lon = equirectangular_projection(latlons)
 
     for i in range(nplots):
         ax_ = ax[i] if nplots > 1 else ax
