@@ -46,10 +46,12 @@ rollout:
   # maximum rollout to use
   max: 1
 
-max_epochs: 200
+max_epochs: null
+max_steps: 150000
+
 lr:
   rate: 0.625e-4 #local_lr
-  iterations: 300000
+  iterations: ${training.max_steps}
   min: 3e-7 #Not scaled by #GPU
 
 # Changes in per-gpu batch_size should come with a rescaling of the local_lr
