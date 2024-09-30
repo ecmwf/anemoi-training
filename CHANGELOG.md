@@ -36,6 +36,7 @@ Keep it human-readable, your future self will thank you!
 ### Changed
 
 - Updated configuration examples in documentation and corrected links - [#46](https://github.com/ecmwf/anemoi-training/pull/46)
+- Modified training configuration to support max_steps and tied lr iterations to max_steps by default
 
 ## [0.1.0 - Anemoi training - First release](https://github.com/ecmwf/anemoi-training/releases/tag/0.1.0) - 2024-08-16
 
