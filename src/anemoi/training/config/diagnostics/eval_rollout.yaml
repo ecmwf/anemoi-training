@@ -70,10 +70,10 @@ checkpoint:
     save_frequency: null # Does not scale with rollout
     num_models_saved: 0
 
-callbacks:
+callbacks: []
   # Add callbacks here
 
-plot_callbacks:
+plot_callbacks: []
   # Add extra plot callbacks here
 
 log:
