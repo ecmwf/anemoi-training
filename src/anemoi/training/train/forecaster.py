@@ -92,7 +92,6 @@ class GraphForecaster(pl.LightningModule):
         self.loss = WeightedMSELoss(
             node_weights=self.loss_weights,
             data_variances=loss_scaling,
-            apply_variable_node_mask=True,
         )
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
 

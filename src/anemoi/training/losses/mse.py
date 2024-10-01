@@ -25,7 +25,6 @@ class WeightedMSELoss(nn.Module):
         node_weights: torch.Tensor,
         data_variances: torch.Tensor | None = None,
         ignore_nans: bool | None = False,
-        apply_variable_node_mask: bool | None = False,
     ) -> None:
         """Latitude- and (inverse-)variance-weighted MSE Loss.
 
@@ -44,7 +43,6 @@ class WeightedMSELoss(nn.Module):
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-        self.apply_variable_node_mask = apply_variable_node_mask
         # register_buffer:
         #   1. save the tensor to the model
         #   2. make sure that the tensor is moved to the same device as the model
@@ -82,8 +80,8 @@ class WeightedMSELoss(nn.Module):
         if hasattr(self, "ivar"):
             out *= self.ivar
 
-        if self.apply_variable_node_mask:
-            out = self.variable_node_mask * out
+        # apply variable node mask (masking input-NaN-positions with 0)
+        out = self.variable_node_mask * out
 
         # Squash by last dimension
         if squash:
