@@ -37,7 +37,10 @@ CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str, list[type[Callback]] | typ
             plotting.PlotSample,
         ],
     ),
-    ("diagnostics.plot.learned_features", plotting.GraphTrainableFeaturesPlot),
+    ("diagnostics.plot.learned_features", [
+        plotting.GraphNodeTrainableFeaturesPlot,
+        plotting.GraphEdgeTrainableFeaturesPlot,
+    ]),
 ]
 
 
