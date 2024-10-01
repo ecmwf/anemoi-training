@@ -323,7 +323,7 @@ class AnemoiTrainer:
             num_nodes=self.config.hardware.num_nodes,
             precision=self.config.training.precision,
             max_epochs=self.config.training.max_epochs,
-            max_steps=self.config.training.max_steps,
+            max_steps = self.config.training.max_steps or -1,
             logger=self.loggers,
             log_every_n_steps=self.config.diagnostics.log.interval,
             # run a fixed no of batches per epoch (helpful when debugging)
