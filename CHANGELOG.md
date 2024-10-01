@@ -25,8 +25,8 @@ Keep it human-readable, your future self will thank you!
 - Fix: Inference checkpoints are now saved according the frequency settings defined in the config [#37](https://github.com/ecmwf/anemoi-training/pull/37)
 - Feature: Add configurable models [#50](https://github.com/ecmwf/anemoi-training/pulls/50)
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
-- Long rollout plots and videos (GIFS)
-- Long Rollout Plots
+- Long rollout plots and videos (GIFS) [#65](https://github.com/ecmwf/anemoi-training/pull/65)
+- Long Rollout Plots 
 
 ### Fixed
 
