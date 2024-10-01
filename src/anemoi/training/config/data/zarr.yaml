@@ -30,6 +30,11 @@ remapped:
 
 normalizer:
   default: "mean-std"
+  remap:
+    cp: tp
+  std:
+  - "tp"
+  - "cp"
   min-max:
   max:
   - "sdor"
