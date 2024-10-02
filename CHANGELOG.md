@@ -13,6 +13,7 @@ Keep it human-readable, your future self will thank you!
 ### Added
 - Codeowners file (#56)
 - Changelog merge strategy (#56)
+- Included more loss functions and allowed configuration
 
 #### Miscellaneous
 
