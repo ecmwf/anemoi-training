@@ -14,17 +14,17 @@ import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
 import torch
+from anemoi.models.layers.mapper import GraphEdgeMixin
+from matplotlib.collections import LineCollection
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import ListedColormap
 from matplotlib.colors import TwoSlopeNorm
-from matplotlib.collections import LineCollection
 from pyshtools.expand import SHGLQ
 from pyshtools.expand import SHExpandGLQ
 from scipy.interpolate import griddata
 
 from anemoi.training.diagnostics.maps import Coastlines
 from anemoi.training.diagnostics.maps import EquirectangularProjection
-from anemoi.models.layers.mapper import GraphEdgeMixin
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -757,7 +757,7 @@ def plot_graph_edge_features(model, q_extreme_limit: float = 0.05) -> Figure:
     }
 
     if isinstance(model.processor, GraphEdgeMixin):
-        trainable_modules[(model._graph_name_hidden, model._graph_name_hidden)] = model.processor
+        trainable_modules[model._graph_name_hidden, model._graph_name_hidden] = model.processor
 
     ncols = min([module.trainable.trainable.shape[1] for module in trainable_modules.values()])
     nrows = len(trainable_modules)
