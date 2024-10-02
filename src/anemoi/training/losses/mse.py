@@ -46,7 +46,7 @@ class WeightedMSELoss(nn.Module):
         # register_buffer:
         #   1. save the tensor to the model
         #   2. make sure that the tensor is moved to the same device as the model
-        self.register_buffer("variable_node_mask", torch.ones(1), persistent=True)
+        self.register_buffer("variable_node_mask", torch.ones(1), persistent=False)  # not saved in state_dict
         self.register_buffer("weights", node_weights, persistent=True)
         if data_variances is not None:
             self.register_buffer("ivar", data_variances, persistent=True)
