@@ -709,7 +709,7 @@ def plot_graph_node_features(model: torch.nn.Module) -> Figure:
         Figure object handle
     """
     nrows = len(nodes_name := model._graph_data.node_types)
-    ncols = min([getattr(model, f"trainable_{m}").trainable.shape[1] for m in nodes_name])
+    ncols = min(getattr(model, f"trainable_{m}").trainable.shape[1] for m in nodes_name)
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
@@ -757,7 +757,7 @@ def plot_graph_edge_features(model: torch.nn.Module, q_extreme_limit: float = 0.
     if isinstance(model.processor, GraphEdgeMixin):
         trainable_modules[model._graph_name_hidden, model._graph_name_hidden] = model.processor
 
-    ncols = min([module.trainable.trainable.shape[1] for module in trainable_modules.values()])
+    ncols = min(module.trainable.trainable.shape[1] for module in trainable_modules.values())
     nrows = len(trainable_modules)
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
