@@ -312,8 +312,6 @@ class GraphNodeTrainableFeaturesPlot(BasePlotCallback):
 
         """
         super().__init__(config)
-        self._graph_name_data = config.graph.data
-        self._graph_name_hidden = config.graph.hidden
         self.epoch_freq = 5
 
     @rank_zero_only
@@ -324,7 +322,7 @@ class GraphNodeTrainableFeaturesPlot(BasePlotCallback):
         tag: str,
         exp_log_tag: str,
     ) -> None:
-        fig = plot_graph_node_features(model, [self._graph_name_data, self._graph_name_hidden])
+        fig = plot_graph_node_features(model)
         self._output_figure(trainer.logger, fig, epoch=trainer.current_epoch, tag=tag, exp_log_tag=exp_log_tag)
 
     @rank_zero_only

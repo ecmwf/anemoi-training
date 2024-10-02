@@ -587,7 +587,7 @@ def scatter_plot(
 
     Parameters
     ----------
-    fig : _type_
+    fig : Figure
         Figure object handle
     ax : matplotlib.axes
         Axis object handle
@@ -629,8 +629,8 @@ def scatter_plot(
 
 
 def edge_plot(
-    fig,
-    ax,
+    fig: Figure,
+    ax: plt.Axes,
     src_coords: np.ndarray,
     dst_coords: np.ndarray,
     data: np.ndarray,
@@ -695,22 +695,20 @@ def sincos_to_latlon(sincos_coords: torch.Tensor) -> torch.Tensor:
     return torch.atan2(sin_y, cos_y)
 
 
-def plot_graph_node_features(model, nodes_name: list[str]) -> Figure:
+def plot_graph_node_features(model: torch.nn.Module) -> Figure:
     """Plot trainable graph node features.
 
     Parameters
     ----------
-    model:
+    model: AneomiModelEncProcDec
         Model object
-    force_global_view : bool, optional
-        Show the entire globe, by default True.
 
     Returns
     -------
     Figure
         Figure object handle
     """
-    nrows = len(nodes_name)
+    nrows = len(nodes_name := model._graph_data.node_types)
     ncols = min([getattr(model, f"trainable_{m}").trainable.shape[1] for m in nodes_name])
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
@@ -736,7 +734,7 @@ def plot_graph_node_features(model, nodes_name: list[str]) -> Figure:
     return fig
 
 
-def plot_graph_edge_features(model, q_extreme_limit: float = 0.05) -> Figure:
+def plot_graph_edge_features(model: torch.nn.Module, q_extreme_limit: float = 0.05) -> Figure:
     """Plot trainable graph edge features.
 
     Parameters
