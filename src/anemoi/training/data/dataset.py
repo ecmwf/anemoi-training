@@ -12,6 +12,9 @@ import random
 from functools import cached_property
 from typing import Callable
 
+import psutil
+from collections import defaultdict
+
 import numpy as np
 import torch
 from einops import rearrange
@@ -191,6 +194,17 @@ class NativeGridDataset(IterableDataset):
         Currently it receives data with an ensemble dimension, which is discarded for
         now. (Until the code is "ensemble native".)
         """
+        if self.model_comm_group_rank != 0: 
+            # yield dummy data only with shape information for non-root ranks
+            shape = (self.rollout + self.multi_step, self.data.shape[2], self.data.shape[3], self.data.shape[1])
+            LOGGER.debug(f"Rank {self.model_comm_group_rank} using dummy shape {shape}")
+            
+            for _ in self.chunk_index_range: 
+                yield torch.tensor(shape, dtype=torch.long)
+
+            self._log_memory_usage()
+            return 
+        
         if self.shuffle:
             shuffled_chunk_indices = self.rng.choice(
                 self.chunk_index_range,
@@ -222,11 +236,48 @@ class NativeGridDataset(IterableDataset):
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
 
-            if self.model_comm_group_rank == 0: 
-                yield torch.from_numpy(x)
-            else:
-                # yield dummy data only with shape information for non-root ranks
-                yield torch.tensor(x.shape, dtype=torch.long)
+            yield torch.from_numpy(x)
+            LOGGER.debug(f"Worker {self.worker_id} yielded data with shape {x.shape}")
+
+        self._log_memory_usage()
+            
+    def _log_memory_usage(self) -> None:
+        """Log detailed memory usage, including RSS, PSS, USS, and shared memory."""
+        LOGGER.debug(f"Worker {self.worker_id} logging memory usage.")
+        process = psutil.Process(os.getpid())
+        mem_info = self._get_mem_info(process.pid)
+
+        # Log the detailed memory usage
+        LOGGER.debug(
+            "Worker %d (pid %d, global_rank %d, model comm group %d) memory usage (in MB): "
+            "RSS: %.2f MB, PSS: %.2f MB, USS: %.2f MB, Shared: %.2f MB, Shared File: %.2f MB",
+            self.worker_id,
+            os.getpid(),
+            self.global_rank,
+            self.model_comm_group_id,
+            mem_info['rss'] / 1024 ** 2,
+            mem_info['pss'] / 1024 ** 2,
+            mem_info['uss'] / 1024 ** 2,
+            mem_info['shared'] / 1024 ** 2,
+            mem_info['shared_file'] / 1024 ** 2 
+        )
+
+    def _get_mem_info(self, pid: int) -> dict[str, int]:
+        """Retrieve detailed memory information for the given process."""
+        res = defaultdict(int)
+
+        # Iterate through memory maps to gather memory details
+        for mmap in psutil.Process(pid).memory_maps():
+            res['rss'] += mmap.rss
+            res['pss'] += mmap.pss
+            res['uss'] += mmap.private_clean + mmap.private_dirty
+            res['shared'] += mmap.shared_clean + mmap.shared_dirty
+
+            # If the path points to a file, classify it as shared file memory
+            if mmap.path.startswith('/'):
+                res['shared_file'] += mmap.shared_clean + mmap.shared_dirty
+
+        return res
 
     def __repr__(self) -> str:
         return f"""
