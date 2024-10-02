@@ -28,7 +28,6 @@ from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
-from anemoi.training.losses.mse import WeightedMSELoss
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.utils.jsonify import map_config_to_primitives
 
@@ -88,10 +87,12 @@ class GraphForecaster(pl.LightningModule):
             config,
             data_indices,
         )
-        self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
-        self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
+        loss_kwargs = {"node_weights": self.loss_weights, "feature_weights": loss_scaling}
 
-        if config.training.loss_gradient_scaling:
+        self.loss = self.get_loss_function(config.training.loss_functions.loss, **loss_kwargs)
+        self.metrics = self.get_loss_function(config.training.loss_functions.metrics, **loss_kwargs)
+
+        if config.training.loss_functions.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
         self.multi_step = config.training.multistep_input
@@ -126,6 +127,23 @@ class GraphForecaster(pl.LightningModule):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
+
+    @staticmethod
+    def get_loss_function(config: DictConfig, **kwargs) -> torch.nn.Module:
+        """
+        Get loss function from config.
+
+        Will include additional kwargs if specified in the config.
+
+        E.g.
+            If `include_node_weights: True` is set in the config, and node_weights in kwargs
+             `node_weights` will be included in the config to instantiate the module with.
+        """
+        config = dict(config)
+        for key in kwargs:
+            if config.pop(f"include_{key}", False):
+                config[key] = kwargs[key]
+        return instantiate(config)
 
     @staticmethod
     def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
