@@ -13,13 +13,14 @@ import logging
 from functools import cached_property
 
 import torch
-from torch import nn
+
+from anemoi.training.losses.mse import WeightedMSELoss
 
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedMSELoss(nn.Module):
-    """Latitude-weighted MSE loss."""
+class WeightedRMSELoss(WeightedMSELoss):
+    """Latitude-weighted RMSE loss."""
 
     def __init__(
         self,
@@ -27,7 +28,7 @@ class WeightedMSELoss(nn.Module):
         feature_weights: torch.Tensor | None = None,
         ignore_nans: bool = False,
     ) -> None:
-        """Latitude- and (inverse-)variance-weighted MSE Loss.
+        """Latitude- and (inverse-)variance-weighted RMSE Loss.
 
         Parameters
         ----------
@@ -38,14 +39,7 @@ class WeightedMSELoss(nn.Module):
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
         """
-        super().__init__()
-
-        self.avg_function = torch.nanmean if ignore_nans else torch.mean
-        self.sum_function = torch.nansum if ignore_nans else torch.sum
-
-        self.register_buffer("node_weights", node_weights, persistent=True)
-        if feature_weights is not None:
-            self.register_buffer("feature_weights", feature_weights, persistent=True)
+        super().__init__(node_weights=node_weights, feature_weights=feature_weights, ignore_nans=ignore_nans)
 
     def forward(
         self,
@@ -55,7 +49,7 @@ class WeightedMSELoss(nn.Module):
         feature_indices: torch.Tensor | None = None,
         feature_scale: bool = True,
     ) -> torch.Tensor:
-        """Calculates the lat-weighted MSE loss.
+        """Calculates the lat-weighted RMSE loss.
 
         Parameters
         ----------
@@ -73,38 +67,17 @@ class WeightedMSELoss(nn.Module):
         Returns
         -------
         torch.Tensor
-            Weighted MSE loss
+            Weighted RMSE loss
         """
-        if pred.ndim == 4:
-            pred = pred.mean(dim=1)
-
-        torch.save(self.node_weights, "node_weights.pt")
-        torch.save(pred, "pred.pt")
-        torch.save(target, "target.pt")
-
-        out = torch.square(pred - target)
-
-        if feature_scale and hasattr(self, "feature_weights"):
-            out = (
-                out * self.feature_weights
-                if feature_indices is None
-                else out * self.feature_weights[..., feature_indices]
-            )
-
-        # Squash by last dimension
-        if squash:
-            out = self.avg_function(out, dim=-1)
-            # Weight by area
-            out *= self.node_weights.expand_as(out)
-            out /= self.sum_function(self.node_weights.expand_as(out))
-            return self.sum_function(out)
-
-        # Weight by area, due to weighting construction is analagous to a mean
-        out *= self.node_weights[..., None].expand_as(out)
-        # keep last dimension (variables) when summing weights
-        out /= self.sum_function(self.node_weights[..., None].expand_as(out))
-        return self.sum_function(out, axis=(0, 1, 2))
+        mse = super().forward(
+            pred=pred,
+            target=target,
+            squash=squash,
+            feature_indices=feature_indices,
+            feature_scale=feature_scale,
+        )
+        return torch.sqrt(mse)
 
     @cached_property
     def name(self) -> str:
-        return "mse"
+        return "rmse"

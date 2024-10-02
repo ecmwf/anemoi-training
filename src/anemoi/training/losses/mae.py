@@ -18,8 +18,8 @@ from torch import nn
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedMSELoss(nn.Module):
-    """Latitude-weighted MSE loss."""
+class WeightedMAELoss(nn.Module):
+    """Latitude-weighted MAE loss."""
 
     def __init__(
         self,
@@ -27,7 +27,9 @@ class WeightedMSELoss(nn.Module):
         feature_weights: torch.Tensor | None = None,
         ignore_nans: bool = False,
     ) -> None:
-        """Latitude- and (inverse-)variance-weighted MSE Loss.
+        """Latitude- and (inverse-)variance-weighted MAE Loss.
+
+        Also known as the Weighted L1 loss.
 
         Parameters
         ----------
@@ -55,7 +57,7 @@ class WeightedMSELoss(nn.Module):
         feature_indices: torch.Tensor | None = None,
         feature_scale: bool = True,
     ) -> torch.Tensor:
-        """Calculates the lat-weighted MSE loss.
+        """Calculates the lat-weighted MAE loss.
 
         Parameters
         ----------
@@ -73,16 +75,12 @@ class WeightedMSELoss(nn.Module):
         Returns
         -------
         torch.Tensor
-            Weighted MSE loss
+            Weighted MAE loss
         """
         if pred.ndim == 4:
             pred = pred.mean(dim=1)
 
-        torch.save(self.node_weights, "node_weights.pt")
-        torch.save(pred, "pred.pt")
-        torch.save(target, "target.pt")
-
-        out = torch.square(pred - target)
+        out = torch.abs(pred - target)
 
         if feature_scale and hasattr(self, "feature_weights"):
             out = (
@@ -107,4 +105,4 @@ class WeightedMSELoss(nn.Module):
 
     @cached_property
     def name(self) -> str:
-        return "mse"
+        return "mae"

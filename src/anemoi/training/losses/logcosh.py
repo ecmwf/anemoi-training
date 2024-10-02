@@ -18,34 +18,35 @@ from torch import nn
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedMSELoss(nn.Module):
-    """Latitude-weighted MSE loss."""
+class WeightedLogCoshLoss(nn.Module):
+    """Latitude-weighted LogCosh loss."""
 
     def __init__(
         self,
         node_weights: torch.Tensor,
         feature_weights: torch.Tensor | None = None,
-        ignore_nans: bool = False,
+        ignore_nans: bool | None = False,
     ) -> None:
-        """Latitude- and (inverse-)variance-weighted MSE Loss.
+        """Latitude- and (inverse-)variance-weighted LogCosh Loss.
 
         Parameters
         ----------
-        node_weights : torch.Tensor
-            Weights by area
+        node_weights : torch.Tensor of shape (N, )
+            Weight of each node in the loss function
         feature_weights : Optional[torch.Tensor], optional
             precomputed, per-variable stepwise variance estimate, by default None
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
+
         """
         super().__init__()
 
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-        self.register_buffer("node_weights", node_weights, persistent=True)
+        self.register_buffer("weights", node_weights, persistent=True)
         if feature_weights is not None:
-            self.register_buffer("feature_weights", feature_weights, persistent=True)
+            self.register_buffer("ivar", feature_weights, persistent=True)
 
     def forward(
         self,
@@ -55,14 +56,14 @@ class WeightedMSELoss(nn.Module):
         feature_indices: torch.Tensor | None = None,
         feature_scale: bool = True,
     ) -> torch.Tensor:
-        """Calculates the lat-weighted MSE loss.
+        """Calculates the lat-weighted LogCosh loss.
 
         Parameters
         ----------
         pred : torch.Tensor
-            Prediction tensor, shape (bs, (optional_ensemble), lat*lon, n_outputs)
+            Prediction tensor, shape (bs, lat*lon, n_outputs)
         target : torch.Tensor
-            Target tensor, shape (bs, (optional_ensemble), lat*lon, n_outputs)
+            Target tensor, shape (bs, lat*lon, n_outputs)
         squash : bool, optional
             Average last dimension, by default True
         feature_indices:
@@ -73,17 +74,15 @@ class WeightedMSELoss(nn.Module):
         Returns
         -------
         torch.Tensor
-            Weighted MSE loss
+            Weighted LogCosh loss
+
         """
         if pred.ndim == 4:
             pred = pred.mean(dim=1)
 
-        torch.save(self.node_weights, "node_weights.pt")
-        torch.save(pred, "pred.pt")
-        torch.save(target, "target.pt")
+        out = torch.log(torch.cosh(pred - target))
 
-        out = torch.square(pred - target)
-
+        # Use variances if available
         if feature_scale and hasattr(self, "feature_weights"):
             out = (
                 out * self.feature_weights
@@ -95,16 +94,16 @@ class WeightedMSELoss(nn.Module):
         if squash:
             out = self.avg_function(out, dim=-1)
             # Weight by area
-            out *= self.node_weights.expand_as(out)
-            out /= self.sum_function(self.node_weights.expand_as(out))
+            out *= self.weights.expand_as(out)
+            out /= self.sum_function(self.weights.expand_as(out))
             return self.sum_function(out)
 
         # Weight by area, due to weighting construction is analagous to a mean
-        out *= self.node_weights[..., None].expand_as(out)
+        out *= self.weights[..., None].expand_as(out)
         # keep last dimension (variables) when summing weights
-        out /= self.sum_function(self.node_weights[..., None].expand_as(out))
+        out /= self.sum_function(self.weights[..., None].expand_as(out), axis=(0, 1, 2))
         return self.sum_function(out, axis=(0, 1, 2))
 
     @cached_property
     def name(self) -> str:
-        return "mse"
+        return "logcosh"
