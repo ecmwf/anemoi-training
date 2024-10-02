@@ -13,7 +13,7 @@ Keep it human-readable, your future self will thank you!
 ### Added
 - Codeowners file (#56)
 - Changelog merge strategy (#56)
-- Included more loss functions and allowed configuration
+- Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
 
 #### Miscellaneous
 
