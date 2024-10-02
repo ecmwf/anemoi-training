@@ -1,11 +1,20 @@
 ---
-eval:
-  enabled: False
-  # use this to evaluate the model over longer rollouts, every so many validation batches
-  rollout: 12
-  frequency: 20
+
+callbacks:
+  # Add callbacks here
+  - _target_: anemoi.training.diagnostics.callbacks.evaluation.RolloutEval
+    rollout: 12
+    frequency: 20
+
 plot:
   enabled: True
+
+  callbacks:
+    # Add extra plot callbacks here
+    - _target_: anemoi.training.diagnostics.callbacks.plot.GraphTrainableFeaturesPlot
+    - _target_: anemoi.training.diagnostics.callbacks.plot.PlotLoss
+    - _target_: anemoi.training.diagnostics.callbacks.plot.PlotSample
+
   asynchronous: True
   frequency: 750
   sample_idx: 0
@@ -43,7 +52,6 @@ plot:
   parameter_groups:
     moisture: [tp, cp, tcw]
     sfc_wind: [10u, 10v]
-  learned_features: False
   longrollout:
     enabled: False
     rollout: [60]
@@ -58,6 +66,7 @@ debug:
 profiler: False
 
 checkpoint:
+  enabled: True
   every_n_minutes:
     save_frequency: 30 # Approximate, as this is checked at the end of training steps
     num_models_saved: 3 # If set to k, saves the 'last' k model weights in the training.
@@ -70,11 +79,7 @@ checkpoint:
     save_frequency: null # Does not scale with rollout
     num_models_saved: 0
 
-callbacks:
-  # Add callbacks here
 
-plot_callbacks:
-  # Add extra plot callbacks here
 
 log:
   wandb:

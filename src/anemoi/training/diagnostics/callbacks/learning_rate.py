@@ -21,6 +21,6 @@ if TYPE_CHECKING:
 class LearningRateMonitor(pl_LearningRateMonitor):
     """Provide LearningRateMonitor from pytorch_lightning as a callback."""
 
-    def __init__(self, config: DictConfig):
-        super().__init__(logging_interval="step", log_momentum=False)
+    def __init__(self, config: DictConfig, logging_interval: str = "step", log_momentum: bool = False) -> None:
+        super().__init__(logging_interval=logging_interval, log_momentum=log_momentum)
         self.config = config

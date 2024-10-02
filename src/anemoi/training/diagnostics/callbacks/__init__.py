@@ -8,17 +8,21 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from datetime import timedelta
 from typing import TYPE_CHECKING
+from typing import Callable
+from typing import Iterable
 
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from anemoi.training.diagnostics.callbacks import plotting
-from anemoi.training.diagnostics.callbacks.checkpointing import AnemoiCheckpoint
+from anemoi.training.diagnostics.callbacks import plot
+from anemoi.training.diagnostics.callbacks.checkpoint import AnemoiCheckpoint
 from anemoi.training.diagnostics.callbacks.evaluation import RolloutEval
 from anemoi.training.diagnostics.callbacks.id import ParentUUIDCallback
 from anemoi.training.diagnostics.callbacks.learning_rate import LearningRateMonitor
+from anemoi.training.diagnostics.callbacks.swa import StochasticWeightAveraging
 
 if TYPE_CHECKING:
     from pytorch_lightning.callbacks import Callback
@@ -26,23 +30,58 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
+def nestedget(conf: DictConfig, key, default):
+    """
+    Get a nested key from a DictConfig object
+
+    E.g.
+    >>> nestedget(config, "diagnostics.log.wandb.enabled", False)
+    """
+    keys = key.split(".")
+    for k in keys:
+        conf = conf.get(k, default)
+        if not isinstance(conf, (dict, DictConfig)):
+            break
+    return conf
+
+
 # Callbacks to add according to flags in the config
-CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str, list[type[Callback]] | type[Callback]]] = [
-    (["diagnostics.log.wandb.enabled", "diagnostics.log.mlflow.enabled"], LearningRateMonitor),
-    ("diagnostics.eval.enabled", RolloutEval),
+# Can be function to check status from config
+CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str | Callable[[DictConfig], bool], type[Callback]]] = [
+    ("training.swa.enabled", StochasticWeightAveraging),
     (
-        "diagnostics.plot.enabled",
-        [
-            plotting.PlotLoss,
-            plotting.PlotSample,
-        ],
+        lambda config: nestedget(config, "diagnostics.log.wandb.enabled", False)
+        or nestedget(config, "diagnostics.log.mflow.enabled", False),
+        LearningRateMonitor,
     ),
-    ("diagnostics.plot.learned_features", plotting.GraphTrainableFeaturesPlot),
+    (
+        lambda config: config.diagnostics.plot.enabled
+        and (
+            nestedget(config, "diagnostics.plot.parameters_histogram", None)
+            or nestedget(config, "diagnostics.plot.parameters_spectrum", None)
+        )
+        is not None,
+        plot.PlotAdditionalMetrics,
+    ),
+]
+
+DEPRECATED_CONFIGS: list[tuple[list[str] | str, type[Callback]]] = [
+    (
+        "diagnostics.eval.enabled",
+        lambda config: RolloutEval(
+            config, rollout=config.diagnostics.eval.rollout, frequency=config.diagnostics.eval.frequency
+        ),
+    ),
+    ("diagnostics.plot.learned_features", plot.GraphTrainableFeaturesPlot),
+    (["diagnostics.plot.enabled", "diagnostics.plot.longrollout.enabled"], plot.LongRolloutPlots),
 ]
 
 
 def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint] | None:
     """Get checkpointing callback"""
+    if not config.diagnostics.checkpoint.get("enabled", True):
+        return []
+
     checkpoint_settings = {
         "dirpath": config.hardware.paths.checkpoints,
         "verbose": False,
@@ -103,31 +142,27 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
     """
     callbacks = []
 
-    def nestedget(conf: DictConfig, key, default):
-        keys = key.split(".")
-        for k in keys:
-            conf = conf.get(k, default)
-            if not isinstance(conf, DictConfig):
-                break
-        return conf
+    def check_key(config, key: str | Iterable[str] | Callable[[DictConfig], bool]):
+        """Check key in config."""
+        if isinstance(key, Callable):
+            return key(config)
+        elif isinstance(key, str):
+            return nestedget(config, key, False)
+        elif isinstance(key, Iterable):
+            return all(nestedget(config, k, False) for k in key)
+        return nestedget(config, key, False)
 
-    for enable_key, callback_list in CONFIG_ENABLED_CALLBACKS:
-        if isinstance(enable_key, list):
-            if not any(nestedget(config, key, False) for key in enable_key):
-                continue
-        elif not nestedget(config, enable_key, False):
-            continue
-
-        if isinstance(callback_list, list):
-            callbacks.extend(map(lambda x: x(config), callback_list))
-        else:
+    for deprecated_key, callback_list in DEPRECATED_CONFIGS:
+        if check_key(config, deprecated_key):
+            warnings.warn(
+                f"Deprecated config {deprecated_key} found. Please update your config file to use the new callback initialisation method.",
+                DeprecationWarning,
+            )
             callbacks.append(callback_list(config))
 
-    if config.diagnostics.plot.enabled:
-        if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
-            callbacks.append(plotting.PlotAdditionalMetrics(config))
-        if config.diagnostics.plot.get("longrollout") and config.diagnostics.plot.longrollout.enabled:
-            callbacks.append(plotting.LongRolloutPlots(config))
+    for enable_key, callback_list in CONFIG_ENABLED_CALLBACKS:
+        if check_key(config, enable_key):
+            callbacks.append(callback_list(config))
 
     return callbacks
 
@@ -141,16 +176,19 @@ def get_callbacks(config: DictConfig) -> list[Callback]:  # noqa: C901
     E.g.:
     ```
     callbacks:
-        swa: _target_: pytorch_lightning.callbacks.stochastic_weight_avg.StochasticWeightAveraging
-                swa_lr: 1e-4
-                swa_epoch_start: 123
-                annealing_epochs: 5
-                annealing_strategy: cos
-                device: null
+        - _target_: anemoi.training.diagnostics.callbacks.RolloutEval
+          rollout: 1
+          frequency: 12
     ```
 
-    Set `config.diagnostics.plot_callbacks` to a list of plotting callback configurations
+    Set `config.diagnostics.plot.callbacks` to a list of plot callback configurations
     will only be added if `config.diagnostics.plot.enabled` is set to True.
+
+    A callback must take a `DictConfig` in its `__init__` method as the first argument,
+    which will be the complete configuration object.
+
+    Some callbacks are added by default, depending on the configuration.
+    See CONFIG_ENABLED_CALLBACKS for more information.
 
     Parameters
     ----------
@@ -174,15 +212,15 @@ def get_callbacks(config: DictConfig) -> list[Callback]:  # noqa: C901
     # Base callbacks
     for callback in config.diagnostics.get("callbacks", []):
         # Instantiate new callbacks
-        trainer_callbacks.append(instantiate(callback))
+        trainer_callbacks.append(instantiate(callback, config))
 
     # Plotting callbacks
     if config.diagnostics.plot.enabled:
-        for callback in config.diagnostics.get("plot_callbacks", []):
+        for callback in config.diagnostics.plot.get("callbacks", []):
             # Instantiate new callbacks
-            trainer_callbacks.append(instantiate(callback))
+            trainer_callbacks.append(instantiate(callback, config))
 
-    # Extend with backward compatible callbacks
+    # Extend with config enabled callbacks
     trainer_callbacks.extend(_get_config_enabled_callbacks(config))
 
     # Parent UUID callback
@@ -191,4 +229,4 @@ def get_callbacks(config: DictConfig) -> list[Callback]:  # noqa: C901
     return trainer_callbacks
 
 
-__all__ = ["get_callbacks", "RolloutEval", "LearningRateMonitor", "plotting"]
+__all__ = ["get_callbacks"]
