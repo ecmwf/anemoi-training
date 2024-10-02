@@ -26,6 +26,7 @@ Keep it human-readable, your future self will thank you!
 - Feature: Add configurable models [#50](https://github.com/ecmwf/anemoi-training/pulls/50)
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
 - Long Rollout Plots
+- Mask NaN values in training loss function [#271](https://github.com/ecmwf-lab/aifs-mono/issues/271)
 
 ### Fixed
 
