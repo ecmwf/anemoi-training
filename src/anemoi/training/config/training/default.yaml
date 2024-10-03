@@ -52,15 +52,15 @@ loss_functions:
     # other kwargs
     ignore_nans: False
 
-  # loss function for metric calculation
+  # loss functions for metric calculation
   metrics:
     # loss class to initialise, can be anything subclassing torch.nn.Module
-    _target_: anemoi.training.losses.mse.WeightedMSELoss
-    # what to include in the loss class initialisation
-    include_node_weights: True
-    include_feature_weights: False
-    # other kwargs
-    ignore_nans: True
+    - _target_: anemoi.training.losses.mse.WeightedMSELoss
+      # what to include in the loss class initialisation
+      include_node_weights: True
+      include_feature_weights: False
+      # other kwargs
+      ignore_nans: True
 
 # length of the "rollout" window (see Keisler's paper)
 rollout:
