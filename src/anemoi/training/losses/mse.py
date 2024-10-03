@@ -75,21 +75,18 @@ class WeightedMSELoss(nn.Module):
         torch.Tensor
             Weighted MSE loss
         """
+        # If pred is 4D, average over ensemble dimension
         if pred.ndim == 4:
             pred = pred.mean(dim=1)
 
-        torch.save(self.node_weights, "node_weights.pt")
-        torch.save(pred, "pred.pt")
-        torch.save(target, "target.pt")
-
         out = torch.square(pred - target)
 
+        # Use feature_weights if available and feature_scale is True
         if feature_scale and hasattr(self, "feature_weights"):
-            out = (
-                out * self.feature_weights
-                if feature_indices is None
-                else out * self.feature_weights[..., feature_indices]
-            )
+            if feature_indices is None:
+                out *= self.feature_weights
+            else:
+                out *= self.feature_weights[..., feature_indices]
 
         # Squash by last dimension
         if squash:
