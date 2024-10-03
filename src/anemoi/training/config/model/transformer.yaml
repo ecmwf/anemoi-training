@@ -14,6 +14,7 @@ processor:
   num_heads: 16 # GraphTransformer or Transformer only
   window_size: 512
   dropout_p: 0.0 # GraphTransformer
+  use_flash_attention: True # Transformer
 
 encoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
