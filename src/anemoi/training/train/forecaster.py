@@ -6,13 +6,13 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
-from __future__ import annotations
 
 import logging
 import math
 import os
 from collections import defaultdict
 from collections.abc import Mapping
+from typing import Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -134,7 +134,10 @@ class GraphForecaster(pl.LightningModule):
         return self.model(x, self.model_comm_group)
 
     @staticmethod
-    def get_loss_function(config: DictConfig, **kwargs) -> torch.nn.Module | torch.nn.ModuleList:
+    def get_loss_function(
+        config: DictConfig,
+        **kwargs,
+    ) -> Union[torch.nn.Module, torch.nn.ModuleList]:  # noqa: FA100 # stop ruff
         """
         Get loss functions from config.
 
