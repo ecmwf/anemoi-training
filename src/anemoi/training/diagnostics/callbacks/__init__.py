@@ -69,11 +69,16 @@ DEPRECATED_CONFIGS: list[tuple[list[str] | str, type[Callback]]] = [
     (
         "diagnostics.eval.enabled",
         lambda config: RolloutEval(
-            config, rollout=config.diagnostics.eval.rollout, frequency=config.diagnostics.eval.frequency
+            config,
+            rollout=config.diagnostics.eval.rollout,
+            frequency=config.diagnostics.eval.frequency,
         ),
     ),
     ("diagnostics.plot.learned_features", plot.GraphTrainableFeaturesPlot),
-    (["diagnostics.plot.enabled", "diagnostics.plot.longrollout.enabled"], plot.LongRolloutPlots),
+    (
+        ["diagnostics.plot.enabled", "diagnostics.plot.longrollout.enabled"],
+        plot.LongRolloutPlots,
+    ),
 ]
 
 
@@ -103,10 +108,18 @@ def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint] | Non
             frequency = timedelta(minutes=frequency_dict["save_frequency"])
         else:
             target = key
-        ckpt_frequency_save_dict[target] = (config.hardware.files.checkpoint[key], frequency, n_saved)
+        ckpt_frequency_save_dict[target] = (
+            config.hardware.files.checkpoint[key],
+            frequency,
+            n_saved,
+        )
 
     if not config.diagnostics.profiler:
-        for save_key, (name, save_frequency, save_n_models) in ckpt_frequency_save_dict.items():
+        for save_key, (
+            name,
+            save_frequency,
+            save_n_models,
+        ) in ckpt_frequency_save_dict.items():
             if save_frequency is not None:
                 LOGGER.debug("Checkpoint callback at %s = %s ...", save_key, save_frequency)
                 return (
@@ -154,8 +167,10 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
 
     for deprecated_key, callback_list in DEPRECATED_CONFIGS:
         if check_key(config, deprecated_key):
+            suggested_change = f""" - _target_: {callback_list.__module__}.{callback_list.__name__}"""
             warnings.warn(
-                f"Deprecated config {deprecated_key} found. Please update your config file to use the new callback initialisation method.",
+                f"Deprecated config {deprecated_key} found. Please update your config file to use the new callback initialisation method."
+                + f"This will be removed in a future release.\n Add the following to the `callbacks` list:\n{suggested_change}",
                 DeprecationWarning,
             )
             callbacks.append(callback_list(config))
