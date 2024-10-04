@@ -29,10 +29,10 @@ class NativeGridDataset(IterableDataset):
     def __init__(
         self,
         data_reader: Callable,
-        rollout: int = 1,
+        rollout: int = 0,
         multistep: int = 1,
         timeincrement: int = 1,
-        timestep: str = '6h',
+        timestep: str = "6h",
         model_comm_group_rank: int = 0,
         model_comm_group_id: int = 0,
         model_comm_num_groups: int = 1,
@@ -203,7 +203,7 @@ class NativeGridDataset(IterableDataset):
         chunked batches for DDP and sharded training.
 
         Currently it receives data with an ensemble dimension, which is discarded for
-        now. (Until the code is "ensemble native".)
+        now. 
         """
         if self.shuffle:
             shuffled_chunk_indices = self.rng.choice(
@@ -233,8 +233,8 @@ class NativeGridDataset(IterableDataset):
             end = i + (self.rollout + 1) * self.timeincrement
 
             x = self.data[start : end : self.timeincrement]
-            x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
-            self.ensemble_dim = 1
+            x = rearrange(x, "dates variables ensemble gridpoints -> ensemble dates gridpoints variables")
+            self.ensemble_dim = 0
 
             yield torch.from_numpy(x)
 
@@ -248,9 +248,7 @@ class NativeGridDataset(IterableDataset):
         shard_end = min((self.model_comm_group_id + 1) * shard_size, len(self.data) - self.rollout * self.timeincrement)
         samples = shard_end - shard_start
 
-        samples = (samples // self.model_comm_group_nworkers) * self.model_comm_group_nworkers
-
-        return samples
+        return (samples // self.model_comm_group_nworkers) * self.model_comm_group_nworkers
 
     def __repr__(self) -> str:
         return f"""

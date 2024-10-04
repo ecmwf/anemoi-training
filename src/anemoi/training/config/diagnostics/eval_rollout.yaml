@@ -129,6 +129,29 @@ log:
     run_name: null # If set to null, the run name will be the a random UUID
     on_resume_create_child: True
     synchronous: True
+  tensorboard:
+    enabled: False
+    run_name: ${diagnostics.log.mlflow.run_name}
+    experiment_name: ${diagnostics.log.mlflow.experiment_name}
+    project_name: null
+    log_weights:
+      enabled: False
+      freq: 1
+      interval: 'batch'
+    log_gradients:
+      enabled: False
+      freq: 1
+      # interval fixed to 'batch'
+    log_clipped_gradients:
+      enabled: False
+      freq: 1
+      # interval fixed to 'batch'
+    log_preds:
+      enabled: False
+      freq: 1
+    log_postproc_preds:
+      enabled: False
+      freq: 1
   interval: 100
 
 enable_progress_bar: True

@@ -12,8 +12,9 @@ from _pytest.fixtures import SubRequest
 from hydra import compose
 from hydra import initialize
 from omegaconf import DictConfig
+import sys
 
-from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
+from anemoi.training.data.datamodule import AnemoiBaseDataModule
 
 
 @pytest.fixture
@@ -25,8 +26,21 @@ def config(request: SubRequest) -> DictConfig:
 
 
 @pytest.fixture
-def datamodule() -> AnemoiDatasetsDataModule:
+def datamodule() -> AnemoiBaseDataModule:
     with initialize(version_base=None, config_path="../src/anemoi/training/config"):
         # config is relative to a module
         cfg = compose(config_name="config")
-    return AnemoiDatasetsDataModule(cfg)
+    return AnemoiBaseDataModule(cfg)
+
+# enable_stop_on_exceptions if the debugger is running during a test
+def is_debugging():
+    return 'debugpy' in sys.modules
+
+if is_debugging():
+  @pytest.hookimpl(tryfirst=True)
+  def pytest_exception_interact(call):
+    raise call.excinfo.value
+    
+  @pytest.hookimpl(tryfirst=True)
+  def pytest_internalerror(excinfo):
+    raise excinfo.value

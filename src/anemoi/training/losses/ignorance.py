@@ -2,6 +2,7 @@ import torch
 from torch import nn, Tensor
 from typing import Optional
 
+
 class IgnoranceScore(nn.Module):
     """Latitude-weighted Ignorance Score."""
 
@@ -26,11 +27,11 @@ class IgnoranceScore(nn.Module):
             If True, NaNs will be ignored in the loss calculations, by default False.
         """
         super().__init__()
-        
+
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-        self.register_buffer("node_weights", node_weights[...,None], persistent=True)
+        self.register_buffer("node_weights", node_weights[..., None], persistent=True)
         self.register_buffer("eps", torch.as_tensor(eps), persistent=False)
 
         if feature_weights is not None:
@@ -43,8 +44,7 @@ class IgnoranceScore(nn.Module):
         var_preds = torch.var(preds, dim=1, correction=1) + self.eps  # Variance across ensemble dimension (bs, latlon, nvar)
         log_term = torch.log(2 * torch.pi * var_preds)  # Log term (bs, latlon, nvar)
         sum_term = (preds.mean(dim=1) - target).pow(2) / var_preds  # (bs, latlon, nvar)
-        nll = 0.5 * (log_term + sum_term)  # Negative log-likelihood
-        return nll  # (bs, latlon, nvar)
+        return 0.5 * (log_term + sum_term)  # Negative log-likelihood
 
     def forward(
         self,
@@ -52,16 +52,16 @@ class IgnoranceScore(nn.Module):
         target: Tensor,
         squash: bool = True,
         feature_scaling: bool = True,
-        feature_indices: Optional[torch.Tensor] = None
+        feature_indices: Optional[torch.Tensor] = None,
     ) -> Tensor:
         """Forward pass for calculating Ignorance Score.
 
         Parameters
         ----------
         preds : torch.Tensor
-            Predictions tensor, shape (bs, nens, timesteps, lat*lon, nvar).
+            Predictions tensor, shape (bs, nens_input, timesteps, lat*lon, nvar).
         target : torch.Tensor
-            Target tensor, shape (bs, timesteps, lat*lon, nvar).
+            Target tensor, shape (bs, nens_target, timesteps, lat*lon, nvar).
         squash : bool, optional
             If True, the output will be squashed to a single value, by default True.
         feature_scaling : bool, optional
@@ -73,6 +73,8 @@ class IgnoranceScore(nn.Module):
         torch.Tensor
             Weighted Ignorance Score.
         """
+        target = target.mean(dim=1)
+        
         # Calculate Ignorance Score
         ignorance_score = self._calc_ignorance_score(preds, target)
 
@@ -80,20 +82,19 @@ class IgnoranceScore(nn.Module):
         if feature_scaling:
             ignorance_score = ignorance_score * self.feature_weights if feature_indices is None else ignorance_score * self.feature_weights[..., feature_indices]
             ignorance_score = ignorance_score / self.feature_weights.numel()
-            
-            #Normalize by number of features
+
+            # Normalize by number of features
 
         # Scale in spatial dimension
         ignorance_score *= self.node_weights / self.sum_function(self.node_weights)
 
         # Squash: reduce the dimensions to a single value
         if squash:
-            ignorance_score = self.sum_function(ignorance_score, dim=(1, 2))
+            ignorance_score = self.sum_function(ignorance_score, dim=(-3, -2, -1))
 
-        return ignorance_score.mean(dim=0) # (timesteps, latlon, nvar)
+        return ignorance_score.mean(dim=0)  # (timesteps, latlon, nvar)
 
     @property
-    def log_name(self) -> str:
+    def name(self) -> str:
         """Log name for the Ignorance Score."""
         return f"ignorance_eps{self.eps:.0e}"
-

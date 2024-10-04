@@ -2,161 +2,472 @@ import torch
 from torch import nn
 import torch_harmonics as harmonics
 from typing import Optional
+import einops
+from .mixins import TargetEachEnsIndepMixin
+import torch
+import torch.nn as nn
+import einops
+from typing import Optional
 
-class SpectralEnergyLoss(nn.Module):
+#TODO(rilwan-ade): Probably need to add optional weightings for frequencies since this will just focus on the larger scales
+#TODO(rilwan-ade): maybe make loss across amplitudes proportional difference for scales - or (scale it proportional to how it generally varies for each variable)
+
+class SHTBaseLoss(TargetEachEnsIndepMixin, nn.Module):
+    """Base class for spectral losses using Spherical Harmonic Transforms."""
+
+    def __init__(
+        self,
+        node_weights: torch.Tensor,
+        nlat: int,
+        nlon: int,
+        grid: str = "legendre-gauss",
+        lmax: Optional[int] = None,
+        feature_weights: Optional[torch.Tensor] = None,
+        spectral_loss_method: str = "2D_spatial",
+        target_each_ens_indep: bool = False,
+        ignore_nans: Optional[bool] = False,
+    ) -> None:
+        super().__init__()
+        self.spectral_loss_method = spectral_loss_method
+        self.avg_function = torch.nanmean if ignore_nans else torch.mean
+        self.sum_function = torch.nansum if ignore_nans else torch.sum
+        self.nlat = nlat
+        self.nlon = nlon
+        self.solver = None
+        self.target_each_ens_indep = target_each_ens_indep
+
+        if spectral_loss_method != "1D_temporal":
+            if grid not in ["legendre-gauss", "lobatto", "equiangular"]:
+                msg = f"Unsupported grid type: {grid}"
+                raise ValueError(msg)
+            self.solver = harmonics.RealSHT(self.nlat, self.nlon, lmax=lmax, grid=grid, csphase=True)
+
+        # Register area and feature weights
+        self.register_buffer("node_weights", node_weights[..., None], persistent=True)
+        self.register_buffer("feature_weights", feature_weights, persistent=True)
+
+        # Map the spectral loss method to its corresponding function
+        self.spectral_loss_impl = {
+            "2D_spatial": self._spectral_loss_2D,
+            "1D_temporal": self._spectral_loss_1D_temporal,
+            "3D_spatiotemporal": self._spectral_loss_3D_spatiotemporal,
+        }
+
+    def forward(
+        self,
+        preds: torch.Tensor,
+        target: torch.Tensor,
+        squash: bool = True,
+        feature_scale: bool = True,
+        feature_indices: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Calculate the area-weighted and feature-weighted spectral loss."""
+        # Apply spectral loss calculation
+        loss = self._spectral_loss(preds, target)
+
+        # Average across ensemble dimension
+        loss = loss.mean(dim=1)
+
+        # Apply feature scaling if required
+        if feature_scale and self.feature_weights is not None:
+            if feature_indices is None:
+                loss = loss * self.feature_weights
+            else:
+                loss = loss * self.feature_weights[..., feature_indices]
+            loss = loss / self.feature_weights.numel()
+
+        # Apply area (spatial) weighting
+        loss *= (self.node_weights / self.sum_function(self.node_weights))
+
+        # Squash (reduce spatial and feature dimensions)
+        if squash:
+            loss = loss.sum(dim=(-3, -2, -1))
+
+        return loss.mean(dim=0)
+
+    def _spectral_loss(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Compute the spectral loss based on the specified spectral method."""
+        return self.spectral_loss_impl[self.spectral_loss_method](preds, target)
+
+    # Placeholder methods to be implemented by subclasses
+    def _spectral_loss_2D(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+    def _spectral_loss_1D_temporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+    def _spectral_loss_3D_spatiotemporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+class SpectralEnergyLoss(SHTBaseLoss):
     """Spectral Energy Loss with area- and feature-weighting support."""
 
     def __init__(
         self,
-        area_weights: torch.Tensor,
+        node_weights: torch.Tensor,
         nlat: int,
         nlon: int,
-        grid: str = 'legendre-gauss',
+        grid: str = "legendre-gauss",
         lmax: Optional[int] = None,
         feature_weights: Optional[torch.Tensor] = None,
-        power: int = 2,
+        beta: int = 2,
         spectral_loss_method: str = "2D_spatial",
-        frequency_weighting_method: str = "none",
+        target_each_ens_indep: bool = False,
         ignore_nans: Optional[bool] = False,
     ) -> None:
-        """Initialize the Spectral Energy Loss module with a configurable power term.
+        super().__init__(
+            node_weights,
+            nlat,
+            nlon,
+            grid,
+            lmax,
+            feature_weights,
+            spectral_loss_method,
+            target_each_ens_indep,
+            ignore_nans,
+        )
+        self.beta = beta
 
-        Args:
-            area_weights : torch.Tensor
-                Weights by area (latitude or spatial domain).
-            nlat : int
-                Number of latitudinal points.
-            nlon : int
-                Number of longitudinal points.
-            grid : str, optional
-                Type of grid ('legendre-gauss' or 'icosahedral'), by default 'legendre-gauss'.
-            lmax : Optional[int], optional
-                Maximum degree of spherical harmonics, by default None.
-            feature_weights : Optional[torch.Tensor], optional
-                Loss weighting by feature (e.g., different variables), by default None.
-            power : int, optional
-                Power applied to the spectral energy, by default 2.
-            spectral_loss_method : str, optional
-                Method for calculating spectral loss, by default "2D_spatial".
-            frequency_weighting_method : str, optional
-                Method to apply frequency weighting to the spectral loss, by default "none".
-            ignore_nans : bool, optional
-                Allow NaNs in the loss calculation, by default False.
-        """
-        super().__init__()
-        self.power = power
-        self.spectral_loss_method = spectral_loss_method
-        self.avg_function = torch.nanmean if ignore_nans else torch.mean
-        self.sum_function = torch.nansum if ignore_nans else torch.sum
-        self.solver = None
+    def _spectral_loss_2D(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Reshape tensors
+        preds = einops.rearrange(
+            preds,
+            "bs ens_inp timesteps (lat lon) nvars -> bs ens_inp timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+        target = einops.rearrange(
+            target,
+            "bs ens_target timesteps (lat lon) nvars -> bs ens_target timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
 
-        if spectral_loss_method != "1D_temporal":
-            if grid not in ["legendre-gauss", "lobatto", "equiangular"]:
-                # For any of the spatial grids, must use the FXXX grids which are legender-gauss
-                raise ValueError(f"Unsupported grid type: {grid}")
-                    # Create solver based on grid type and initialize spherical harmonics transformer
-            self.solver = harmonics.RealSHT(nlat, nlon, lmax=lmax, grid=grid, csphase=False)
-            
-        
+        # Apply SHT
+        preds_sht = self.solver(preds)
+        target_sht = self.solver(target)
 
-        # Register area and feature weights
-        self.register_buffer("area_weights", area_weights[..., None], persistent=True)
-        self.register_buffer("feature_weights", feature_weights, persistent=True)
-
-
-
-        # Map the spectral loss method to its corresponding function
-        self.spectral_loss_impl = {
-            "2D_spatial": self._spectral_energy_2D,
-            "1D_temporal": self._spectral_energy_1D_temporal,
-            "3D_spatiotemporal": self._spectral_energy_3D_spatiotemporal
-        }
-
-        #TODO (rilwan-ade): Implement frequency weighting
-
-    def _spectral_energy(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """Compute the spectral energy loss based on the spectral method."""
-        return self.spectral_loss_impl[self.spectral_loss_method](preds, target)
-
-    def _spectral_energy_2D(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """Compute 2D spatial spherical harmonic spectral energy."""
-        # Spherical Harmonic Transform (SHT) for spatial dimensions
-        preds_sht = self.solver.grid2spec(preds)
-        target_sht = self.solver.grid2spec(target)
-
+        # Compute energies (magnitude)
         preds_energy = torch.abs(preds_sht)
         target_energy = torch.abs(target_sht)
+
+        # Average across ensemble dimension
+        preds_energy = preds_energy.mean(dim=1)
+        target_energy = target_energy.mean(dim=1)
+
+        # Compute energy difference
         energy_diff = preds_energy - target_energy
 
-        return energy_diff.abs() ** self.power
+        # Apply beta power
+        power = energy_diff.abs() ** self.beta
 
-    def _spectral_energy_1D_temporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """Compute 1D temporal FFT-based spectral energy."""
-        # 1D temporal FFT
+        # Rearrange back
+        output = einops.rearrange(
+            power,
+            "bs timesteps nvars lat lon -> bs timesteps (lat lon) nvars",
+        )
+
+        return output
+
+    def _spectral_loss_1D_temporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Apply 1D temporal FFT
         preds_fft = torch.fft.fftn(preds, dim=-3)
         target_fft = torch.fft.fftn(target, dim=-3)
 
+        # Compute energies (magnitude)
         preds_energy = torch.abs(preds_fft)
         target_energy = torch.abs(target_fft)
+
+        # Average across ensemble dimension
+        preds_energy = preds_energy.mean(dim=1)
+        target_energy = target_energy.mean(dim=1)
+
+        # Compute energy difference
         energy_diff = preds_energy - target_energy
 
-        return energy_diff.abs() ** self.power
+        # Apply beta power
+        output = energy_diff.abs() ** self.beta
 
-    def _spectral_energy_3D_spatiotemporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """Compute 3D spatiotemporal spectral energy using spherical harmonics for spatial dimensions and FFT for the temporal dimension."""
-        # Spherical Harmonic Transform (SHT) for spatial dimensions
-        preds_sht = self.solver.grid2spec(preds)
-        target_sht = self.solver.grid2spec(target)
+        return output
 
-        # FFT for temporal dimension
-        preds_fft = torch.fft.fftn(preds_sht, dim=-3)
-        target_fft = torch.fft.fftn(target_sht, dim=-3)
+    def _spectral_loss_3D_spatiotemporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Reshape tensors
+        preds = einops.rearrange(
+            preds,
+            "bs ens_inp timesteps (lat lon) nvars -> bs ens_inp timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+        target = einops.rearrange(
+            target,
+            "bs ens_target timesteps (lat lon) nvars -> bs ens_target timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
 
-        preds_energy = torch.abs(preds_fft)
-        target_energy = torch.abs(target_fft)
+        # Apply SHT
+        preds_sht = self.solver(preds)
+        target_sht = self.solver(target)
+
+        # Apply FFT for temporal dimension
+        preds_sht_fft = torch.fft.fftn(preds_sht, dim=-3)
+        target_sht_fft = torch.fft.fftn(target_sht, dim=-3)
+
+        # Compute energies (magnitude)
+        preds_energy = torch.abs(preds_sht_fft)
+        target_energy = torch.abs(target_sht_fft)
+
+        # Average across ensemble dimension
+        preds_energy = preds_energy.mean(dim=1)
+        target_energy = target_energy.mean(dim=1)
+
+        # Compute energy difference
         energy_diff = preds_energy - target_energy
 
-        return energy_diff.abs() ** self.power
+        # Apply beta power
+        output = energy_diff.abs() ** self.beta
 
-    def forward(
-            self,
-            preds: torch.Tensor,
-            target: torch.Tensor,
-            squash: bool = True,
-            feature_scale: bool = True,
-            feature_indices: Optional[torch.Tensor] = None,
-        ) -> torch.Tensor:
-            """Calculate the area-weighted and feature-weighted spectral energy loss.
+        return output
 
-            Args:
-                preds : torch.Tensor shape (bs, ens, (timesteps), lat*lon, n_outputs)
-                    Predicted values.
-                target : torch.Tensor shape (bs, (timesteps), lat*lon, n_outputs)
-                    Ground truth values.
-                squash : bool, optional
-                    Whether to reduce spatial and feature dimensions, by default True.
-                feature_scale : bool, optional
-                    Whether to apply feature scaling, by default True.
-                feature_indices: Optional[torch.Tensor], optional
-                    Indices to scale the loss by specific features, by default None.
+class SHTAmplitudePhaseLoss(SHTBaseLoss):
+    """Spectral loss that combines amplitude and phase differences."""
 
-            Returns:
-                torch.Tensor
-                    The computed weighted spectral energy loss.
-            """
-            # Apply spectral energy calculation
-            loss = self._spectral_energy(preds, target)
+    def __init__(
+        self,
+        node_weights: torch.Tensor,
+        nlat: int,
+        nlon: int,
+        grid: str = "legendre-gauss",
+        lmax: Optional[int] = None,
+        feature_weights: Optional[torch.Tensor] = None,
+        alpha: float = 0.5,
+        beta: float = 0.5,
+        spectral_loss_method: str = "2D_spatial",
+        target_each_ens_indep: bool = False,
+        ignore_nans: Optional[bool] = False,
+    ) -> None:
+        super().__init__(
+            node_weights,
+            nlat,
+            nlon,
+            grid,
+            lmax,
+            feature_weights,
+            spectral_loss_method,
+            target_each_ens_indep,
+            ignore_nans,
+        )
+        self.alpha = alpha  # Weight for amplitude loss
+        self.beta = beta    # Weight for phase loss
 
-            # Apply feature scaling if required
-            if feature_scale and self.feature_weights is not None:
-                loss = loss * self.feature_weights if feature_indices is None else loss * self.feature_weights[..., feature_indices]
-                loss = loss / self.feature_weights.numel()
+    def _compute_amplitude_phase_loss(self, preds_complex, target_complex):
+        # Compute amplitude (magnitude) and phase (angle)
+        preds_amplitude = torch.abs(preds_complex)
+        target_amplitude = torch.abs(target_complex)
 
-            # Apply area (spatial) weighting
-            loss *= (self.area_weights / self.sum_function(self.area_weights))
+        preds_phase = torch.angle(preds_complex)
+        target_phase = torch.angle(target_complex)
 
-            # Squash (reduce spatial and feature dimensions)
-            if squash:
-                loss = loss.sum(dim=(-2, -1))
+        # Compute amplitude difference
+        amplitude_diff = preds_amplitude - target_amplitude
+        amplitude_loss = amplitude_diff ** 2
 
-            return loss.mean(dim=0)
+        # Compute phase difference, mapping to [-pi, pi]
+        phase_diff = preds_phase - target_phase
+        phase_diff = torch.atan2(torch.sin(phase_diff), torch.cos(phase_diff))
+        phase_loss = phase_diff ** 2
+
+        # Combine losses
+        total_loss = self.alpha * amplitude_loss + self.beta * phase_loss
+
+        return total_loss
+
+    def _spectral_loss_2D(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Reshape tensors
+        preds = einops.rearrange(
+            preds,
+            "bs ens_inp timesteps (lat lon) nvars -> bs ens_inp timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+        target = einops.rearrange(
+            target,
+            "bs ens_target timesteps (lat lon) nvars -> bs ens_target timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+
+        # Apply SHT
+        preds_sht = self.solver(preds)
+        target_sht = self.solver(target)
+
+        # Compute loss
+        loss = self._compute_amplitude_phase_loss(preds_sht, target_sht)
+
+        # Average across ensemble dimension
+        loss = loss.mean(dim=1)
+
+        # Rearrange back
+        output = einops.rearrange(
+            loss,
+            "bs timesteps nvars lat lon -> bs timesteps (lat lon) nvars",
+        )
+
+        return output
+
+    def _spectral_loss_1D_temporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Apply FFT for temporal dimension
+        preds_fft = torch.fft.fftn(preds, dim=-3)
+        target_fft = torch.fft.fftn(target, dim=-3)
+
+        # Compute loss
+        loss = self._compute_amplitude_phase_loss(preds_fft, target_fft)
+
+        # Average across ensemble dimension
+        loss = loss.mean(dim=1)
+
+        return loss
+
+    def _spectral_loss_3D_spatiotemporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Reshape tensors
+        preds = einops.rearrange(
+            preds,
+            "bs ens_inp timesteps (lat lon) nvars -> bs ens_inp timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+        target = einops.rearrange(
+            target,
+            "bs ens_target timesteps (lat lon) nvars -> bs ens_target timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+
+        # Apply SHT
+        preds_sht = self.solver(preds)
+        target_sht = self.solver(target)
+
+        # Apply FFT for temporal dimension
+        preds_sht_fft = torch.fft.fftn(preds_sht, dim=-3)
+        target_sht_fft = torch.fft.fftn(target_sht, dim=-3)
+
+        # Compute loss
+        loss = self._compute_amplitude_phase_loss(preds_sht_fft, target_sht_fft)
+
+        # Average across ensemble dimension
+        loss = loss.mean(dim=1)
+
+        return loss
+
+class SHTComplexBetaLoss(SHTBaseLoss):
+    """Spectral loss computed directly on complex coefficients with customizable power."""
+    
+    def __init__(
+        self,
+        node_weights: torch.Tensor,
+        nlat: int,
+        nlon: int,
+        grid: str = "legendre-gauss",
+        lmax: Optional[int] = None,
+        feature_weights: Optional[torch.Tensor] = None,
+        beta: float = 2.0,
+        spectral_loss_method: str = "2D_spatial",
+        target_each_ens_indep: bool = False,
+        ignore_nans: Optional[bool] = False,
+    ) -> None:
+        super().__init__(
+            node_weights,
+            nlat,
+            nlon,
+            grid,
+            lmax,
+            feature_weights,
+            spectral_loss_method,
+            target_each_ens_indep,
+            ignore_nans,
+        )
+        self.beta = beta  # Power to raise the absolute difference
+
+    def _compute_complex_power_loss(self, preds_complex, target_complex):
+        # Compute complex difference
+        complex_diff = preds_complex - target_complex
+        # Compute the loss using the specified beta power
+        complex_loss = torch.abs(complex_diff) ** self.beta
+        return complex_loss
+
+    def _spectral_loss_2D(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Reshape tensors
+        preds = einops.rearrange(
+            preds,
+            "bs ens_inp timesteps (lat lon) nvars -> bs ens_inp timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+        target = einops.rearrange(
+            target,
+            "bs ens_target timesteps (lat lon) nvars -> bs ens_target timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+
+        # Apply SHT
+        preds_sht = self.solver(preds)
+        target_sht = self.solver(target)
+
+        # Compute loss
+        loss = self._compute_complex_power_loss(preds_sht, target_sht)
+
+        # Average across ensemble dimension
+        loss = loss.mean(dim=1)
+
+        # Rearrange back
+        output = einops.rearrange(
+            loss,
+            "bs timesteps nvars lat lon -> bs timesteps (lat lon) nvars",
+        )
+
+        return output
+
+    def _spectral_loss_1D_temporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Apply FFT for temporal dimension
+        preds_fft = torch.fft.fftn(preds, dim=-3)
+        target_fft = torch.fft.fftn(target, dim=-3)
+
+        # Compute loss
+        loss = self._compute_complex_power_loss(preds_fft, target_fft)
+
+        # Average across ensemble dimension
+        loss = loss.mean(dim=1)
+
+        return loss
+
+    def _spectral_loss_3D_spatiotemporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Reshape tensors
+        preds = einops.rearrange(
+            preds,
+            "bs ens_inp timesteps (lat lon) nvars -> bs ens_inp timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+        target = einops.rearrange(
+            target,
+            "bs ens_target timesteps (lat lon) nvars -> bs ens_target timesteps nvars lat lon",
+            lat=self.nlat,
+            lon=self.nlon,
+        )
+
+        # Apply SHT
+        preds_sht = self.solver(preds)
+        target_sht = self.solver(target)
+
+        # Apply FFT for temporal dimension
+        preds_sht_fft = torch.fft.fftn(preds_sht, dim=-3)
+        target_sht_fft = torch.fft.fftn(target_sht, dim=-3)
+
+        # Compute loss
+        loss = self._compute_complex_power_loss(preds_sht_fft, target_sht_fft)
+
+        # Average across ensemble dimension
+        loss = loss.mean(dim=1)
+
+        return loss

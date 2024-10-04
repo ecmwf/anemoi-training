@@ -9,10 +9,9 @@
 # * This functionality will be restructured in the near future
 # * so for now callbacks are under __init__.py
 
-# TODO (Rilwan-Ade) Make sure that in logs we include epoch and step within epoch to circumvent having to figure out validation epoch
+# TODO: (Rilwan-Ade) Make sure that in logs we include epoch and step within epoch to circumvent having to figure out validation epoch
 from __future__ import annotations
 
-import copy
 import logging
 import sys
 import time
@@ -21,11 +20,8 @@ import uuid
 from abc import ABC
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import nullcontext
-from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 
@@ -33,36 +29,106 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from torch import Tensor
 import torchinfo
 from anemoi.utils.checkpoints import save_metadata
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities import rank_zero_only
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from anemoi.training.diagnostics.plots.plots import init_plot_settings
+from anemoi.training.diagnostics.plots.plots import plot_graph_features
+from anemoi.training.diagnostics.plots.plots import plot_loss
 
-from anemoi.training.diagnostics.plots import init_plot_settings
-from anemoi.training.diagnostics.plots import plot_graph_features
-from anemoi.training.diagnostics.plots import plot_histogram
-from anemoi.training.diagnostics.plots import plot_loss
-from anemoi.training.diagnostics.plots import plot_power_spectrum
-from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
+from typing import TYPE_CHECKING
+import cv2
+from functools import lru_cache
+from functools import wraps
 
-from typing import Optional
+import cartopy.crs as ccrs
 
 if TYPE_CHECKING:
     import pytorch_lightning as pl
-    from omegaconf import DictConfig
     from omegaconf import OmegaConf
 
 LOGGER = logging.getLogger(__name__)
+
+
+def tensor_lru_cache(maxsize=128, typed=False):
+    def decorator(func):
+        cache = lru_cache(maxsize=maxsize, typed=typed)
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Convert Tensor arguments to a hashable type
+            key = tuple(arg.tolist() if isinstance(arg, Tensor) else arg for arg in args)
+            key_kwargs = {k: (v.tolist() if isinstance(v, Tensor) else v) for k, v in kwargs.items()}
+            return cache(func)(*key, **key_kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def safe_cast_to_numpy(tensor: torch.Tensor) -> np.ndarray:
+    """Converts a PyTorch tensor to a NumPy array, ensuring that the array is of the
+    appropriate type.
+    """
+    tensor = tensor.to("cpu")
+
+    if tensor.dtype == torch.bfloat16 or tensor.dtype == torch.float32:
+        tensor = tensor.to(torch.float32)
+    elif tensor.dtype == torch.float16:
+        pass
+
+    return tensor.numpy()
+
+
+@tensor_lru_cache()
+def get_time_step(increment: str, step: Tensor) -> str:
+    """Return the time step name for a given step number based on increment."""
+    inc_hours = increment_to_hours(increment)
+
+    total_hours = step * inc_hours
+    days = total_hours / 24
+
+    return f"{days:.2f}d"
+
+
+@lru_cache
+def increment_to_hours(increment: str):
+    """Convert time increment string to hours."""
+    if increment.endswith("h"):
+        return int(increment[:-1])
+    if increment.endswith("d"):
+        return int(increment[:-1]) * 24
+    msg = "Invalid time increment format. Use 'h' for hours and 'd' for days."
+    raise ValueError(msg)
+
+
+@tensor_lru_cache()
+def generate_time_steps(increment: str, steps: int):
+    """Generate named time steps based on increment and number of steps."""
+    inc_hours = increment_to_hours(increment)
+
+    time_steps = []
+
+    for step in range(1, steps + 1):
+        total_hours = step * inc_hours
+        days = total_hours / 24
+
+        step_name = f"{int(days)}d" if days.is_integer() else f"{days:.2f}d"
+
+        time_steps.append(step_name)
+
+    return time_steps
+
 
 class ParallelExecutor(ThreadPoolExecutor):
     """Wraps parallel execution and provides accurate information about errors.
 
     Extends ThreadPoolExecutor to preserve the original traceback and line number.
 
-    Reference: https://stackoverflow.com/questions/19309514/getting-original-line-
-    number-for-exception-in-concurrent-futures/24457608#24457608
+    Reference: https://stackoverflow.com/questions/19309514/getting-original-line-number-for-exception-in-concurrent-futures/24457608#24457608
     """
 
     def submit(self, fn: Any, *args, **kwargs) -> Callable:
@@ -80,13 +146,17 @@ class ParallelExecutor(ThreadPoolExecutor):
 class BasePlotCallback(Callback, ABC):
     """Factory for creating a callback that plots data to Experiment Logging."""
 
-    def __init__(self, config: OmegaConf, val_dset_len=None, op_on:str = 'batch') -> None:
+    def __init__(self, config: OmegaConf, val_dset_len: int | None = None, op_on: str = "batch") -> None:
         """Initialise the BasePlotCallback abstract base class.
 
         Parameters
         ----------
         config : OmegaConf
             Config object
+        val_dset_len : Optional[int]
+            Length of validation dataset
+        op_on : str
+            Operation on 'batch' or 'epoch'
 
         """
         super().__init__()
@@ -101,7 +171,7 @@ class BasePlotCallback(Callback, ABC):
         self.plot = self._plot
         self._executor = None
 
-        assert op_on in ['batch', 'epoch'], f"Operation on {op_on} not supported"
+        assert op_on in ["batch", "epoch"], f"Operation on {op_on} not supported"
         self.op_on = op_on
 
         if self.config.diagnostics.plot.asynchronous:
@@ -172,7 +242,7 @@ class BasePlotCallback(Callback, ABC):
             LOGGER.exception("Critical error occurred in asynchronous plots.")
             sys.exit(1)
 
-    def get_plot_frequency(self, plot_frequency: float | int, val_dset_len: Optional[int]) -> int:
+    def get_plot_frequency(self, plot_frequency: float | int, val_dset_len: int | None) -> int:
         self.plot_frequency = None
 
         # If not operating on batch, just return
@@ -181,7 +251,7 @@ class BasePlotCallback(Callback, ABC):
             freq = plot_frequency
 
         elif self.op_on == "batch":
-            
+
             if isinstance(plot_frequency, int):
                 self.plot_frequency = plot_frequency
 
@@ -194,7 +264,8 @@ class BasePlotCallback(Callback, ABC):
                     freq = int(val_dset_len * freq_rate)
                 else:
                     LOGGER.error(f"Plot frequency could not be determined for {self.__class__.__name__}")
-                    raise ValueError(f"Plot frequency could not be determined for {self.__class__.__name__}")
+                    msg = f"Plot frequency could not be determined for {self.__class__.__name__}"
+                    raise ValueError(msg)
 
                 # Ensure frequency is not lower than the minimum required
                 if freq < self.min_iter_to_plot:
@@ -203,7 +274,7 @@ class BasePlotCallback(Callback, ABC):
 
         return freq
 
-    def op_on_this_batch(self, batch_idx ):
+    def op_on_this_batch(self, batch_idx):
         return ((batch_idx + 1) % self.plot_frequency) == 0
 
 
@@ -211,6 +282,8 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
     """Visualize the trainable features defined at the data and hidden graph nodes.
 
     TODO: How best to visualize the learned edge embeddings? Offline, perhaps - using code from @Simon's notebook?
+
+    #TODO: is this to be included in further code???
     """
 
     def __init__(self, config: OmegaConf) -> None:
@@ -247,7 +320,7 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
         epoch = trainer.current_epoch
 
         if model.trainable_data is not None:
-            data_coords = np.rad2deg(graph[(self._graph_name_data, "to", self._graph_name_data)].ecoords_rad.numpy())
+            data_coords = np.rad2deg(graph[self._graph_name_data, "to", self._graph_name_data].ecoords_rad.numpy())
 
             self.plot(
                 trainer,
@@ -260,7 +333,7 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
 
         if model.trainable_hidden is not None:
             hidden_coords = np.rad2deg(
-                graph[(self._graph_name_hidden, "to", self._graph_name_hidden)].hcoords_rad.numpy(),
+                graph[self._graph_name_hidden, "to", self._graph_name_hidden].hcoords_rad.numpy(),
             )
 
             self.plot(
@@ -273,7 +346,7 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
             )
 
 
-class LossBarPlot(BasePlotCallback):
+class BaseLossBarPlot(BasePlotCallback):
     """Plots the unsqueezed loss over rollouts."""
 
     def __init__(self, config: OmegaConf, **kwargs) -> None:
@@ -424,6 +497,135 @@ class LossBarPlot(BasePlotCallback):
             self.plot(trainer, pl_module, outputs, batch, batch_idx, epoch=trainer.current_epoch)
 
 
+# TODO: (rilwan-ade) make sure that this is added for implementations of forecaster, forecast_ensemble,
+class WeightGradOutputLoggerCallback(Callback):
+    """Tensorboard Callback."""
+
+    from torch.utils.tensorboard import SummaryWriter
+
+    def __init__(
+        self,
+        summary_writer: SummaryWriter,
+        log_weights: bool,
+        log_weights_interval: str,
+        log_weights_freq: int | None,
+        log_gradients: bool,
+        log_gradients_freq: int | None,
+        log_clipped_gradients: bool,
+        log_clipped_gradients_freq: int,
+        log_preds: bool,
+        log_preds_freq: int | None,
+        log_postproc_preds: int | None,
+        log_postproc_preds_freq: int,
+    ):
+        super().__init__()
+
+        log_periods = ["batch", "epoch"]
+
+        if log_weights is True:
+            assert (
+                log_weights_freq is None or log_weights_freq > 0
+            ), "log_weights_freq must be greater than 0 if log_weights is True"
+            assert log_weights_interval in log_periods, "log_weights_interval must be 'batch' or 'epoch'"
+
+        if log_gradients is True:
+            assert (
+                log_gradients_freq is not None and log_gradients_freq > 0
+            ), "log_gradients_freq must be greater than 0 if log_gradients is True"
+
+        if log_clipped_gradients is True:
+            assert (
+                log_clipped_gradients_freq is not None and log_clipped_gradients_freq > 0
+            ), "log_clipped_gradients_freq must be greater than 0 if log_clipped_gradients is True"
+
+        if log_preds is True:
+            assert log_preds_freq is not None and log_preds_freq > 0, "log_preds_freq must be greater than 0 if log_preds is True"
+
+        if log_postproc_preds is True:
+            assert (
+                log_postproc_preds_freq is not None and log_postproc_preds_freq > 0
+            ), "log_postproc_preds_freq must be greater than 0 if log_postproc_preds is True"
+
+        self.writer = summary_writer
+        self._log_weights = log_weights
+        self._log_weights_interval = log_weights_interval
+        self._log_weights_freq = log_weights_freq
+
+        self._log_gradients = log_gradients
+        self._log_gradients_freq = log_gradients_freq
+
+        self._log_clipped_gradients = log_clipped_gradients
+        self._log_clipped_gradients_freq = log_clipped_gradients_freq
+
+        self._log_preds = log_preds
+        self._log_preds_freq = log_preds_freq
+
+        self._log_postproc_preds = log_postproc_preds
+        self._log_postproc_preds_freq = log_postproc_preds_freq
+
+    def log_parameters(self, named_params: list, idx: int, log_weights=False, log_grads=False, log_clipped_grads=False) -> None:
+        for name, param in named_params:
+            if log_weights:
+                self.writer.add_histogram(f"{name}_weights", param, idx)
+            if log_grads and param.grad is not None:
+                self.writer.add_histogram(f"{name}_grads", param.grad, idx)
+            if log_clipped_grads and param.grad is not None:
+                self.writer.add_histogram(f"{name}_clipped_grads", param.grad, idx)
+
+    def log_preds(self, pl_module, outputs: list, idx: int, flag_outputs=False, flag_postproc_outputs=False) -> None:
+        if not flag_outputs and not flag_postproc_outputs:
+            return
+
+        preds = torch.stack(outputs["y_preds"], dim=1)  # outputs shape: (bs, ts, ens, latlon, nvar )
+
+        preds_denorm = None
+        if flag_postproc_outputs:
+            preds_denorm = pl_module.model.post_processors(preds, in_place=False)  # ens
+
+        idx_to_name = {
+            pl_module.data_indices.model.output.name_to_index[name]: name
+            for name in pl_module.data_indices.model.output.name_to_index
+        }
+
+        for i in range(preds.shape[-1]):
+            if flag_outputs:
+                self.writer.add_histogram(f"{idx_to_name[i]}", preds[..., i], idx)
+            if flag_postproc_outputs:
+                self.writer.add_histogram(f"{idx_to_name[i]}_postproc", preds_denorm[..., i], idx)
+
+    def on_after_backward(self, trainer, pl_module) -> None:
+        log_grads = self._log_gradients and (trainer.global_step % self._log_gradients_freq == 0)
+        self.log_parameters(pl_module.named_parameters(), trainer.global_step, log_grads=log_grads)
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx) -> None:
+        # if self.pl_module.global_rank != 0:
+        #     return
+        log_weights = self._log_weights and (self._log_weights_interval == "batch" and batch_idx % self._log_weights_freq == 0)
+        log_clipped_grads = self._log_clipped_gradients and (batch_idx % self._log_clipped_gradients_freq == 0)
+        self.log_parameters(
+            pl_module.named_parameters(),
+            trainer.global_step,
+            log_weights=log_weights,
+            log_clipped_grads=log_clipped_grads,
+        )
+
+        if self._log_preds and batch_idx % self._log_preds_freq == 0:
+            self.log_preds(pl_module, outputs, trainer.global_step)
+
+        flag_outputs = self._log_preds and batch_idx % self._log_preds_freq == 0
+        flag_postproc_outputs = self._log_postproc_preds and batch_idx % self._log_postproc_preds_freq == 0
+
+        self.log_preds(pl_module, outputs, trainer.global_step, flag_outputs, flag_postproc_outputs)
+
+    def on_train_epoch_end(self, trainer, pl_module) -> None:
+        # if self.pl_module.global_rank != 0:
+        #     return
+        log_weights = self._log_weights and (
+            self._log_weights_interval == "epoch" and (trainer.current_epoch + 1) % self._log_weights_freq == 0
+        )
+        self.log_parameters(pl_module.named_parameters(), trainer.current_epoch, log_weights=log_weights)
+
+
 class ParentUUIDCallback(Callback):
     """A callback that retrieves the parent UUID for a model, if it is a child model."""
 
@@ -447,6 +649,7 @@ class ParentUUIDCallback(Callback):
     ) -> None:
         del trainer  # unused
         pl_module.hparams["metadata"]["parent_uuid"] = checkpoint["hyper_parameters"]["metadata"]["uuid"]
+
 
 class BaseLossMapPlot(BasePlotCallback):
     # Plot the accumulated loss over a given Map for the validation epoch at regular intervals
@@ -481,6 +684,7 @@ class BaseLossMapPlot(BasePlotCallback):
 
     def reset(self) -> None:
         raise NotImplementedError
+
 
 class AnemoiCheckpoint(ModelCheckpoint):
     """A checkpoint callback that saves the model after every validation epoch."""
@@ -568,7 +772,7 @@ class AnemoiCheckpoint(ModelCheckpoint):
 
         return {}
 
-    def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
+    def _remove_checkpoint(self, trainer: pl.Trainer, filepath: str) -> None:
         """Calls the strategy to remove the checkpoint file."""
         super()._remove_checkpoint(trainer, filepath)
         trainer.strategy.remove_checkpoint(self._get_inference_checkpoint_filepath(filepath))
@@ -635,10 +839,108 @@ class AnemoiCheckpoint(ModelCheckpoint):
                 logger.after_save_checkpoint(proxy(self))
 
 
-class MemCleanupCallback(Callback):
+class MemCleanUpCallback(Callback):
     def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
         # This will be called after the ValidationCallback
         self.cleanup()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         torch.cuda.empty_cache()
+
+
+class VideoPlotCallback(BasePlotCallback):
+    """Evaluates the model performance over a (longer) rollout window."""
+
+    # TODO: (Rilwan Adewoyin): Change this class so it plots the following videos:
+    # Group 1 Video: Temporal evolution of the true target, predicted target and forecast error
+    # 1. The temporal evolution of the true target (top left)
+    # 2. The temporal evolution of the predicted target (top right)
+    # 3. The temporal evolution of the forecast error (bottom left)
+    # 4. A chart wihch shows x-axis time, y-axis aggregated & weighted error (true - predicted) across all latlons (e.g. effect of rollout length on error) (bottom right)
+
+    # Group 2 Video: Temporal evolution of the true and predicted spectra
+    # 5. The temporal evolution of the true and predicted spectra (spatial)
+
+    def __init__(self, config, eval_dset_len) -> None:
+        super().__init__(config, eval_dset_len)
+        self.sample_idx = self.config.diagnostics.plot.sample_idx
+        self.eval_enabled = config.diagnostics.test.rollouteval.eval.enabled
+        self.video_enabled = config.diagnostics.test.rollouteval.video.enabled
+        self.eval_frequency = self._calculate_frequency(config.diagnostics.test.rollouteval.eval.frequency, eval_dset_len)
+        self.video_frequency = self._calculate_frequency(config.diagnostics.test.rollouteval.video.frequency, eval_dset_len)
+        self.video_rollout = config.diagnostics.test.rollouteval.video.rollout
+        self.max_rollout = max(self.video_rollout, max(config.diagnostics.test.rollouteval.eval.rsteps_to_log, default=0))
+        assert self.config.dataloader.batch_size.test == 1, "Batch size for testing must be 1!"
+
+    def _calculate_frequency(self, frequency, eval_dset_len):
+        if isinstance(frequency, float):
+            return max(1, int(frequency * eval_dset_len))
+        return frequency
+
+    def _prepare_data(self, batch, pl_module):
+        x = batch[:, 0 : pl_module.multi_step, ..., pl_module.data_indices.data.input.full]
+        input_tensor_0 = batch[:, pl_module.multi_step - 1, ..., pl_module.data_indices.data.output.full].cpu()
+        data_0 = self.post_processors(input_tensor_0).numpy()
+        if pl_module.output_mask is not None:
+            data_0[..., ~pl_module.output_mask, :] = np.nan
+        return x, data_0
+
+    def _plot_frame(self, ts, cache, dates, var_idx, var_name, lats, lons, vmin, vmax, path_dir):
+        fig, axs = plt.subplots(2, 2, figsize=(12, 9), dpi=400, subplot_kw={"projection": ccrs.PlateCarree()})
+        fig.suptitle(f"{var_name} Rollout: {dates[ts].strftime('%Y-%m-%d %H:%M')}", fontsize=12)
+
+        self._map_scatter(lats, lons, cache["y_proc"][ts, :, var_idx], cmap="viridis", axes=axs[0, 0], s=3, vmin=vmin, vmax=vmax)
+        axs[0, 0].set_title("Target")
+
+        self._map_scatter(lats, lons, cache["y_hat_proc"][ts, :, var_idx], cmap="viridis", axes=axs[0, 1], s=2, vmin=vmin, vmax=vmax)
+        axs[0, 1].set_title("Prediction")
+
+        error = cache["y_proc"][ts, :, var_idx] - cache["y_hat_proc"][ts, :, var_idx]
+        self._map_scatter(lats, lons, error, cmap="viridis", axes=axs[1, 0], s=2, vmin=-vmax, vmax=vmax)
+        axs[1, 0].set_title("Error")
+
+        fig.tight_layout()
+        frame_filename = f"{path_dir}/frame_{ts:04d}.png"
+        plt.savefig(frame_filename)
+        plt.close(fig)
+        return frame_filename
+
+    def _create_video(self, cache, dates, var_idx, var_name, lats, lons, path_dir):
+        vmin = min(np.nanmin(cache["y_proc"][:, :, var_idx]), np.nanmin(cache["y_hat_proc"][:, :, var_idx]))
+        vmax = max(np.nanmax(cache["y_proc"][:, :, var_idx]), np.nanmax(cache["y_hat_proc"][:, :, var_idx]))
+
+        frame_filenames = [self._plot_frame(ts, cache, dates, var_idx, var_name, lats, lons, vmin, vmax, path_dir) for ts in range(cache["y_proc"].shape[0])]
+
+        video_filename = Path(path_dir) / f"rollout_{var_name}.mp4"
+        frame = cv2.imread(str(frame_filenames[0]))
+        height, width, _layers = frame.shape
+        video = cv2.VideoWriter(str(video_filename), cv2.VideoWriter_fourcc(*"mp4v"), 4, (width, height))
+
+        for frame_filename in frame_filenames:
+            video.write(cv2.imread(str(frame_filename)))
+            Path(frame_filename).unlink()
+
+        video.release()
+        return str(video_filename)
+
+    def _map_scatter(self, lats, lons, data, proj=None, cmap="viridis", axes=None, vmin=None, vmax=None, **kwargs):
+
+        # for example for gaussian grid
+        import cartopy.crs as ccrs
+
+        if proj is None:
+            proj = ccrs.PlateCarree()
+        if axes is None:
+            _, ax = plt.subplots(subplot_kw={"projection": proj}, figsize=(16, 6))
+        else:
+            ax = axes
+        ax.coastlines()
+        ax.gridlines()
+        sc = ax.scatter(x=lons, y=lats, c=data, transform=proj, **kwargs, cmap=cmap, vmin=vmin, vmax=vmax)
+        plt.colorbar(sc)
+        gl = ax.gridlines(draw_labels=True, alpha=0.3, color="grey", linewidth=0.5, linestyle="-", x_inline=False, y_inline=False)
+        # gl.n_steps = 100
+        gl.n_steps = 85
+        gl.top_labels = False
+        gl.right_labels = False
+        return ax

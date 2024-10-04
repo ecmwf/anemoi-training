@@ -9,15 +9,17 @@
 
 from __future__ import annotations
 
+from functools import cached_property
 import logging
 
 import torch
 from torch import nn
-from typing import Optional
+from .mixins import TargetEachEnsIndepMixin
 LOGGER = logging.getLogger(__name__)
 
+# TODO(rilwan-ade): make parent loss calss that holds the common methods avg_function and sum_function
 
-class WeightedMSELoss(nn.Module):
+class WeightedMSELoss(TargetEachEnsIndepMixin,nn.Module):
     """Latitude-weighted MSE loss."""
 
     def __init__(
@@ -25,6 +27,7 @@ class WeightedMSELoss(nn.Module):
         node_weights: torch.Tensor,
         feature_weights: torch.Tensor,
         ignore_nans: bool | None = False,
+        target_each_ens_indep: bool = False,
     ) -> None:
         """Latitude- and feature-weighted MSE Loss.
 
@@ -42,8 +45,9 @@ class WeightedMSELoss(nn.Module):
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-        self.register_buffer("node_weights", node_weights[...,None], persistent=True)
+        self.register_buffer("node_weights", node_weights[..., None], persistent=True)
         self.register_buffer("feature_weights", feature_weights, persistent=True)
+        self.target_each_ens_indep = target_each_ens_indep
 
     def forward(
         self,
@@ -51,7 +55,8 @@ class WeightedMSELoss(nn.Module):
         target: torch.Tensor,
         squash: bool = True,
         feature_scale: bool = True,
-        feature_indices: Optional[torch.Tensor] = None
+        feature_indices: torch.Tensor | None = None,
+        **kwargs,
     ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 
@@ -60,31 +65,43 @@ class WeightedMSELoss(nn.Module):
         pred : torch.Tensor
             Prediction tensor, shape (bs, ens, (timesteps), lat*lon, n_mseputs)
         target : torch.Tensor
-            Target tensor, shape (bs, (timesteps), lat*lon, n_mseputs)
+            Target tensor, shape (bs, ens, (timesteps), lat*lon, n_mseputs)
         squash : bool, optional
             Reduce the spatial and feature dimensions
         feature_scaling : bool, optional
             Scale the loss by the feature weights
         feature_indices: indices of the features to scale the loss by
+
         Returns
         -------
         torch.Tensor
             Weighted MSE loss
 
         """
-        mse = torch.square(pred.mean(dim=1) - target) 
-        
+        pred = pred.mean(dim=1)
+        target = target.mean(dim=1)
+
+        mse = torch.square(pred - target)
+
         # Scale in feature dimension
         if feature_scale:
-            mse = (mse * self.feature_weights) if feature_indices is None else (mse * self.feature_weights[..., feature_indices]) 
-            mse = mse * self.feature_weights.numel()
+            mse = (mse * self.feature_weights) if feature_indices is None else (mse * self.feature_weights[..., feature_indices])
+            mse = mse / self.feature_weights.numel()
             # Normalize by number of features
 
         # Scale in spatial dimension
         mse *= (self.node_weights / self.sum_function(self.node_weights))
 
+        # Reduce over ensemble dimension
+        mse = mse.mean(1)
+
         # Squash - reduce spatial and feature dimensions
         if squash:
-            mse = self.sum_function(mse, axis=(-2,-1))
+            mse = self.sum_function(mse, axis=(-3, -2, -1))  # (bs, timesteps)
 
-        return self.avg_function(mse, axis=(0)) 
+        return self.avg_function(mse, axis=(0))  # (timesteps) or (timesteps, latlon, nvars)
+
+    @cached_property
+    def name(self) -> str:
+        """Returns the name of the loss for logging."""
+        return "mse"

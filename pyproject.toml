@@ -93,71 +93,96 @@ version_file = "src/anemoi/training/_version.py"
 target-version = "py39"
 line-length = 120
 src = [ "src" ]
-exclude = [ "docs/" ]
+include = ["*.py", "**/*.py"]
+exclude = [
+    "pyproject.toml",
+    "docs/",
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "*.toml"
+]
 
 preview = true
 lint.flake8-import-conventions.extend-aliases."pytorch_lightning" = "pl"
 lint.pydocstyle.convention = "numpy"
-select = [
-  "A", # flake8 builtins
-  # "ANN", # flake8-annotations
-  "ANN001", # Type annotation
-  "ANN201", # Return type public
-  "ANN202", # Return type private
-  "ANN205", # Return type static method
-  "ANN206", # Return type class method
-  "ARG",    # Unused arguments
-  "B",      # flake8-bugbear
-  "BLE",    # Non-specific exceptions
-  "C4",     # Comprehensions
-  "C90",    # Mccabe complexity
-  "COM",    # Commas
-  "CPY",    # Copyright
-  # "C",  # pylint convention
-  "D", # pydocstyle
-  # "DOC", # pydoclint
-  "DTZ", # Datetimes
-  "E",   # pycodestyle error
-  "EM",  # Error messages
-  "ERA", # Found unused code
-  "F",   # flake8 error
-  "FA",  # Future annotations
-  # "EXE", # Executable
-  # "FBT", # Boolean traps
-  "FLY",  # Fstrings
-  "FURB", # Modernising code
-  "G",    # flake8 logging format
-  "ICN",  # Import conventions
-  "ISC",  # Implicit string concatenation
-  "LOG",  # Logging
-  # "I", # isort
-  "N",    # pep8 naming
-  "NPY",  # Numpys
-  "PERF", # Perfomance linting
-  "PGH",  # Pygrep hooks
-  "PIE",  # Misc lints
-  # "PL",  # Pylint (superset of C, E, R, W)
-  "PT",  # Pytest
-  "PTH", # Use Pathlib
-  "Q",   # Quotes
-  "R",   # Refactor
-  "RET", # Return statements
-  "RSE", # Raises
-  "RUF", # Ruff specific
-  "S",   # bandit !IMPORTANT
-  "SIM", # flake8-simplify
-  "T10", # Debug statements
-  "T20", # Print statements
-  "TCH", # Type checking blocks
-  "TD",  # Todos
-  "TID", # Tidy imports
-  "TRY", # Exception handling antipatterns
-  "UP",  # Pyupgrade
-  "W",   # pycodestyle warning
-  "YTT", # flake8-2020
-]
+# lint.select = [
+#   "A", # flake8 builtins
+#   # "ANN", # flake8-annotations
+#   "ANN001", # Type annotation
+#   "ANN201", # Return type public
+#   "ANN202", # Return type private
+#   "ANN205", # Return type static method
+#   "ANN206", # Return type class method
+#   "ARG",    # Unused arguments
+#   "B",      # flake8-bugbear
+#   "BLE",    # Non-specific exceptions
+#   "C4",     # Comprehensions
+#   "C90",    # Mccabe complexity
+#   "COM",    # Commas
+#   "CPY",    # Copyright
+#   # "C",  # pylint convention
+#   "D", # pydocstyle
+#   # "DOC", # pydoclint
+#   "DTZ", # Datetimes
+#   "E",   # pycodestyle error
+#   "EM",  # Error messages
+#   "ERA", # Found unused code
+#   "F",   # flake8 error
+#   "FA",  # Future annotations
+#   # "EXE", # Executable
+#   # "FBT", # Boolean traps
+#   "FLY",  # Fstrings
+#   "FURB", # Modernising code
+#   "G",    # flake8 logging format
+#   "ICN",  # Import conventions
+#   "ISC",  # Implicit string concatenation
+#   "LOG",  # Logging
+#   # "I", # isort
+#   "N",    # pep8 naming
+#   "NPY",  # Numpys
+#   "PERF", # Perfomance linting
+#   "PGH",  # Pygrep hooks
+#   "PIE",  # Misc lints
+#   # "PL",  # Pylint (superset of C, E, R, W)
+#   "PT",  # Pytest
+#   "PTH", # Use Pathlib
+#   "Q",   # Quotes
+#   "R",   # Refactor
+#   "RET", # Return statements
+#   "RSE", # Raises
+#   "RUF", # Ruff specific
+#   "S",   # bandit !IMPORTANT
+#   "SIM", # flake8-simplify
+#   "T10", # Debug statements
+#   "T20", # Print statements
+#   "TCH", # Type checking blocks
+#   "TD",  # Todos
+#   "TID", # Tidy imports
+#   "TRY", # Exception handling antipatterns
+#   "UP",  # Pyupgrade
+#   "W",   # pycodestyle warning
+#   "YTT", # flake8-2020
+# ]
 
-ignore = [
+lint.ignore = [
   "B018",
   "B028",
   "D100",
@@ -172,3 +197,6 @@ ignore = [
   "S101",
   "TD003",
 ]
+
+[tool.pytest.ini_options]
+addopts = "-n 6"  # Run with 6 parallel workers and stop after 12 test failures

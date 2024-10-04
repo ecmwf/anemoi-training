@@ -1,16 +1,16 @@
 
 
-
 import os
 import math
 import torch.distributed as dist
 from torch.distributed.distributed_c10d import ProcessGroup
 import logging
-from aifs.distributed.helpers import gather_tensor
 from typing import Optional
 from torch import Tensor
+import torch
 
 LOGGER = logging.getLogger(__name__)
+
 
 class DeterministicCommunicationMixin:
 
@@ -60,7 +60,7 @@ class EnsembleCommunicationMixin:
         # Calculate the number of model and ensemble communication groups
         self.model_comm_num_groups = self.config.hardware.num_gpus_per_ensemble // self.config.hardware.num_gpus_per_model
         self.ens_comm_num_groups = math.ceil(
-            self.config.hardware.num_gpus_per_node * self.config.hardware.num_nodes / self.config.hardware.num_gpus_per_ensemble
+            self.config.hardware.num_gpus_per_node * self.config.hardware.num_nodes / self.config.hardware.num_gpus_per_ensemble,
         )
 
         # Get ensemble communication group ID and rank
@@ -110,6 +110,6 @@ class EnsembleCommunicationMixin:
         """
         # sub-block used to average all contributions from a model comm group
         gather_matrix_block = (1.0 / self.model_comm_group_size) * torch.cat(
-            [torch.eye(self.nens_per_device, dtype=self.dtype, device=self.device)] * self.model_comm_group_size, dim=1
+            [torch.eye(self.nens_per_device, dtype=self.dtype, device=self.device)] * self.model_comm_group_size, dim=1,
         )
         return torch.block_diag(*([gather_matrix_block] * self.model_comm_num_groups)).T

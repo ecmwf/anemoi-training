@@ -113,6 +113,7 @@ def plot_loss(
 
     return fig
 
+
 def plot_loss_map(
     parameters: dict[str, int],
     latlons: np.ndarray,
@@ -122,7 +123,7 @@ def plot_loss_map(
     """
     Plots pointwise Loss values
     latlons: lat/lon coordinates array, shape (lat*lon, 2)
-    pkcrps: array of pointwise kcrps values, shape (nvar, latlon) -> (latlon, nvar)
+    pkcrps: array of pointwise kcrps values, shape (nvar, latlon) -> (latlon, nvar).
     """
     assert latlons.shape[0] == pointwise_loss.shape[0], "Error: shape mismatch!"
 
@@ -136,7 +137,7 @@ def plot_loss_map(
         ploss_ = pointwise_loss[:, variable_idx].squeeze()
         ax_ = ax[plot_idx] if len(parameters) > 1 else ax
         scatter_plot(
-            fig, ax_, pc_lon, pc_lat, ploss_, title=f"{variable_name} {loss_name}"
+            fig, ax_, pc_lon, pc_lat, ploss_, title=f"{variable_name} {loss_name}",
         )
 
     return fig

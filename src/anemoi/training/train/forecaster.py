@@ -1,6 +1,4 @@
 import logging
-import math
-import os
 from collections import defaultdict
 from collections.abc import Mapping
 
@@ -9,28 +7,23 @@ import pytorch_lightning as pl
 import torch
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.interface import AnemoiForecastingModelInterface
-from anemoi.utils.config import DotDict
+
 from hydra.utils import instantiate
 from omegaconf import DictConfig
-from omegaconf import OmegaConf
-from timm.scheduler import CosineLRScheduler
-from torch.distributed.distributed_c10d import ProcessGroup
-from torch.distributed.optim import ZeroRedundancyOptimizer
-from torch.utils.checkpoint import checkpoint
-from torch_geometric.data import HeteroData
 
-from anemoi.training.losses.mse import WeightedMSELoss
-from anemoi.training.losses.utils import grad_scaler
-from anemoi.training.utils.jsonify import map_config_to_primitives
+from torch.utils.checkpoint import checkpoint
+
 from anemoi.training.train.comm_mixins import DeterministicCommunicationMixin, EnsembleCommunicationMixin
 
+from anemoi.training.train.anemoi_lightning_module import AnemoiLightningModule
+from typing import Optional
 LOGGER = logging.getLogger(__name__)
+
 
 class ForecastingLightningModule(AnemoiLightningModule):
     def __init__(self, config, graph_data, statistics, statistics_tendencies, data_indices, metadata):
         super().__init__(config, graph_data, statistics, data_indices, metadata, model_cls=AnemoiForecastingModelInterface)
-    
-            self.step_functions = {
+        self.step_functions = {
             "residual": self._step_residual,
             "tendency": self._step_tendency,
         }
@@ -41,7 +34,7 @@ class ForecastingLightningModule(AnemoiLightningModule):
         self.rollout_epoch_increment = config.training.rollout.epoch_increment
         self.rollout_max = config.training.rollout.max
 
-    def get_feature_weights(self, config: DictConfig, data_indices: IndexCollection ) -> torch.Tensor:
+    def get_feature_weights(self, config: DictConfig, data_indices: IndexCollection) -> torch.Tensor:
         """
         Calculates the feature weights for each output feature based on the configuration, data indices. User can specify weighting strategies based on pressure level, feature type, and inverse variance scaling. Any strategies provided are combined.
 
@@ -79,13 +72,12 @@ class ForecastingLightningModule(AnemoiLightningModule):
                     feature_weights[idx] = config.training.feature_weighting.sfc[key]
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
-        
+
         if config.training.feature_weighting.inverse_tendency_variance_scaling:
             variances = self.model.statistics_tendencies["stdev"][data_indices.data.output.full]
             feature_weights /= variances
-            
-        return torch.from_numpy(feature_weights)
 
+        return torch.from_numpy(feature_weights)
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)
@@ -109,13 +101,12 @@ class ForecastingLightningModule(AnemoiLightningModule):
         )
         return train_loss
 
-
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
-        #TODO: change this to use the log_name from the loss function to avoid hardcoding
+        # TODO: change this to use the name from the loss function to avoid hardcoding
         with torch.no_grad():
             val_loss, metrics, outputs = self._step(batch, batch_idx, validation_mode=True)
         self.log(
-            f"val/loss/{self.loss.log_name}",
+            f"val/loss/{self.loss.name}",
             val_loss,
             on_epoch=True,
             on_step=True,
@@ -142,25 +133,25 @@ class ForecastingLightningModule(AnemoiLightningModule):
         batch: torch.Tensor,
         batch_idx: int,
         validation_mode: bool = False,
-        lead_time_to_eval: Optional[int] = None,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
-        return self.step_functions[self.prediction_mode](batch, batch_idx, validation_mode, lead_time_to_eval: Optional[int] = None)
+        lead_time_to_eval: Optional[list[int]] = None,
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], Mapping[str, list]]:
+        return self.step_functions[self.prediction_mode](batch, batch_idx, validation_mode, lead_time_to_eval)
 
-    
     def _step_residual(
         self,
         batch: torch.Tensor,
         batch_idx: int,
         validation_mode: bool = False,
-        lead_time_to_eval: Optional[list[int]] = None
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        lead_time_to_eval: Optional[list[int]] = None,
+        ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], Mapping[str, list]]:
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         batch = self.model.pre_processors_state(batch, in_place=False)  # normalized in-place
         metrics = {}
 
         # start rollout
-        x = batch[:, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, multi_step, latlon, nvar)
+        x = batch[:, :, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, inp_ens, multi_step, latlon, nvar)
 
+        # Version 1 - which assume loss function takes time step by time step and not all at once
         outputs = defaultdict(list)
         for rollout_step in range(self.rollout):
             # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
@@ -176,25 +167,65 @@ class ForecastingLightningModule(AnemoiLightningModule):
             if validation_mode:
                 if lead_time_to_eval and rollout_step + 1 not in lead_time_to_eval:
                     continue
-                dict_tensors = self.get_proc_and_unproc_data(y_pred, y) 
+                dict_tensors = self.get_proc_and_unproc_data(y_pred, y)
                 metrics_next = self.calculate_val_metrics(**dict_tensors, rollout_step=rollout_step)
                 metrics.update(metrics_next)
-                
-                for k in dict_tensors.keys():
-                    outputs[k].append(outputs[k])
 
+                for k in dict_tensors:
+                    outputs[k].append(dict_tensors[k])
         # scale loss
         loss *= 1.0 / self.rollout
+        return loss, metrics, outputs
+
+    def _step_residual_2(
+        self,
+        batch: torch.Tensor,
+        batch_idx: int,
+        validation_mode: bool = False,
+        lead_time_to_eval: Optional[list[int]] = None,
+        ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], Mapping[str, list]]:
+        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
+        batch = self.model.pre_processors_state(batch, in_place=False)  # normalized in-place
+        metrics = {}
+
+        # start rollout
+        x = batch[:, :, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, inp_ens, multi_step, latlon, nvar)
+
+        # Version 2 - which assume loss function takes in all the data at once. In this version we have to rollout and hold y_pred in memory
+        y_preds = torch.zeros(batch.shape[0], self.rollout, *batch.shape[2:], device=self.device, dtype=batch.dtype)
+        for rollout_step in range(self.rollout):
+            y_pred = self(x)
+            y_preds[:, rollout_step, ...] = y_pred
+            x = self.advance_input(x, y_pred, batch, rollout_step)
+
+        loss += checkpoint(self.loss, y_preds, batch[:, self.multi_step:, ..., self.data_indices.data.output.full], use_reentrant=False)
+
+        # now calculate metrics
+        # TODO: fix this - the calculate val_metrics now holds losses that can processes whole timesteps at once, take advantage of squash_time = False in order to get the losses over all timesteps then split the output tensor in order to report per time step losses
+
+        outputs = defaultdict(list)
+        if validation_mode:
+            dict_tensors = self.get_proc_and_unproc_data(y_preds, batch[:, self.multi_step: self.multi_step + rollout_step, ..., self.data_indices.data.output.full])
+
+            metrics_next = self.calculate_val_metrics2(**dict_tensors, lead_time_to_eval=lead_time_to_eval)
+        
+        
+        metrics.update(metrics_next)
 
         return loss, metrics, outputs
+            
+
+
+
+        
 
     def _step_tendency(
         self,
         batch: torch.Tensor,
         batch_idx: int,
         validation_mode: bool = False,
-        lead_time_to_eval: Optional[list[int]] = None
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        lead_time_to_eval: Optional[list[int]] = None,
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], Mapping[str, list]]:
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}
 
@@ -236,21 +267,17 @@ class ForecastingLightningModule(AnemoiLightningModule):
                     y_postprocessed=y_target)
                 metrics_next = self.calculate_val_metrics(
                     **dict_tensors,
-                    rollout_step=rollout_step
-                    
+                    rollout_step=rollout_step,
+
                 )
 
                 metrics.update(metrics_next)
 
-                for k in dict_tensors.keys():
-                    outputs[k].append(outputs[k])
-                
-                # Appending the inputs since alot of the validation callbacks seem to use it
-                outputs["x"]
+                for k in dict_tensors:
+                    outputs[k].append(dict_tensors[k])
 
         # scale loss
         loss *= 1.0 / self.rollout
-
 
         return loss, metrics, outputs
 
@@ -262,12 +289,12 @@ class ForecastingLightningModule(AnemoiLightningModule):
             y_postprocessed = self.model.post_processors_state(y, in_place=False)
         if y_pred_postprocessed is None:
             y_pred_postprocessed = self.model.post_processors_state(y_pred, in_place=False)
-        
+
         if y_pred is None:
             y_pred = self.model.pre_processors_state(y_pred_postprocessed, in_place=False, data_index=self.data_indices.data.output.full)
         if y is None:
             y = self.model.pre_processors_state(y_postprocessed, in_place=False, data_index=self.data_indices.data.output.full)
-        
+
         return {
             "y": y,
             "y_pred": y_pred,
@@ -275,21 +302,44 @@ class ForecastingLightningModule(AnemoiLightningModule):
             "y_pred_postprocessed": y_pred_postprocessed,
         }
 
-    def calculate_val_metrics(self, y_pred, y, rollout_step, y_pred_postprocessed, y_postprocessed):
-        metrics = {}
+    # def calculate_val_metrics(self, y_pred, y, rollout_step, y_pred_postprocessed, y_postprocessed):
+    #     metrics = {}
 
-        for mkey, indices in self.val_metric_ranges.items():
-            
-            # for single metrics do no variable scaling and non processed data
-            # TOOD (rilwan-ade): Update logging to use get_time_step and report lead time in hours
-            if len(indices) == 1:
-                metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred_postprocessed[..., indices], y_postprocessed[..., indices], feature_scaling=False)
-            else:
-                # for metrics over groups of vars used preprocessed data to adjust for potentially differing ranges for each variable in the group
-                metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred[..., indices], y[..., indices], feature_scaling=False)
+    #     for mkey, indices in self.val_metric_ranges.items():
 
-        return metrics
-    
+    #         # for single metrics do no variable scaling and non processed data
+    #         # TOOD (rilwan-ade): Update logging to use get_time_step and report lead time in hours
+    #         if len(indices) == 1:
+    #             metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred_postprocessed[..., indices], y_postprocessed[..., indices], feature_scaling=False)
+    #         else:
+    #             # for metrics over groups of vars used preprocessed data to adjust for potentially differing ranges for each variable in the group
+    #             metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(y_pred[..., indices], y[..., indices], feature_scaling=False)
+
+    #     return metrics
+
+    def calculate_val_metrics(self, y_pred, y, y_pred_postprocessed, y_postprocessed):
+        metric_vals = {}
+        rollout = y_pred.shape[2]
+
+        for metric in self.val_metrics:
+            for mkey, indices in self.val_metric_ranges.items():
+
+                # for single metrics do no variable scaling and non processed data
+                # TOOD (rilwan-ade): Update logging to use get_time_step and report lead time in hours
+                if len(indices) == 1:
+                    m_value = metric(y_pred_postprocessed[..., indices], y_postprocessed[..., indices], feature_scaling=False, squash_time=False)    
+                else:
+                    # for metrics over groups of vars used preprocessed data to adjust for potentially differing ranges for each variable in the group
+                    m_value = metric(y_pred[..., indices], y[..., indices], feature_scaling=False, squash_time=False)
+
+                if metric.is_temporal:
+                    metric_vals[f"{mkey}_{rollout}"] = m_value
+                else:
+                    for i in range(rollout):
+                        metric_vals[f"{mkey}_{i + 1}"] = m_value[:, :, i]
+
+        return metric_vals
+
     def advance_input(
         self,
         x: torch.Tensor,
@@ -320,6 +370,7 @@ class ForecastingLightningModuleDeterministic(DeterministicCommunicationMixin, p
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
 
 class ForecastingLightningModuleEnsemble(EnsembleCommunicationMixin, pl.LightningModule):
     """Ensemble version of Forecasting Lightning Module."""

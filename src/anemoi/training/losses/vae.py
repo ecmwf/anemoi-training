@@ -4,18 +4,19 @@ import logging
 
 import torch
 from torch import nn
-from typing import Optional
-LOGGER = logging.getLogger(__name__)
-from torch import Tensor
-from typing import Union
-from omegaconf import DictConfig
-from hydra import instantiate
 
+from torch import Tensor
+from omegaconf import DictConfig
+from hydra.utils import instantiate
+from functools import cached_property
 # TODO: Make a AnemoiLoss base class that all losses inherit from and contains the shared functionality
+LOGGER = logging.getLogger(__name__)
+from typing import Optional
 
 class VAELoss(nn.Module):
     """Variational Autoencoder loss, combining reconstruction loss and KL divergence
-    loss."""
+    loss.
+    """
 
     def __init__(
         self,
@@ -33,36 +34,54 @@ class VAELoss(nn.Module):
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-        self.register_buffer("node_weights", node_weights[...,None], persistent=True)
-        self.register_buffer("feature_weights", feature_weights, persistent=True)
-
-        if isinstance(reconstruction_loss, dict) or isinstance(reconstruction_loss, DictConfig):
+        if isinstance(reconstruction_loss, (dict, DictConfig)):
 
             self.reconstruction_loss = instantiate(
                 reconstruction_loss,
                 node_weights=node_weights,
                 feature_weights=feature_weights,
-                 ignore_nans=ignore_nans, 
+                 ignore_nans=ignore_nans,
                 **kwargs,
             )
+        elif isinstance(reconstruction_loss, nn.Module):
+            self.reconstruction_loss = reconstruction_loss
+        else:
+            raise ValueError(f"Invalid reconstruction loss: {reconstruction_loss}")
 
-        if isinstance(divergence_loss, dict) or isinstance(divergence_loss, DictConfig):
+        if isinstance(divergence_loss, (dict, DictConfig)):
             # A similar scaling must be used for the divergence loss as is used for the reconstruction
             # the latent area weights are already handled (when they are normalized)
             # the feature dimension should be scaled by the scaling factor denominator used in reconstruction loss
-            latent_node_weights = kwargs.get('latent_node_weights', latent_node_weights)
+            
             self.divergence_loss = instantiate(
                 divergence_loss,
                 node_weights=latent_node_weights,
-                feature_weights=latent_node_weights.new_ones(latent_node_weights.numel()),
                 ignore_nans=ignore_nans,
-                **kwargs
+                **kwargs,
             )
+        elif isinstance(divergence_loss, nn.Module):
+            self.divergence_loss = divergence_loss
+        else:
+            raise ValueError(f"Invalid divergence loss: {divergence_loss}")
 
-        self.divergence_loss_weight = self.register_buffer("divergence_loss_weight", self.divergence_loss_weight )
-        
+        self.register_buffer("divergence_loss_weight", torch.tensor(divergence_loss_weight))
 
-    def forward(self, preds: Tensor, target: Tensor, squash: bool = True, **kwargs) -> Tensor:
+    def forward(self, preds: Tensor, target: Tensor, squash: bool = True, feature_scale: bool = True, feature_indices: Optional[Tensor] = None, **kwargs) -> Tensor:
+        """
+        Parameters
+        ----------
+        preds : torch.Tensor
+            Predictions tensor, shape (bs, (timesteps), lat*lon, n_outputs)
+        target : torch.Tensor
+            Target tensor, shape (bs, (timesteps), lat*lon, n_outputs)
+        squash : bool, optional
+            Whether to squash the loss, by default True
+
+        Returns
+        -------
+        torch.Tensor
+            Weighted VAE loss.
+        """
         x_rec = preds
         x_target = target
 
@@ -70,36 +89,23 @@ class VAELoss(nn.Module):
         z_mu = kwargs.pop("z_mu")
         z_logvar = kwargs.pop("z_logvar")
 
-        if squash is True:
-            div_loss = self.divergence_loss(z_mu, z_logvar, squash=True, **kwargs)
-            rec_loss = self.reconstruction_loss(x_rec, x_target, squash=True, **kwargs)
+        div_loss = self.divergence_loss(z_mu, z_logvar, squash=squash, feature_scale=False, feature_indices=feature_indices)
+        rec_loss = self.reconstruction_loss(x_rec, x_target, squash=squash, feature_scale=feature_scale, feature_indices=feature_indices)
 
-            return {
-                self.log_name: rec_loss + self.divergence_loss_weight * div_loss,
-                f"{self.reconstruction_loss.log_name}": rec_loss,
-                f"{self.divergence_loss.log_name}": div_loss,
-            }
-
-        else:
-            # In this branch we squash the combined loss, but leave the individual losses unsquashed
-
-            div_loss = self.divergence_loss(z_mu, z_logvar, squash=False, **kwargs)
-            rec_loss = self.reconstruction_loss(x_rec, x_target, squash=False, **kwargs)
-
-            loss_squashed = (rec_loss.sum() + self.divergence_loss_weight * div_loss.sum()) / x_rec.shape[0]
-
-            return {
-                self.log_name: loss_squashed,
-                f"{self.reconstruction_loss.log_name}": rec_loss,
-                f"{self.divergence_loss.log_name}": div_loss,
-            }
+        # NOTE: The rec_loss and divergence loss can not consistently be broadcasted to have a similar shape
+        vae_loss = (rec_loss.sum() + self.divergence_loss_weight * div_loss.sum())
+        
+        return {
+            self.name: vae_loss,
+            f"{self.reconstruction_loss.name}": rec_loss,
+            f"{self.divergence_loss.name}": div_loss,
+        }
 
     @cached_property
-    def log_name(self):
-        
+    def name(self):
+
         str_ = "vae"
-        str_ += f"_{self.reconstruction_loss.log_name}"
-        str_ += f"_{self.divergence_loss.log_name}-{self.divergence_loss_weight:.2f}"
+        str_ += f"_{self.reconstruction_loss.name}"
+        str_ += f"_{self.divergence_loss.name}-{self.divergence_loss_weight:.2f}"
 
         return str_
-

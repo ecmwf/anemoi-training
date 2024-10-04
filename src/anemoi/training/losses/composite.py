@@ -1,24 +1,31 @@
-
 from __future__ import annotations
 
-from functools import cached_property
+import os
+import sys
 import logging
+import hydra
+import logging
+
+
+from functools import cached_property
 
 import torch
 from torch import nn
 from torch import Tensor
-from typing import Optional
-LOGGER = logging.getLogger(__name__)
 
-from omegaconf import DictConfig
-import hydra
-from typing import Union, Optional, List
+
+from typing import TYPE_CHECKING
 from anemoi.training.losses.utils import buffered_arange
 
+LOGGER = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from omegaconf import DictConfig
+
+
 class CompositeLoss(nn.Module):  # A composite loss that combines multiple losses
-    def __init__(self, losses: Union[torch.nn.ModuleList, List[DictConfig]], loss_weights: Optional[torch.Tensor] = None, **kwargs ) -> None:
+    def __init__(self, losses: torch.nn.ModuleList | list[DictConfig], loss_weights: torch.Tensor | None = None, **kwargs) -> None:
         """Composite loss that combines multiple losses.
-        
+
         Args:
             losses: Either a ModuleList of loss functions or a list of configurations for Hydra to instantiate.
             loss_weights: Weights for each loss function. If None, weights are uniform.
@@ -27,10 +34,10 @@ class CompositeLoss(nn.Module):  # A composite loss that combines multiple losse
 
         # If losses is a list of configs, instantiate the losses via Hydra
         if isinstance(losses, list):
-            losses = torch.nn.ModuleList([hydra.utils.instantiate(cfg) for cfg in losses])
+            _ = [hydra.utils.instantiate(cfg, **kwargs) for cfg in losses]
+            losses = torch.nn.ModuleList(_)
 
-        assert len(losses) > 1, "Composite loss must have at least two losses"
-        
+
         # If weights are provided, ensure they match the number of losses
         if loss_weights is not None:
             assert len(losses) == len(loss_weights), "Length of losses and weights must be equal"
@@ -45,7 +52,18 @@ class CompositeLoss(nn.Module):  # A composite loss that combines multiple losse
         self.losses = losses
 
     def forward(self, preds: Tensor, target: Tensor, squash: bool = True, **kwargs) -> Tensor:
+        """Forward pass of the composite loss.
+
+        Args:
+            preds: Predicted values, shape (batch_size, ens_size_inp, timesteps, latlon, n_vars)
+            target: Ground truth values, shape (batch_size, ens_size_target, timesteps, latlon, n_vars)
+            squash: If False, return a (latlon, n_vars) tensor with the individual loss contributions;
+                if True, return the (scalar) total loss.
+
         # When squash is False the shape of output from each individual loss may be different
+        # The losses are then broadcasted to the target shape and summed up
+        # The final loss is the weighted sum of the losses
+        """
         if squash:
             loss_values = preds.new_zeros(len(self.losses))
 
@@ -66,7 +84,7 @@ class CompositeLoss(nn.Module):  # A composite loss that combines multiple losse
             for idx in buffered_arange(self.losses_len):
                 loss_value = loss_values[idx]
                 original_num_elements = loss_value.numel()  # Original number of elements before broadcasting
-                
+
                 if loss_value.shape != target_shape:
                     # Adjust the loss_value to match the target_shape
                     if loss_value.ndim != 2 and loss_value.shape[0] == target_shape[0]:
@@ -87,11 +105,9 @@ class CompositeLoss(nn.Module):  # A composite loss that combines multiple losse
 
         return composite_loss
 
-
     @cached_property
-    def log_name(self):
+    def name(self) -> str:
 
-        sublossweight_str = "_".join([f"{loss.log_name}-{weight:.2g}" for loss, weight in zip(self.losses, self.loss_weights.tolist())])
+        sublossweight_str = "_".join([f"{loss.name}-{weight:.2g}" for loss, weight in zip(self.losses, self.loss_weights.tolist())])
 
         return f"composite_{sublossweight_str}"
-

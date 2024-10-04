@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torch import Tensor
 from typing import Optional
-
+from functools import cached_property
 LOGGER = logging.getLogger(__name__)
 
 
@@ -51,17 +51,18 @@ class KLDivergenceLoss(nn.Module):
         mu: Tensor,
         logvar: Tensor,
         squash: bool = True,
-        feature_scaling: bool = True,
-        feature_indices: Optional[torch.Tensor] = None
+        feature_scaling: bool = False,
+        feature_indices: Optional[torch.Tensor] = None,
+        **kwargs,
     ) -> Tensor:
         """Calculates the latitude-weighted KL Divergence loss.
 
         Parameters
         ----------
         mu : torch.Tensor
-            Mean tensor from the VAE encoder, shape (bs, timesteps, lat*lon, n_outputs)
+            Mean tensor from the VAE encoder, shape (bs, timesteps, lat*lon, dim)
         logvar : torch.Tensor
-            Log-variance tensor from the VAE encoder, shape (bs, timesteps, lat*lon, n_outputs)
+            Log-variance tensor from the VAE encoder, shape (bs, timesteps, lat*lon, dim)
         squash : bool, optional
             Reduce the spatial and feature dimensions, by default True
         feature_scaling : bool, optional
@@ -78,7 +79,7 @@ class KLDivergenceLoss(nn.Module):
         
         # Scale in feature dimension
         if feature_scaling:
-            kl_loss = kl_loss * self.feature_weights if feature_indices is None else kl_loss * self.feature_weights[..., feature_indices])
+            kl_loss = (kl_loss * self.feature_weights if feature_indices is None else kl_loss * self.feature_weights[..., feature_indices])
             kl_loss = kl_loss / self.feature_weights.numel()  # Normalize by number of features
 
         # Scale in spatial dimension
@@ -86,9 +87,14 @@ class KLDivergenceLoss(nn.Module):
 
         # Squash - reduce spatial and feature dimensions
         if squash:
-            kl_loss = self.sum_function(kl_loss, axis=(-2, -1))
+            kl_loss = self.sum_function(kl_loss, axis=(-3, -2, -1))
 
-        return self.avg_function(kl_loss, axis=(0))  # (timesteps, latlon, n_outputs)
+        return self.avg_function(kl_loss, axis=(0))  # (timesteps, latlon, dim)
+
+    @cached_property
+    def name(self) -> str:
+        """Returns the name of the loss for logging."""
+        return "kldiv"
 
 class RenyiDivergenceLoss(nn.Module):
     """Rényi Divergence loss."""
@@ -97,7 +103,7 @@ class RenyiDivergenceLoss(nn.Module):
         self,
         alpha: float,
         node_weights: torch.Tensor,
-        feature_weights: Optional[torch.Tensor] = None,
+        feature_weights: Optional[torch.Tensor] = False,
         ignore_nans: bool | None = False,
     ) -> None:
         """Latitude- and feature-weighted Rényi Divergence Loss.
@@ -135,17 +141,18 @@ class RenyiDivergenceLoss(nn.Module):
         mu: Tensor,
         logvar: Tensor,
         squash: bool = True,
-        feature_scaling: bool = True,
-        feature_indices: Optional[torch.Tensor] = None
+        feature_scaling: bool = False,
+        feature_indices: Optional[torch.Tensor] = None,
+        **kwargs,
     ) -> Tensor:
         """Calculates the latitude-weighted Rényi Divergence loss.
 
         Parameters
         ----------
         mu : torch.Tensor
-            Mean tensor, shape (bs, lat*lon, n_outputs)
+            Mean tensor, shape (bs,timesteps, lat*lon, dim)
         logvar : torch.Tensor
-            Log-variance tensor, shape (bs, lat*lon, n_outputs)
+            Log-variance tensor, shape (bs, timesteps, lat*lon, dim)
         squash : bool, optional
             Reduce the spatial and feature dimensions, by default True
         feature_scaling : bool, optional
@@ -170,7 +177,11 @@ class RenyiDivergenceLoss(nn.Module):
 
         # Squash - reduce spatial and feature dimensions
         if squash:
-            renyi_loss = self.sum_function(renyi_loss, axis=(1, 2))
+            renyi_loss = self.sum_function(renyi_loss, axis=(-3, -2, -1))
         
-        return self.avg_function(renyi_loss, axis=(0))  # (latlon, n_outputs)
+        return self.avg_function(renyi_loss, axis=(0))  # (latlon, dim)
 
+    @cached_property
+    def name(self) -> str:
+        """Returns the name of the loss for logging."""
+        return "renyi_div"

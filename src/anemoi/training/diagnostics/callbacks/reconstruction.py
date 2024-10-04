@@ -8,7 +8,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from typing import Optional
-from weakref import proxy
 from zipfile import ZipFile
 
 import einops
@@ -18,42 +17,35 @@ import pytorch_lightning as pl
 import torch
 import torch.distributed as dist
 import torchinfo
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from omegaconf import ListConfig
 from PIL import Image
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from pytorch_lightning.utilities.rank_zero import rank_zero_info
-from anemoi.training.diagnostics.callbacks import BasePlotCallback
-
+from pytorch_lightning.utilities.rank_zero import rank_zero_only
+from anemoi.training.diagnostics.callbacks import BasePlotCallback, GraphTrainableFeaturesPlot, ParentUUIDCallback, WeightGradOutputLoggerCallback
+from torch.utils.checkpoint import checkpoint
 from anemoi.training.diagnostics.callbacks import LossBarPlot
 from anemoi.training.diagnostics.callbacks import AnemoiCheckpoint
 from anemoi.training.diagnostics.callbacks import MemCleanUpCallback
-from anemoi.training.diagnostics.plots import plot_reconstructed_multilevel_sample
-from anemoi.training.diagnostics.plots import plot_loss_map
-from anemoi.training.diagnostics.plots import init_plot_settings
-from anemoi.training.diagnostics.plots import plot_graph_features
-from anemoi.training.diagnostics.plots import plot_histogram
-from anemoi.training.diagnostics.plots import plot_loss
-from anemoi.training.diagnostics.plots import plot_power_spectrum
-from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
+from anemoi.training.diagnostics.plots.plots import plot_reconstructed_multilevel_sample
+from anemoi.training.diagnostics.plots.plots import plot_loss_map
+from anemoi.training.diagnostics.plots.plots import plot_loss
+from anemoi.training.diagnostics.plots.plots import plot_power_spectrum
 from anemoi.training.diagnostics.callbacks import MemCleanUpCallback
 
 from anemoi.training.diagnostics.callbacks import BasePlotCallback, BaseLossMapPlot
+from anemoi.training.diagnostics import safe_cast_to_numpy
 
-def safe_cast_to_numpy(tensor: torch.Tensor) -> np.ndarray:
-    """Converts a PyTorch tensor to a NumPy array, ensuring that the array is of the
-    appropriate type."""
-    tensor = tensor.to("cpu")
+import logging
 
-    if tensor.dtype == torch.bfloat16 or tensor.dtype == torch.float32:
-        tensor = tensor.to(torch.float32)
-    elif tensor.dtype == torch.float16:
-        pass
+from anemoi.training.losses.utils import get_monitored_metric_name
 
-    return tensor.numpy()
+LOGGER = logging.getLogger(__name__)
+
+from anemoi.training.diagnostics import get_time_step, increment_to_hours, generate_time_steps
 
 class ReconstructionLossBarPlot(LossBarPlot):
     """Plots the reconstruction loss accumulated over validation batches and printed once per validation epoch."""
@@ -84,7 +76,7 @@ class ReconstructionLossBarPlot(LossBarPlot):
             squash=False,
         ).sum(0) # ( nvar)
 
-        loss_div = loss_[pl_module.loss.reconstruction_loss.log_name]  # (latlon, nvar)
+        loss_div = loss_[pl_module.loss.reconstruction_loss.name]  # (latlon, nvar)
 
         if self.loss_map_accum["reconstruction"] is None:
             self.loss_map_accum["reconstruction"] = loss_div
@@ -128,12 +120,12 @@ class ReconstructionLossBarPlot(LossBarPlot):
             fig = plot_loss(safe_cast_to_numpy(loss_avg_recon[sort_by_parameter_group], colors, xticks, legend_patches))
             fig.tight_layout()
             
-            loss_log_name_recon = pl_module.loss.reconstruction_loss.log_name
+            loss_name_recon = pl_module.loss.reconstruction_loss.name
             self._output_figure(
                 trainer,
                 fig,
-                tag=f"val_loss_barplot_{loss_log_name_recon}_epoch{epoch:03d}_batch{batch_idx:04d}",
-                exp_log_tag=f"val_loss_barplot_{loss_log_name_recon}",
+                tag=f"val_loss_barplot_{loss_name_recon}_epoch{epoch:03d}_batch{batch_idx:04d}",
+                exp_log_tag=f"val_loss_barplot_{loss_name_recon}",
             )
 
 class ReconstructionLossMapPlot(BaseLossMapPlot):
@@ -155,20 +147,10 @@ class ReconstructionLossMapPlot(BaseLossMapPlot):
             squash=False
         ) # (latlon, nvar)
 
-        # if self.loss_map_accum["divergence"] is None:
-        #     self.loss_map_accum["divergence"] = loss_map[pl_module.loss.divergence_loss.log_name].sum(dim=-1, keepdim=True)
-        # else:
-        #     self.loss_map_accum["divergence"] += loss_map[pl_module.loss.divergence_loss.log_name].sum(dim=-1, keepdim=True)
-
-        # if self.loss_map_accum["reconstruction"] is None:
-        #     self.loss_map_accum["reconstruction"] = loss_map[pl_module.loss.reconstruction_loss.log_name]
-        # else:
-        #     self.loss_map_accum["reconstruction"] += loss_map[pl_module.loss.reconstruction_loss.log_name]
-
-        divergence_loss = loss_map[pl_module.loss.divergence_loss.log_name].sum(dim=-1, keepdim=True)
+        divergence_loss = loss_map[pl_module.loss.divergence_loss.name].sum(dim=-1, keepdim=True)
         self.loss_map_accum["divergence"] = self.loss_map_accum.get("divergence", 0) + divergence_loss
 
-        reconstruction_loss = loss_map[pl_module.loss.reconstruction_loss.log_name]
+        reconstruction_loss = loss_map[pl_module.loss.reconstruction_loss.name]
         self.loss_map_accum["reconstruction"] = self.loss_map_accum.get("reconstruction", 0) + reconstruction_loss
 
     def _plot(self, trainer, pl_module) -> None:
@@ -274,11 +256,9 @@ class PlotReconstructedSample(BasePlotCallback):
         )
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx) -> None:
-        if PredictedEnsemblePlot.op_on_this_batch(
-            batch_idx, pl_module.ens_comm_group_rank, self.plot_frequency, self.min_iter_to_plot
-        ):
+        if self.op_on_this_batch(
+            batch_idx):
             self.plot(trainer, pl_module, outputs, batch, batch_idx, epoch=trainer.current_epoch)
-
 
 class SpectralAnalysisPlot(BasePlotCallback):
     """Plots spectral comparison of target and prediction.
@@ -409,147 +389,239 @@ class SpectralAnalysisPlot(BasePlotCallback):
                 exp_log_tag="val_pred_spec",
             )
 
+class PlotReconstructionPowerSpectrum(BasePlotCallback):
+    """Plots power spectrum metrics comparing target and prediction."""
+
+    def __init__(self, config, val_dset_len, **kwargs):
+        """Initialise the PlotPowerSpectrum callback.
+        
+        # TODO: (Rilwan Adewoyin): Think about what the default case should be for if spectrum should plot tendencies or state for diagnostic variables.
+
+        The actual increment (output - input) is plot for prognostic variables while the output is plot for diagnostic ones.
+
+        Parameters
+        ----------
+        config : OmegaConf
+            Config object
+        """
+        super().__init__(config, op_on_batch=True, val_dset_len=val_dset_len, **kwargs)
+        self.sample_idx = self.config.diagnostics.plot.sample_idx
+
+    @rank_zero_only
+    def _plot_spectrum(
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs: list,
+        batch: torch.Tensor,
+        batch_idx: int,
+        epoch: int,
+    ) -> None:
+        if self.config.diagnostics.plot.parameters_spectrum is None:
+            pass
+
+        logger = trainer.logger
+
+        if self.latlons is None:
+            self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
+        
+        # NOTE: currently we investigate spatial spectrum only
+
+        
+        x_inp_postprocessed = outputs["x_inp_postprocessed"]
+        x_target_postprocessed = outputs["x_target_postprocessed"]
+        x_rec_postprocessed = outputs["x_rec_postprocessed"]
+        timesteps = x_inp_postprocessed.shape[1]
+        
+        for t in range(timesteps):
+
+            diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
+
+            plot_parameters_dict_spectrum = {
+                pl_module.data_indices.model.output.name_to_index[name]: (name, name not in diagnostics)
+                for name in self.config.diagnostics.plot.parameters_spectrum
+            }
+
+            fig = plot_power_spectrum(
+                plot_parameters_dict_spectrum,
+                self.latlons,
+                x_inp_postprocessed[self.sample_idx, t, ...].squeeze(),
+                x_target_postprocessed[self.sample_idx, t, ...],
+                x_rec_postprocessed[self.sample_idx, t, ...],
+            )
+
+            #TODO: (rilwan-adewoyin): replace the t with the time name 
+            self._output_figure(
+                logger,
+                fig,
+                tag=f"power_spectrum_t{t:02d}_epoch_{epoch:03d}_batch{batch_idx:04d}_rank0",
+                exp_log_tag=f"power_spectrum_t{t:02d}_rank{pl_module.local_rank:01d}_rank0",
+            )
+
+    def on_validation_batch_end(
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs: list[torch.Tensor],
+        batch: torch.Tensor,
+        batch_idx: int,
+    ) -> None:
+        if self.op_on_this_batch(batch_idx):
+            self._plot_spectrum(trainer, pl_module, outputs, batch, batch_idx, epoch=trainer.current_epoch)
 
 
-
-def get_callbacks(config: DictConfig, monitored_metrics) -> list:  # noqa: C901
-    """Setup callbacks for PyTorch Lightning trainer.
+def get_reconstruction_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
+    """Setup callbacks for PyTorch Lightning trainer for reconstruction tasks.
 
     Parameters
     ----------
     config : DictConfig
         Job configuration
+    monitored_metrics : list
+        List of monitored metrics to track during training
+    val_dset_len : int
+        Length of the validation dataset
 
     Returns
     -------
-    List
+    list
         A list of PyTorch Lightning callbacks
-
     """
-    checkpoint_settings = {
-        "dirpath": config.hardware.paths.checkpoints,
-        "verbose": False,
-        # save weights, optimizer states, LR-schedule states, hyperparameters etc.
-        # https://pytorch-lightning.readthedocs.io/en/stable/common/checkpointing_basic.html#contents-of-a-checkpoint
-        "save_weights_only": False,
-        "auto_insert_metric_name": False,
-        # save after every validation epoch, if we've improved
-        "save_on_train_epoch_end": False,
-        "enable_version_counter": False,
-    }
-
-    ckpt_frequency_save_dict = {}
-    for key, frequency_dict in config.diagnostics.checkpoint.items():
-        frequency = frequency_dict["save_frequency"]
-        n_saved = frequency_dict["num_models_saved"]
-        if key == "every_n_minutes" and frequency_dict["save_frequency"] is not None:
-            target = "train_time_interval"
-            frequency = timedelta(minutes=frequency_dict["save_frequency"])
-        else:
-            target = key
-        ckpt_frequency_save_dict[target] = (config.hardware.files.checkpoint[key], frequency, n_saved)
-
     trainer_callbacks = []
-    if not config.diagnostics.profiler:
-        for save_key, (name, save_frequency, save_n_models) in ckpt_frequency_save_dict.items():
-            if save_frequency is not None:
-                LOGGER.debug("Checkpoint callback at %s = %s ...", save_key, save_frequency)
-                trainer_callbacks.extend(
-                    # save_top_k: the save_top_k flag can either save the best or the last k checkpoints
-                    # depending on the monitor flag on ModelCheckpoint.
-                    # See https://lightning.ai/docs/pytorch/stable/common/checkpointing_intermediate.html for reference
-                    [
-                        AnemoiCheckpoint(
-                            config=config,
-                            filename=name,
-                            save_last=True,
-                            **{save_key: save_frequency},
-                            # if save_top_k == k, last k models saved; if save_top_k == -1, all models are saved
-                            save_top_k=save_n_models,
-                            monitor="step",
-                            mode="max",
-                            **checkpoint_settings,
-                        ),
-                    ],
+
+    def setup_checkpoint_callbacks():
+        """Create and return checkpoint-related callbacks."""
+        ckpt_callbacks = []
+        if config.diagnostics.profiler:
+            LOGGER.warning("Profiling is enabled - no checkpoints will be written!")
+            return []
+
+        checkpoint_configs = config.diagnostics.checkpoints
+
+        for ckpt_cfg in checkpoint_configs:
+            filename, mode, dirpath = None, "max", None
+
+            if ckpt_cfg.type == 'interval':
+                dirpath = Path(config.hardware.paths.checkpoints) / next(k for k in ("every_n_train_steps", "train_time_interval", "every_n_epochs") if ckpt_cfg.get(k))
+
+            elif ckpt_cfg.type == "performance":
+                OmegaConf.set_readonly(ckpt_cfg, False)
+                ckpt_cfg.kwargs['monitor'] = get_monitored_metric_name(monitored_metrics, ckpt_cfg['monitor'])
+                OmegaConf.set_readonly(ckpt_cfg, True)
+                monitor_name = f"perf_{ckpt_cfg.kwargs['monitor'].replace('/', '_')}"
+                dirpath = Path(config.hardware.paths.checkpoints) / f"perf_{monitor_name}"
+                filename = f"epoch={{epoch}}-step={{step}}-{monitor_name}-{{{ckpt_cfg.kwargs['monitor']}}:.5f}"
+
+            ckpt_callbacks.append(
+                AnemoiCheckpoint(
+                    config=config,
+                    filename=filename,
+                    mode=mode,
+                    dirpath=dirpath,
+                    **ckpt_cfg.kwargs,
+                    save_last=False,
+                    save_weights_only=False,
+                    save_on_train_epoch_end=False,
+                    enable_version_counter=False,
+                    auto_insert_metric_name=False,
+                    verbose=False
                 )
-            else:
-                LOGGER.debug("Not setting up a checkpoint callback with %s", save_key)
-    else:
-        # the tensorboard logger + pytorch profiler cause pickling errors when writing checkpoints
-        LOGGER.warning("Profiling is enabled - will not write any training or inference model checkpoints!")
+            )
+        return ckpt_callbacks
 
-    if any([config.diagnostics.log.wandb.enabled, config.diagnostics.log.mlflow.enabled]):
-        from pytorch_lightning.callbacks import LearningRateMonitor
+    def setup_early_stopping_callbacks():
+        """Create and return early stopping callbacks."""
+        es_callbacks = []
+        for es_config in config.diagnostics.early_stoppings:
+            OmegaConf.set_readonly(es_config, False)
+            es_config['monitor'] = get_monitored_metric_name(monitored_metrics, es_config.monitor)
+            OmegaConf.set_readonly(es_config, True)
 
-        trainer_callbacks.append(
-            LearningRateMonitor(
-                logging_interval="step",
-                log_momentum=False,
-            ),
-        )
+            es_callbacks.append(
+                EarlyStopping(
+                    **es_config,
+                    check_finite=True,
+                    verbose=True,
+                    strict=True,
+                    log_rank_zero_only=True
+                )
+            )
+        return es_callbacks
 
-    if config.diagnostics.eval.enabled:
-        trainer_callbacks.append(RolloutEval(config))
+    def setup_reconstruction_eval_callbacks():
+        """Create and return reconstruction evaluation callbacks."""
+        validation_batch_end_callbacks = []
+        validation_epoch_end_callbacks = []
 
-    if config.diagnostics.plot.enabled:
-        trainer_callbacks.extend(
-            [
-                PlotLoss(config),
-                PlotSample(config),
-            ],
-        )
-        if (config.diagnostics.plot.parameters_histogram or config.diagnostics.plot.parameters_spectrum) is not None:
-            trainer_callbacks.extend([PlotAdditionalMetrics(config)])
+        if config.diagnostics.plot.loss_map:
+            loss_map_plot = ReconstructionLossMapPlot(config, val_dset_len)
+            validation_batch_end_callbacks.append(loss_map_plot)
+            validation_epoch_end_callbacks.append(loss_map_plot)
 
-    if config.training.swa.enabled:
-        from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
+        if config.diagnostics.plot.loss_bar:
+            loss_bar_plot = ReconstructionLossBarPlot(config, val_dset_len)
+            validation_batch_end_callbacks.append(loss_bar_plot)
+            validation_epoch_end_callbacks.append(loss_bar_plot)
 
-        trainer_callbacks.append(
-            StochasticWeightAveraging(
-                swa_lrs=config.training.swa.lr,
-                swa_epoch_start=min(
-                    int(0.75 * config.training.max_epochs),
-                    config.training.max_epochs - 1,
-                ),
-                annealing_epochs=max(int(0.25 * config.training.max_epochs), 1),
-                annealing_strategy="cos",
-                device=None,
-            ),
-        )
+        if config.diagnostics.plot.plot_spectral_loss:
+            validation_batch_end_callbacks.append(SpectralAnalysisPlot(config, val_dset_len))
 
-    # Early Stopping Callback
-    if config.diagnostics.early_stopping.enabled:
-        es_monitor = config.diagnostics.early_stopping.monitor
+        if config.diagnostics.plot.plot_reconstructed_sample:
+            validation_batch_end_callbacks.append(PlotReconstructedSample(config, val_dset_len))
 
-        assert (
-            es_monitor == "default" or es_monitor in monitored_metrics
-        ), f"""Monitored value:={es_monitor} must either be the loss function,
-                    or a stated validation metric!"""
+        return validation_batch_end_callbacks, validation_epoch_end_callbacks
 
-        if es_monitor == "default":
-            es_monitor = next((mname for mname in monitored_metrics if mname.startswith("val/loss")), None)
-            assert es_monitor is not None, f"Default monitor value not found in monitored metrics: {monitored_metrics}"
+    def setup_convergence_monitoring_callbacks():
+        cm_callbacks = []
 
-        LOGGER.warning(f"Setting up an early stopping callback - monitoring {es_monitor} ...")
+        if any([config.diagnostics.log.wandb.enabled, config.diagnostics.log.mlflow.enabled]):
+            from pytorch_lightning.callbacks import LearningRateMonitor
+            cm_callbacks.append(LearningRateMonitor(logging_interval="step"))
+        
+        return cm_callbacks
 
-        es_cb = EarlyStopping(
-            monitor=es_monitor,
-            patience=config.diagnostics.early_stopping.patience,
-            mode=config.diagnostics.early_stopping.mode,
-            check_finite=True,
-            verbose=True,
-            strict=True,
-            log_rank_zero_only=True,
-        )
+    def setup_model_averaging_callbacks():
+        ma_callbacks = []
+        if config.training.swa.enabled:
+            from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
+            ma_callbacks.append(
+                StochasticWeightAveraging(
+                    swa_lrs=config.training.swa.lr,
+                    swa_epoch_start=min(int(0.75 * config.training.max_epochs), config.training.max_epochs - 1),
+                    annealing_epochs=max(int(0.25 * config.training.max_epochs), 1),
+                    annealing_strategy="cos",
+                )
+            )
+        return ma_callbacks
 
-        trainer_callbacks.append(
-            es_cb,
-        )
+    # Add all checkpoint-related callbacks
+    trainer_callbacks.extend(setup_checkpoint_callbacks())
 
+    # Add early stopping callbacks
+    trainer_callbacks.extend(setup_early_stopping_callbacks())
 
+    # Add reconstruction evaluation callbacks
+    validation_batch_end_callbacks, validation_epoch_end_callbacks = setup_reconstruction_eval_callbacks()
+    trainer_callbacks.extend(validation_batch_end_callbacks)
+    trainer_callbacks.extend(validation_epoch_end_callbacks)
+
+    # Add convergence monitoring callbacks
+    trainer_callbacks.extend(setup_convergence_monitoring_callbacks())
+
+    # Add model averaging callbacks
+    trainer_callbacks.extend(setup_model_averaging_callbacks())
+    
+    # Add other miscellaneous callbacks
+    trainer_callbacks.append(MemCleanUpCallback())
+
+    # Add weight grad output logger callback
+    trainer_callbacks.append(WeightGradOutputLoggerCallback())
+
+    # Add parent UUID callback
     trainer_callbacks.append(ParentUUIDCallback(config))
 
     if config.diagnostics.plot.learned_features:
         LOGGER.debug("Setting up a callback to plot the trainable graph node features ...")
         trainer_callbacks.append(GraphTrainableFeaturesPlot(config))
+
     return trainer_callbacks

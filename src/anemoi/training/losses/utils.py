@@ -14,13 +14,14 @@ import logging
 import torch
 from torch import nn
 
-from anemoi.training.distributed.utils import gather_tensor
-from typing import Optional 
+from typing import TYPE_CHECKING
+from anemoi.models.distributed.graph import gather_tensor
+import einops
+import numpy as np
+from torch.utils.checkpoint import checkpoint
 
-from torch.distributed import ProcessGroup
-import einops 
-import numpy as np 
-
+if TYPE_CHECKING:
+    from torch.distributed import ProcessGroup
 LOGGER = logging.getLogger(__name__)
 
 
@@ -68,7 +69,7 @@ def gather_and_compute_loss(
     ens_comm_group_size: int,
     ens_comm_group: ProcessGroup,
     return_pred_ens: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
     """Gather the ensemble members from all devices in my group.
 
     Eliminate duplicates (if any) and compute the loss.
@@ -114,9 +115,11 @@ def gather_and_compute_loss(
     # an explicit cast is needed when running in mixed precision (i.e. with y_pred_ens.dtype == torch.(b)float16)
     return loss_inc, y_pred_ens.to(dtype=y.dtype) if return_pred_ens else None
 
+
 def process_file(file_path):
     npz_file = np.load(file_path, fix_imports=False)
     return [npz_file[k] for k in npz_file]
+
 
 def buffered_arange(max):
     if not hasattr(buffered_arange, "buf"):
@@ -127,4 +130,17 @@ def buffered_arange(max):
     return buffered_arange.buf[:max]
 
 
-LOGGER
+def get_monitored_metric_name(monitored_metrics, target_metric_name):
+    assert (
+        target_metric_name == "default" or target_metric_name in monitored_metrics
+    ), f"""Monitored value:={target_metric_name} must either be the loss function,
+                or a stated validation metric!"""
+
+    if target_metric_name == "default":
+        target_metric_name = next((mname for mname in monitored_metrics if mname.startswith("val/loss")), None)
+
+        assert (
+            target_metric_name is not None
+        ), f"Default monitor value not found in monitored metrics: {monitored_metrics}"
+
+    return target_metric_name

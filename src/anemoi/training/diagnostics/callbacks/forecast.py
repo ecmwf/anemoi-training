@@ -1,32 +1,18 @@
-import copy
 import csv
-import io
-import json
 import os
-import sys
-import time
-import traceback
-import uuid
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
-from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from typing import Optional
-from weakref import proxy
-from zipfile import ZipFile
 
-import einops
-import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.distributed as dist
-import torchinfo
+
 from omegaconf import DictConfig
-from omegaconf import ListConfig
+
 from omegaconf import OmegaConf
 from PIL import Image
 from pytorch_lightning import Trainer
@@ -38,12 +24,12 @@ from pytorch_lightning.utilities.rank_zero import rank_zero_info
 from anemoi.training.diagnostics.callbacks import AnemoiCheckpoint
 from anemoi.training.diagnostics.callbacks import ParentUUIDCallback
 
-from anemoi.training.diagnostics.plots import init_plot_settings
-from anemoi.training.diagnostics.plots import plot_graph_features
-from anemoi.training.diagnostics.plots import plot_histogram
-from anemoi.training.diagnostics.plots import plot_loss
-from anemoi.training.diagnostics.plots import plot_power_spectrum
-from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
+from anemoi.training.diagnostics.plots.plots import init_plot_settings, plot_loss_map
+from anemoi.training.diagnostics.plots.plots import plot_graph_features
+from anemoi.training.diagnostics.plots.plots import plot_histogram
+from anemoi.training.diagnostics.plots.plots import plot_loss
+from anemoi.training.diagnostics.plots.plots import plot_power_spectrum
+from anemoi.training.diagnostics.plots.plots import plot_predicted_multilevel_flat_sample
 from anemoi.training.diagnostics.callbacks import MemCleanUpCallback
 
 # function should take
@@ -53,95 +39,19 @@ from functools import wraps
 from torch import Tensor
 from pytorch_lightning.callbacks import LearningRateMonitor
 from anemoi.training.diagnostics.callbacks import GraphTrainableFeaturesPlot, BasePlotCallback
-from anemoi.training.diagnostics.callbacks import BaseLossMapPlot
+from anemoi.training.diagnostics.callbacks import BaseLossMapPlot, BaseLossBarPlot
+from anemoi.training.diagnostics.callbacks import WeightGradOutputLoggerCallback
 
-def safe_cast_to_numpy(tensor: torch.Tensor) -> np.ndarray:
-    """Converts a PyTorch tensor to a NumPy array, ensuring that the array is of the
-    appropriate type."""
-    tensor = tensor.to("cpu")
+from anemoi.training.diagnostics import safe_cast_to_numpy
+from anemoi.training.diagnostics import get_time_step, increment_to_hours, generate_time_steps
 
-    if tensor.dtype == torch.bfloat16 or tensor.dtype == torch.float32:
-        tensor = tensor.to(torch.float32)
-    elif tensor.dtype == torch.float16:
-        pass
+from anemoi.training.losses.utils import get_monitored_metric_name
+import logging
 
-    return tensor.numpy()
+LOGGER = logging.getLogger(__name__)
 
+from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
-def tensor_lru_cache(maxsize=128, typed=False):
-    def decorator(func):
-        cache = lru_cache(maxsize=maxsize, typed=typed)
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # Convert Tensor arguments to a hashable type
-            key = tuple(arg.tolist() if isinstance(arg, Tensor) else arg for arg in args)
-            key_kwargs = {k: (v.tolist() if isinstance(v, Tensor) else v) for k, v in kwargs.items()}
-            return cache(func)(*key, **key_kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-@lru_cache()
-def increment_to_hours(increment: str):
-    """Convert time increment string to hours."""
-    if increment.endswith("h"):
-        return int(increment[:-1])
-    elif increment.endswith("d"):
-        return int(increment[:-1]) * 24
-    else:
-        raise ValueError("Invalid time increment format. Use 'h' for hours and 'd' for days.")
-
-
-@tensor_lru_cache()
-def get_time_step(increment: str, step: Tensor) -> str:
-    """Return the time step name for a given step number based on increment."""
-    inc_hours = increment_to_hours(increment)
-
-    total_hours = step * inc_hours
-    days = total_hours / 24
-
-    step_name = f"{days:.2f}d"
-
-    return step_name
-
-
-@tensor_lru_cache()
-def generate_time_steps(increment: str, steps: int):
-    """Generate named time steps based on increment and number of steps."""
-    inc_hours = increment_to_hours(increment)
-
-    time_steps = []
-
-    for step in range(1, steps + 1):
-        total_hours = step * inc_hours
-        days = total_hours / 24
-
-        if days.is_integer():
-            step_name = f"{int(days)}d"
-        else:
-            step_name = f"{days:.2f}d"
-
-        time_steps.append(step_name)
-
-    return time_steps
-
-def get_monitored_metric_name(monitored_metrics, target_metric_name):
-    assert (
-        target_metric_name == "default" or target_metric_name in monitored_metrics
-    ), f"""Monitored value:={target_metric_name} must either be the loss function,
-                or a stated validation metric!"""
-
-    if target_metric_name == "default":
-        target_metric_name = next((mname for mname in monitored_metrics if mname.startswith("val/loss")), None)
-        
-        assert (
-            target_metric_name is not None
-        ), f"Default monitor value not found in monitored metrics: {monitored_metrics}"
-    
-    return target_metric_name
 
 class RolloutEval(Callback):
     """Evaluates the model performance over a (longer) rollout window.
@@ -164,7 +74,7 @@ class RolloutEval(Callback):
         config : dict
             Dictionary with configuration settings
         """
-        super().__init__(config=config, val_dset_len=val_dset_len)
+        super().__init__()
 
         LOGGER.debug(
             "Setting up RolloutEval callback with rollout = %d, frequency = %d ...",
@@ -204,7 +114,8 @@ class RolloutEval(Callback):
             with context:
                 with torch.no_grad():
                     outputs = self._eval(
-                        pl_module, batch[0]
+                        pl_module, batch[0],
+                        batch_idx
                     )  # Ignores the predictions from the validation loop
 
                     for cb in self.callbacks_validation_batch_end:
@@ -216,17 +127,17 @@ class RolloutEval(Callback):
         for callback in self.callbacks_validation_epoch_end:
             callback.on_validation_epoch_end(trainer, pl_module)
 
-    def _eval(self, pl_module: pl.LightningModule, batch: torch.Tensor) -> None:
+    def _eval(self, pl_module: pl.LightningModule, batch: torch.Tensor, batch_idx: int) -> None:
         """Rolls out the model and calculates the validation metrics.
 
         Parameters
         ----------
         pl_module : pl.LightningModule
             Lightning module object
-        batch: torch.Tensor # shape = (bs, input_steps + forecast_steps, latlon, nvar)
+        batch: torch.Tensor # shape = (bs, ens, input_steps + forecast_steps, latlon, nvar)
             Batch tensor
-        ens_ic: torch.Tensor
-            Ensemble initial conditions tensor.
+        batch_idx: int
+            Batch index
         """
         
         loss, metrics, outputs = pl_module._step(batch, validation_mode=True, 
@@ -250,13 +161,13 @@ class RolloutEval(Callback):
 
     def _log(self, pl_module: pl.LightningModule, loss: torch.Tensor, metrics: dict, bs: int) -> None:
         # This is the validation loss using the training loss function, averaged across all rollouts
-        train_loss_log_name = pl_module.loss.log_name
+        train_loss_name = pl_module.loss.name
 
         rollout_step_str_start = get_time_step(self.time_step, 1)
         rollout_step_str_end = get_time_step(self.time_step, self.rollout + 1)
 
         pl_module.log(
-            f"rval/loss/{pl_module.loss.log_name}/r_{rollout_step_str_start}_to_{rollout_step_str_end}_freq_{self.frequency}",
+            f"rval/loss/{pl_module.loss.name}/r_{rollout_step_str_start}_to_{rollout_step_str_end}_freq_{self.frequency}",
             loss,
             on_epoch=True,
             on_step=False,
@@ -289,7 +200,7 @@ class RolloutEval(Callback):
                 
         return (((batch_idx + 1) % self.eval_frequency) == 0) or len(callbacks_idx_to_run) > 0
 
-class ForecastingLossBarPlot(LossBarPlot):
+class ForecastingLossBarPlot(BaseLossBarPlot):
     """Plots the accumulated forecasting unsqueezed loss over rollouts."""
 
     def __init__(self, config, **kwargs):
@@ -308,7 +219,7 @@ class ForecastingLossBarPlot(LossBarPlot):
     def accumulate(self, trainer, pl_module, outputs, batch) -> None:
         LOGGER.debug("Parameters to plot: %s", self.config.diagnostics.plot.parameters)
         
-        for idx in range(len(outputs["preds"])):
+        for idx in range(len(outputs["y_pred"])):
             loss_ = pl_module.loss(
                 outputs["y_pred"][idx],
                 outputs["y"][idx],
@@ -353,12 +264,14 @@ class ForecastingLossBarPlot(LossBarPlot):
                 sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group
 
                 fig = plot_loss(safe_cast_to_numpy(loss_avg[sort_by_parameter_group], colors, xticks, legend_patches))
-
+                
+                epoch = trainer.current_epoch
+                
                 self._output_figure(
-                    logger,
+                    pl_module.logger,
                     fig,
-                    tag=f"val_barplot_{pl_module.loss.log_name}_r{key}_{epoch:03d}_batch{batch_idx:04d}",
-                    exp_log_tag=f"val_bar_{pl_module.loss.log_name}_r{key}_{epoch:03d}_batch{batch_idx:04d}",
+                    tag=f"val_barplot_{pl_module.loss.name}_r{key}_{epoch:03d}_gstep{pl_module.global_step}",
+                    exp_log_tag=f"val_bar_{pl_module.loss.name}_r{key}_{epoch:03d}_gstep{pl_module.global_step}",
                 )
 
 class PlotSample(BasePlotCallback):
@@ -396,35 +309,17 @@ class PlotSample(BasePlotCallback):
             for name in self.config.diagnostics.plot.parameters
         }
 
-        # When running in Async mode, it might happen that in the last epoch these tensors
-        # have been moved to the cpu (and then the denormalising would fail as the 'input_tensor' would be on CUDA
-        # but internal ones would be on the cpu), The lines below allow to address this problem
-        # if self.post_processors_state is None:
-        #     # Copy to be used across all the training cycle
-        #     self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
         if self.latlons is None:
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
 
-        # input_tensor = batch[
-        #     self.sample_idx,
-        #     pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
-        #     ...,
-        #     pl_module.data_indices.data.output.full,
-        # ].cpu()
-        # data = self.post_processors_state(input_tensor).numpy()
         data = outputs["data"]
 
-        # output_tensor = self.post_processors_state(
-        #     torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
-        #     in_place=False,
-        # ).numpy()
-
-        # y_post_processed = safe_cast_to_numpy(outputs['y_pred_postprocessed'])
-
-        # for rollout_step in range(pl_module.rollout):
         
-        for idx in range(len(outputs["preds"])):
+        for idx in range(len(outputs["y_pred"])):
+
+            rollout_step = self.lead_time_to_eval[idx]
+
             fig = plot_predicted_multilevel_flat_sample(
                 plot_parameters_dict,
                 self.config.diagnostics.plot.per_sample,
@@ -484,27 +379,12 @@ class PlotHistograms(BasePlotCallback):
         epoch: int,
     ) -> None:
         logger = trainer.logger
-        # if self.pre_processors_state is None:
-        #     self.pre_processors_state = copy.deepcopy(pl_module.model.pre_processors_state).cpu()
-        # if self.post_processors_state is None:
-        #     self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
 
-        # input_tensor = batch[
-        #     self.sample_idx,
-        #     pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
-        #     ...,
-        #     pl_module.data_indices.data.output.full,
-        # ].cpu()
-        # data = self.post_processors_state(input_tensor).numpy()
-        # output_tensor = self.post_processors_state(
-        #     torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
-        #     in_place=False,
-        # ).numpy()
         data = outputs["data"]
         output_tensor = outputs['y_pred_postprocessed']
 
         # for rollout_step in range(pl_module.rollout):
-        for idx in range(len(outputs["preds"])):
+        for idx in range(len(outputs["y_pred"])):
             if self.config.diagnostics.plot.parameters_histogram is None:
                 continue
             rollout_step = self.lead_time_to_eval[idx]
@@ -538,13 +418,13 @@ class PlotHistograms(BasePlotCallback):
         batch: torch.Tensor,
         batch_idx: int,
     ) -> None:
-        if batch_idx % self.plot_frequency == 0:
+        if self.op_on_this_batch(batch_idx):
             self._plot_histogram(trainer, pl_module, outputs, batch, batch_idx, epoch=trainer.current_epoch)
 
 class PlotPowerSpectrum(BasePlotCallback):
     """Plots power spectrum metrics comparing target and prediction."""
 
-    def __init__(self, config: OmegaConf) -> None:
+    def __init__(self, config, val_dset_len, **kwargs):
         """Initialise the PlotPowerSpectrum callback.
 
         Parameters
@@ -552,8 +432,9 @@ class PlotPowerSpectrum(BasePlotCallback):
         config : OmegaConf
             Config object
         """
-        super().__init__(config)
+        super().__init__(config, op_on_batch=True, val_dset_len=val_dset_len, **kwargs)
         self.sample_idx = self.config.diagnostics.plot.sample_idx
+        self.lead_time_to_eval = config.diagnostics.eval.lead_time_to_eval
 
     @rank_zero_only
     def _plot_spectrum(
@@ -566,33 +447,15 @@ class PlotPowerSpectrum(BasePlotCallback):
         epoch: int,
     ) -> None:
         logger = trainer.logger
-        # if self.pre_processors_state is None:
-        #     self.pre_processors_state = copy.deepcopy(pl_module.model.pre_processors_state).cpu()
-        # if self.post_processors_state is None:
-        #     self.post_processors_state = copy.deepcopy(pl_module.model.post_processors_state).cpu()
 
         if self.latlons is None:
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
 
-        # TODO: maybe include the input tensor in the outputs dictionary and renmae it to tensors
-        # input_tensor = batch[
-        #     self.sample_idx,
-        #     pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
-        #     ...,
-        #     pl_module.data_indices.data.output.full,
-        # ].cpu()
-        # data = self.post_processors_state(input_tensor).numpy()
-        # output_tensor = self.post_processors_state(
-        #     torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
-        #     in_place=False,
-        # ).numpy()
         data = outputs["data"]
         output_tensor = outputs['y_pred_postprocessed']
 
-
-
         # for rollout_step in range(pl_module.rollout):
-        for idx in range(len(outputs["preds"])):
+        for idx in range(len(outputs["y_pred"])):
             rollout_step = self.lead_time_to_eval[idx]
             if self.config.diagnostics.plot.parameters_spectrum is not None:
                 diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
@@ -1077,9 +940,6 @@ def get_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
                 )
             )
         return ma_callbacks
-        
-
-
 
     # Add all checkpoint-related callbacks
     trainer_callbacks.extend(setup_checkpoint_callbacks())
@@ -1098,464 +958,16 @@ def get_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
     trainer_callbacks.extend(setup_model_averaging_callbacks())
     
     # Add other miscellaneous callbacks
-    trainer_callbacks.append(MemCleanupCallback())
+    trainer_callbacks.append(MemCleanUpCallback())
 
+    # Add weight grad output logger callback
+    trainer_callbacks.append(WeightGradOutputLoggerCallback())
 
-
-
-
+    # Add parent UUID callback
     trainer_callbacks.append(ParentUUIDCallback(config))
 
     if config.diagnostics.plot.learned_features:
         LOGGER.debug("Setting up a callback to plot the trainable graph node features ...")
         trainer_callbacks.append(GraphTrainableFeaturesPlot(config))
 
-    return trainer_callbacks
-
-
-
-def get_callbacks(config: DictConfig, monitored_metrics) -> list:
-    """Setup callbacks for PyTorch Lightning trainer.
-
-    Parameters
-    ----------
-    config : DictConfig
-        Job configuration
-
-    Returns
-    -------
-    list
-        A list of PyTorch Lightning callbacks
-    """
-    LOGGER.setLevel(config.diagnostics.log.code.diagnostics)
-
-    trainer_callbacks = []
-
-    # Setting up Checkpointing
-    if config.diagnostics.profiler:
-        # the tensorboard logger + pytorch profiler cause pickling errors when writing checkpoints
-        LOGGER.warning("Profiling is enabled - AIFS will not write any training or inference model checkpoints!")
-    else:
-        enabled_checkpoint_configs = [cfg for cfg in config.diagnostics.checkpoints if cfg["enabled"]]
-
-        # NOTE: Current settings only allow for one checkpoint of type interval and one checkpoint of type performance
-        # In the future relax this constraint
-
-        # assert the the types of checkpoints are unique and only in the range "interval" and "performance"
-        checkpoint_types = [cfg["type"] for cfg in enabled_checkpoint_configs]
-        assert len(checkpoint_types) == len(set(checkpoint_types)), "Checkpoint types must be unique!"
-        assert all(
-            [checkpoint_type in ["interval", "performance"] for checkpoint_type in checkpoint_types]
-        ), "Checkpoint types must be either 'interval' or 'performance'!"
-
-        for ckpt_cfg in enabled_checkpoint_configs:
-            if ckpt_cfg["type"] == "interval":
-                # Setting up Checkpoints Based on intervals
-                for key, frequency in ckpt_cfg["save_frequency"].items():
-                    if frequency is None:
-                        continue
-
-                    elif key == "every_n_minutes":
-                        save_key = "train_time_interval"
-                        save_frequency = timedelta(minutes=frequency)
-                    else:
-                        save_key = key
-                        save_frequency = frequency
-
-                    trainer_callbacks.append(
-                        # save_top_k: the save_top_k flag can either save the best or the last k checkpoints
-                        # depending on the monitor flag on ModelCheckpoint.
-                        # See https://lightning.ai/docs/pytorch/stable/common/checkpointing_intermediate.html for reference
-                        AnemoiCheckpoint(
-                            name=f"intv_{key.split('_')[-1]}",
-                            config=config,
-                            filename=config.hardware.files.checkpoint[key],
-                            save_last=True,
-                            **{save_key: save_frequency},
-                            monitor="step",
-                            mode="max",
-                            dirpath=os.path.join(config.hardware.paths.checkpoints, key),
-                            save_weights_only=False,
-                            save_top_k=ckpt_cfg["save_top_k"],
-                            save_on_train_epoch_end=False,
-                            enable_version_counter=False,
-                            auto_insert_metric_name=False,
-                            verbose=True,
-                        )
-                    )
-                    LOGGER.info("Checkpoint callback at %s = %s ...", key, frequency)
-
-            elif ckpt_cfg["type"] == "performance":
-                # Creating Model Checkpoint Based on performane of ckpt_cfg.monitor value
-                perf_ckpt_monitor = ckpt_cfg["monitor"]
-                assert (
-                    perf_ckpt_monitor == "default" or perf_ckpt_monitor in monitored_metrics
-                ), f"""Monitored value:={perf_ckpt_monitor} must either be the loss function,
-                            or a stated validation metric!"""
-
-                if perf_ckpt_monitor == "default":
-                    perf_ckpt_monitor = next((mname for mname in monitored_metrics if mname.startswith("val/loss")), None)
-                    assert (
-                        perf_ckpt_monitor is not None
-                    ), f"Default monitor value not found in monitored metrics: {monitored_metrics}"
-
-                LOGGER.info(f"Checkpoint callback based on {perf_ckpt_monitor} performance created ...")
-
-                if hasattr(config.training, "rollout"):
-                    anemoi_checkpoint_cls = AnemoiCheckpointRollout
-                    ac_kwargs = {"increment_on": config.training.rollout.increment_on}
-                else:
-                    anemoi_checkpoint_cls = AnemoiCheckpoint
-                    ac_kwargs = {}
-
-                trainer_callbacks.append(
-                    anemoi_checkpoint_cls(
-                        name=f"perf_{perf_ckpt_monitor.replace('/', '_')}",
-                        config=config,
-                        dirpath=os.path.join(config.hardware.paths.checkpoints, "perf"),
-                        save_weights_only=False,
-                        save_last=True,
-                        monitor=perf_ckpt_monitor,
-                        auto_insert_metric_name=False,
-                        save_on_train_epoch_end=False,
-                        enable_version_counter=False,
-                        filename="epoch={epoch}-step={step}-"
-                        + "{monitor_name}-{{{monitor_value}}}".format(
-                            monitor_name=perf_ckpt_monitor.replace("/", "_"), monitor_value=perf_ckpt_monitor + ":.5f"
-                        ),
-                        save_top_k=ckpt_cfg.save_top_k,
-                        mode=ckpt_cfg["mode"],
-                        verbose=True,
-                        **ac_kwargs,
-                    )
-                )
-
-        # Early Stopping Callback
-        if config.diagnostics.early_stopping.enabled:
-            es_monitor = config.diagnostics.early_stopping.monitor
-
-            assert (
-                es_monitor == "default" or es_monitor in monitored_metrics
-            ), f"""Monitored value:={es_monitor} must either be the loss function,
-                        or a stated validation metric!"""
-
-            if es_monitor == "default":
-                es_monitor = next((mname for mname in monitored_metrics if mname.startswith("val/loss")), None)
-                assert es_monitor is not None, f"Default monitor value not found in monitored metrics: {monitored_metrics}"
-
-            LOGGER.warning(f"Setting up an early stopping callback - monitoring {es_monitor} ...")
-
-            if hasattr(config.training, "rollout"):
-                es_cb = EarlyStoppingRollout(
-                    monitor=es_monitor,
-                    patience=config.diagnostics.early_stopping.patience,
-                    mode=config.diagnostics.early_stopping.mode,
-                    check_finite=True,
-                    verbose=True,
-                    strict=True,
-                    log_rank_zero_only=True,
-                    timestep=config.data.timestep,
-                )
-            else:
-                es_cb = EarlyStopping(
-                    monitor=es_monitor,
-                    patience=config.diagnostics.early_stopping.patience,
-                    mode=config.diagnostics.early_stopping.mode,
-                    check_finite=True,
-                    verbose=True,
-                    strict=True,
-                    log_rank_zero_only=True,
-                )
-
-            trainer_callbacks.append(
-                es_cb,
-            )
-
-    # Learning Rate Monitor Callback
-    if any(
-        [config.diagnostics.log.wandb.enabled, config.diagnostics.log.mlflow.enabled, config.diagnostics.log.tensorboard.enabled]
-    ):
-        from pytorch_lightning.callbacks import LearningRateMonitor
-
-        trainer_callbacks.append(
-            LearningRateMonitor(
-                logging_interval="step",
-                log_momentum=False,
-            )
-        )
-
-    if config.diagnostics.log.progressbar.enabled:
-        from pytorch_lightning.callbacks import TQDMProgressBar
-
-        trainer_callbacks.append(TQDMProgressBar(config.diagnostics.log.progressbar.refresh_rate))
-
-    # Experiment Manager Callback
-    if config.diagnostics.experiment_manager.enabled:
-        from aifs.utils.experiment_manager import ExperimentManager
-
-        trainer_callbacks.append(
-            ExperimentManager(config.diagnostics.experiment_manager.log_path, config.diagnostics.log.code.diagnostics)
-        )
-
-
-    # Stochastic Weight Averaging
-    if config.training.swa.enabled:
-        from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
-
-        trainer_callbacks.append(
-            StochasticWeightAveraging(
-                swa_lrs=config.training.swa.lr,
-                swa_epoch_start=min(
-                    int(0.75 * config.training.max_epochs),
-                    config.training.max_epochs - 1,
-                ),
-                annealing_epochs=max(int(0.25 * config.training.max_epochs), 1),
-                annealing_strategy="cos",
-                # TODO: do we want the averaging to happen on the CPU, to save memory?
-                device=None,
-            )
-        )
-
-    # Plot Learned Features Callback
-    if config.diagnostics.plot.plot_learned_features:
-        LOGGER.debug("Setting up a callback to plot the trainable graph node features ...")
-        trainer_callbacks.append(GraphTrainableFeaturesPlot(config, val_dset_len))
-
-    if flag_rollout and config.diagnostics.metrics.rollout_eval.enabled:
-        # # Setting up Diagnostics Callbacks Rollout V2
-        # TODO: Here is an example of how a generalized EvalClass would
-        #  be useful where the user enters the Callbacks that should be included
-
-        # - and enters the type of BaseEval class e.g. RolloutEval, ReconstructionEval
-        callbacks_validation_batch_end = []
-        callbacks_validation_epoch_end = []
-
-        # Adding Callbacks that should be called at the end of each batch
-        if config.diagnostics.plot.plot_predicted_ensemble:
-            callbacks_validation_batch_end.append(PredictedEnsemblePlot(config, val_dset_len, flag_rollout=True))
-
-        if config.diagnostics.plot.plot_loss_map:
-            loss_map_plot = LossMapPlot(config, val_dset_len, flag_rollout=True)
-            callbacks_validation_batch_end.append(loss_map_plot)
-            callbacks_validation_epoch_end.append(loss_map_plot)
-
-        if config.diagnostics.plot.plot_loss_bar:
-            loss_bar_plot = LossBarPlot(config, val_dset_len, flag_rollout=True)
-            callbacks_validation_batch_end.append(loss_bar_plot)
-            callbacks_validation_epoch_end.append(loss_bar_plot)
-
-        if config.diagnostics.plot.plot_ensemble_initial_conditions:
-            callbacks_validation_batch_end.append(PlotEnsembleInitialConditions(config, val_dset_len, flag_rollout=True))
-
-        # Adding Callbacks that should be called at the end of each epoch
-        if config.diagnostics.plot.plot_spectral_loss:
-            callbacks_validation_batch_end.append(SpectralAnalysisPlot(config, val_dset_len, flag_rollout=True))
-
-        if config.diagnostics.plot.plot_rank_histogram:
-            rank_histogram_plot = RankHistogramPlot(config, val_dset_len, flag_rollout=True)
-            callbacks_validation_batch_end.append(rank_histogram_plot)
-            callbacks_validation_epoch_end.append(rank_histogram_plot)
-
-        if config.diagnostics.plot.plot_spread_skill:
-            spread_skill_plot = SpreadSkillPlot(config, val_dset_len, flag_rollout=True)
-            callbacks_validation_batch_end.append(spread_skill_plot)
-            callbacks_validation_epoch_end.append(spread_skill_plot)
-
-        rollout_eval = RolloutEval(
-            config,
-            val_dset_len,
-            callbacks_validation_batch_end=callbacks_validation_batch_end,
-            callbacks_validation_epoch_end=callbacks_validation_epoch_end,
-        )
-        trainer_callbacks.append(rollout_eval)
-
-    if hasattr(config.diagnostics.metrics, "reconstruction_eval"):
-        # Setting up Diagnostics Callbacks Reconstruction
-
-        # Adding Callbacks that should be called at the end of each batch
-        if config.diagnostics.plot.plot_reconstructed_sample:
-            trainer_callbacks.append(PlotReconstructedSample(config, val_dset_len, flag_reconstruction=True))
-
-        if config.diagnostics.plot.plot_spectral_loss:
-            trainer_callbacks.append(SpectralAnalysisPlot(config, val_dset_len, flag_reconstruction=True))
-
-        if config.diagnostics.plot.plot_loss_map:
-            trainer_callbacks.append(LossMapPlot(config, val_dset_len, flag_reconstruction=True))
-
-        if config.diagnostics.plot.plot_loss_bar:
-            trainer_callbacks.append(LossBarPlot(config, val_dset_len, flag_reconstruction=True))
-
-    trainer_callbacks.append(MemCleanupCallback())
-
-    # Setting up Rollout Scheduler
-    if flag_rollout and config.training.rollout.enable_scheduler:
-        rollout_scheduler = RolloutScheduler(
-            schedule=config.training.rollout.schedule, increment_on=config.training.rollout.increment_on
-        )
-
-        trainer_callbacks.insert(0, rollout_scheduler)
-
-        LOGGER.info("Rollout Scheduler enabled ...")
-
-    return trainer_callbacks
-
-
-    """Setup callbacks for PyTorch Lightning trainer.
-
-    Parameters
-    ----------
-    config : DictConfig
-        Job configuration
-
-    Returns
-    -------
-    List
-        A list of PyTorch Lightning callbacks
-
-    """
-    trainer_callbacks = []
-    
-    def get_checkpoint_callbacks():
-        ckpt_callbacks = []
-        if config.diagnostics.profiler:
-            # the tensorboard logger + pytorch profiler cause pickling errors when writing checkpoints
-            LOGGER.warning("Profiling is enabled - AIFS will not write any training or inference model checkpoints!")
-            return []
-        
-        checkpoint_configs = config.diagnostics.checkpoints
-
-        for ckpt_cfg in checkpoint_configs:
-
-            if ckpt_cfg.type == 'interval':
-                filename = None
-                mode = "max"
-                dirpath=os.path.join(config.hardware.paths.checkpoints, next(
-                    k for k in ("every_n_train_steps", "train_time_interval", "every_n_epochs") if ckpt_cfg.get(k)
-                ))
-
-            elif ckpt_cfg.type == "performance":
-                OmegaConf.set_readonly(ckpt_cfg, False)
-                ckpt_cfg.kwargs['monitor'] = get_monitored_metric_name(monitored_metrics, ckpt_cfg['monitor'] )
-                OmegaConf.set_readonly(ckpt_cfg, True)
-                name = f"perf_{ckpt_cfg.kwargs['monitor'].replace('/', '_')}"
-                dirpath=os.path.join(config.hardware.paths.checkpoints, f"perf_{name}")
-
-                filename="epoch={epoch}-step={step}-"
-                        + "{monitor_name}-{{{monitor_value}}}".format(
-                            monitor_name=name,
-                            monitor_value=ckpt_cfg.kwargs['monitor'] + ":.5f"
-                        )
-
-
-            ckpt_callbacks.append(
-                AnemoiCheckpointRollout(
-                    config=config,
-                    filename=filename,
-                    save_last=False,
-                    **ckpt_cfg.kwargs,
-                    mode=mode,
-                    dirpath=dirpath,
-                    save_weights_only=False,
-                    save_on_train_epoch_end=False,
-                    enable_version_counter=False,
-                    auto_insert_metric_name=False,
-                    verbose= False
-                )    
-            )
-        
-        return ckpt_callbacks
-
-    def early_stopping_callbacks():
-        early_stopping_callbacks = []
-        for es_config in config.diagnostics.early_stoppings:
-            metric_name = get_monitored_metric_name(monitored_metrics, config.diagnostics.early_stopping.monitor)
-            es_cb = EarlyStoppingRollout(
-                    monitor=es_monitor,
-                    patience=config.diagnostics.early_stopping.patience,
-                    mode=config.diagnostics.early_stopping.mode,
-                    check_finite=True,
-                    verbose=True,
-                    strict=True,
-                    log_rank_zero_only=True,
-                    timestep=config.data.timestep,
-                )
-            early_stopping_callbacks.append(es_cb)
-        return early_stopping_callbacks
-    
-    def get_rollout_eval_callback():
-        callbacks_validation_batch_end = []
-        callbacks_validation_epoch_end = []
-
-        #TODO - eventually change this to not need the RolloutEval / ResconstructEval class and simply plug right into the lightmodule callbacks
-
-        if config.diagnostics.plot.plot_loss_map:
-            loss_map_plot = LossMapPlot(config, val_dset_len, flag_rollout=True)
-            callbacks_validation_batch_end.append(loss_map_plot)
-            callbacks_validation_epoch_end.append(loss_map_plot)
-
-        if config.diagnostics.plot.plot_loss_bar:
-            loss_bar_plot = LossBarPlot(config, val_dset_len, flag_rollout=True)
-            callbacks_validation_batch_end.append(loss_bar_plot)
-            callbacks_validation_epoch_end.append(loss_bar_plot)
-
-        # Adding Callbacks that should be called at the end of each epoch
-        if config.diagnostics.plot.plot_spectral_loss:
-            callbacks_validation_batch_end.append(SpectralAnalysisPlot(config, val_dset_len, flag_rollout=True))
-
-
-        rollout_eval = RolloutEval(
-            config,
-            val_dset_len,
-            callbacks_validation_batch_end=callbacks_validation_batch_end,
-            callbacks_validation_epoch_end=callbacks_validation_epoch_end,
-        )
-
-        trainer_callbacks.append(rollout_eval)
-
-    trainer_callbacks.extend(
-        get_checkpoint_callbacks()
-    )
-
-    if any([config.diagnostics.log.wandb.enabled, config.diagnostics.log.mlflow.enabled]):
-        from pytorch_lightning.callbacks import LearningRateMonitor
-
-        trainer_callbacks.append(
-            LearningRateMonitor(
-                logging_interval="step",
-            ),
-        )
-
-    if config.diagnostics.eval.enabled:
-        trainer_callbacks.append(RolloutEval(config))
-
-
-
-    if config.training.swa.enabled:
-        trainer_callbacks.append(
-            StochasticWeightAveraging(
-                swa_lrs=config.training.swa.lr,
-                swa_epoch_start=min(
-                    int(0.75 * config.training.max_epochs),
-                    config.training.max_epochs - 1,
-                ),
-                annealing_epochs=max(int(0.25 * config.training.max_epochs), 1),
-                annealing_strategy="cos",
-                device=None,
-            ),
-        )
-        
-    trainer_callbacks.append(ParentUUIDCallback(config))
-
-
-    if config.diagnostics.plot.learned_features:
-        LOGGER.debug("Setting up a callback to plot the trainable graph node features ...")
-        trainer_callbacks.append(GraphTrainableFeaturesPlot(config))
-
-    # Experiment Manager Callback
-    if config.diagnostics.experiment_manager.enabled:
-        from aifs.utils.experiment_manager import ExperimentManager
-
-        trainer_callbacks.append(
-            ExperimentManager(config.diagnostics.experiment_manager.log_path, config.diagnostics.log.code.diagnostics)
-        )
     return trainer_callbacks

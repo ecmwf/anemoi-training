@@ -1,0 +1,65 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Ruff Linter on All Files",
+      "type": "shell",
+      "command": "ruff check .",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": {
+        "owner": "python",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": [
+          {
+            "regexp": "^(.+):(\\d+):(\\d+):\\s+(.+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        ]
+      },
+      "detail": "Lint all Python files in the workspace using Ruff."
+    },
+    {
+      "label": "Ruff: Safe fixes",
+      "type": "shell",
+      "command": "ruff",
+      "args": [
+          "check",
+          "--fix",
+          "${workspaceFolder}"
+      ],
+      "problemMatcher": [
+          "$ruff"
+      ],
+      "presentation": {
+          "reveal": "always",
+          "panel": "new"
+      },
+      "group": "build"
+  },
+  {
+      "label": "Ruff: Unsafe fixes",
+      "type": "shell",
+      "command": "ruff",
+      "args": [
+          "check",
+          "--fix",
+          "--unsafe-fixes",
+          "${workspaceFolder}"
+      ],
+      "problemMatcher": [
+          "$ruff"
+      ],
+      "presentation": {
+          "reveal": "always",
+          "panel": "new"
+      },
+      "group": "build"
+  }
+  ]
+}

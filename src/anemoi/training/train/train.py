@@ -35,6 +35,8 @@ from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.train.forecaster import ForecastingLightningModule
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
+# import lovely_tensors as lt
+# lt.monkey_patch()
 
 if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
@@ -208,9 +210,8 @@ class AnemoiTrainer:
         """Monitored metrics."""
         monitored_metrics = []
         if hasattr(self, "model"):
-            monitored_metrics.append(f"train/loss/{self.model.loss.log_name}")
-            monitored_metrics.append(f"val/loss/{self.model.loss.log_name}")
-        
+            monitored_metrics.extend((f"train/loss/{self.model.loss.name}", f"val/loss/{self.model.loss.name}"))
+
         return monitored_metrics
 
     @cached_property
@@ -303,7 +304,7 @@ class AnemoiTrainer:
             )
         else:
             total_number_of_model_instances = 1
-        
+
         LOGGER.debug("Effective learning rate: %.3e", total_number_of_model_instances * self.config.training.lr.rate)
 
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
@@ -349,7 +350,6 @@ class AnemoiTrainer:
             accumulate_grad_batches=self.config.training.accum_grad_batches,
             gradient_clip_val=self.config.training.gradient_clip.val,
             gradient_clip_algorithm=self.config.training.gradient_clip.algorithm,
-            num_sanity_val_steps=self.config.training.num_sanity_val_steps,
             # we have our own DDP-compliant sampler logic baked into the dataset
             use_distributed_sampler=False,
             profiler=self.profiler,
@@ -360,7 +360,7 @@ class AnemoiTrainer:
             self.model,
             datamodule=self.datamodule,
             ckpt_path=None if self.load_weights_only else self.last_checkpoint,
-            
+
         )
 
         if self.config.diagnostics.print_memory_summary:

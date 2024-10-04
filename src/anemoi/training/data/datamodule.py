@@ -1,3 +1,4 @@
+# © 2023 Anemoi Inc. All rights reserved.
 import logging
 import os
 from functools import cached_property
@@ -13,12 +14,30 @@ from anemoi.training.data.dataset import NativeGridDataset, worker_init_func
 
 LOGGER = logging.getLogger(__name__)
 
+
 class AnemoiBaseDataModule(pl.LightningDataModule):
     """Base class for Anemoi Datasets data module for PyTorch Lightning."""
 
     def __init__(self, config: DictConfig) -> None:
         super().__init__()
         self.config = config
+
+        frequency = self.config.data.frequency
+        timestep = self.config.data.timestep
+        assert (
+            isinstance(frequency, str) and isinstance(timestep, str) and frequency[-1] == "h" and timestep[-1] == "h"
+        ), f"Error in format of timestep, {timestep}, or data frequency, {frequency}"
+        assert (
+            int(timestep[:-1]) % int(frequency[:-1]) == 0
+        ), f"Timestep isn't a multiple of data frequency, {timestep}, or data frequency, {frequency}"
+        self.timeincrement = int(timestep[:-1]) // int(frequency[:-1])
+        LOGGER.info(
+            "Timeincrement set to %s for data with frequency, %s, and timestep, %s",
+            self.timeincrement,
+            frequency,
+            timestep,
+        )
+
         self.global_rank = int(os.environ.get("SLURM_PROCID", "0"))  # global rank
         self.model_comm_group_id = (
             self.global_rank // self.config.hardware.num_gpus_per_model
@@ -107,21 +126,7 @@ class AnemoiForecastingDataModule(AnemoiBaseDataModule):
 
     def __init__(self, config: DictConfig) -> None:
         super().__init__(config)
-        frequency = self.config.data.frequency
-        timestep = self.config.data.timestep
-        assert (
-            isinstance(frequency, str) and isinstance(timestep, str) and frequency[-1] == "h" and timestep[-1] == "h"
-        ), f"Error in format of timestep, {timestep}, or data frequency, {frequency}"
-        assert (
-            int(timestep[:-1]) % int(frequency[:-1]) == 0
-        ), f"Timestep isn't a multiple of data frequency, {timestep}, or data frequency, {frequency}"
-        self.timeincrement = int(timestep[:-1]) // int(frequency[:-1])
-        LOGGER.info(
-            "Timeincrement set to %s for data with frequency, %s, and timestep, %s",
-            self.timeincrement,
-            frequency,
-            timestep,
-        )
+
         self.rollout = (
             self.config.training.rollout.max
             if self.config.training.rollout.epoch_increment > 0
@@ -133,6 +138,7 @@ class AnemoiForecastingDataModule(AnemoiBaseDataModule):
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.training, resolve=True)),
             label="train",
+            rollout=self.rollout,
         )
 
     @cached_property
@@ -162,27 +168,13 @@ class AnemoiReconstructionDataModule(AnemoiBaseDataModule):
 
     def __init__(self, config: DictConfig) -> None:
         super().__init__(config)
-        frequency = self.config.data.frequency
-        timestep = self.config.data.timestep
-        assert (
-            isinstance(frequency, str) and isinstance(timestep, str) and frequency[-1] == "h" and timestep[-1] == "h"
-        ), f"Error in format of timestep, {timestep}, or data frequency, {frequency}"
-        assert (
-            int(timestep[:-1]) % int(frequency[:-1]) == 0
-        ), f"Timestep isn't a multiple of data frequency, {timestep}, or data frequency, {frequency}"
-        self.timeincrement = int(timestep[:-1]) // int(frequency[:-1])
-        LOGGER.info(
-            "Timeincrement set to %s for data with frequency, %s, and timestep, %s",
-            self.timeincrement,
-            frequency,
-            timestep,
-        )
 
     @cached_property
     def ds_train(self) -> NativeGridDataset:
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.training, resolve=True)),
             label="train",
+            rollout=0,
         )
 
     @cached_property
@@ -190,11 +182,16 @@ class AnemoiReconstructionDataModule(AnemoiBaseDataModule):
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.validation, resolve=True)),
             shuffle=False,
+            rollout=0,
             label="validation",
+            
         )
 
     @cached_property
     def ds_test(self) -> NativeGridDataset:
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.test, resolve=True)),
-            shuffle=False
+            shuffle=False,
+            rollout=0,
+            label="test"
+        )

@@ -194,3 +194,8 @@ jobscripts/
 *ecsbatch*
 
 src/anemoi/training/config/**/private_*
+.env
+!.vscode/tasks.json
+
+# I want to include .vscode/tasks.json in the repo
+!.vscode/tasks.json
