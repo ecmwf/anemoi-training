@@ -80,7 +80,10 @@ class GraphForecaster(pl.LightningModule):
         self.save_hyperparameters()
 
         self.latlons_data = graph_data[config.graph.data].x
+        # TODO: Default output mask should be 1s
+        self.output_mask = graph_data[config.graph.data][config.model.output_mask].squeeze().bool()
         self.loss_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
+        self.loss_weights[~self.output_mask] = 0.0
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
@@ -201,6 +204,12 @@ class GraphForecaster(pl.LightningModule):
             ...,
             self.data_indices.internal_model.output.prognostic,
         ]
+
+        # Fill in the boundary values
+        if self.output_mask is not None and not self.output_mask.all():
+            _x = x[:, -1, :, :, self.data_indices.model.input.prognostic]
+            _x[..., ~self.output_mask, :] = batch[:, -1, :, ~self.output_mask][..., self.data_indices.data.output.full]
+            x[:, -1, :, :, self.data_indices.model.input.prognostic] = _x
 
         # get new "constants" needed for time-varying fields
         x[:, -1, :, :, self.data_indices.internal_model.input.forcing] = batch[

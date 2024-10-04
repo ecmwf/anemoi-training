@@ -35,13 +35,14 @@ hardware:
     graph: ???
 model:
   num_channels: 128
+  output_mask: cutout
 dataloader:
   dataset:
     cutout:
       - dataset: ${hardware.paths.data}/${hardware.files.dataset}
         thinning: ${graph.nodes.data.node_builder.thinning}
       - dataset: ${hardware.paths.data}/${hardware.files.forcing_dataset}
-      # area: ${graph.nodes.data.node_builder.forcing_area} # Only supported with feature/support-forcing-area-in-cutout
+        area: ${graph.nodes.data.node_builder.forcing_area} # Only supported with feature/support-forcing-area-in-cutout
     adjust: all
   limit_batches:
     training: 100
