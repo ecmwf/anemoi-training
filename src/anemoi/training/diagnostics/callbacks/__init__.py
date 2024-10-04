@@ -74,7 +74,13 @@ DEPRECATED_CONFIGS: list[tuple[list[str] | str, type[Callback]]] = [
             frequency=config.diagnostics.eval.frequency,
         ),
     ),
-    ("diagnostics.plot.learned_features", plot.GraphTrainableFeaturesPlot),
+    (
+        "diagnostics.plot.learned_features",
+        [
+            plot.GraphNodeTrainableFeaturesPlot,
+            plot.GraphEdgeTrainableFeaturesPlot,
+        ],
+    ),
     (
         ["diagnostics.plot.enabled", "diagnostics.plot.longrollout.enabled"],
         plot.LongRolloutPlots,

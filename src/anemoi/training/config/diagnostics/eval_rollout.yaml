@@ -11,7 +11,8 @@ plot:
 
   callbacks:
     # Add extra plot callbacks here
-    - _target_: anemoi.training.diagnostics.callbacks.plot.GraphTrainableFeaturesPlot
+    - _target_: anemoi.training.diagnostics.callbacks.plot.GraphNodeTrainableFeaturesPlot
+    - _target_: anemoi.training.diagnostics.callbacks.plot.GraphEdgeTrainableFeaturesPlot
     - _target_: anemoi.training.diagnostics.callbacks.plot.PlotLoss
     - _target_: anemoi.training.diagnostics.callbacks.plot.PlotSample
 
@@ -78,8 +79,6 @@ checkpoint:
   every_n_train_steps:
     save_frequency: null # Does not scale with rollout
     num_models_saved: 0
-
-
 
 log:
   wandb:
