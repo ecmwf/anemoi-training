@@ -310,7 +310,27 @@ class RolloutEval(Callback):
 
 
 class LongRolloutPlots(BasePlotCallback):
-    """Evaluates the model performance over a (longer) rollout window."""
+    """Evaluates the model performance over a (longer) rollout window.
+
+    This function allows evaluating the performance of the model over an extended number
+    of rollout steps to observe long-term behavior.
+
+    Configure in the diagnostics config file:
+    ```
+    diagnostics:
+        plots:
+            longrollout:
+                enable: True # enable plotting of long rollout
+                rollout: [30, 60] # number of rollout steps for plots
+                frequency: 20 # every X epochs
+                video_enabled: True # enable creation of videos
+                video_rollout: 56 # 14 days in 6h steps
+    ```
+    The runtime of creating one animation of one variable for 56 rollout steps is about 1 minute.
+
+    Recommended use: Fork the run using fork_run_id for 1 additional epochs and enabled videos.
+    During the first validation epoch, the animations are created and saved.
+    """
 
     def __init__(self, config) -> None:
         """Initialize RolloutEval callback.
