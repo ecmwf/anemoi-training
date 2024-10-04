@@ -91,11 +91,14 @@ class GraphForecaster(pl.LightningModule):
         loss_kwargs = {"node_weights": self.loss_weights, "feature_weights": loss_scaling}
 
         self.loss = self.get_loss_function(config.training.loss_functions.loss, **loss_kwargs)
-        assert isinstance(self.loss, torch.nn.Module), "Loss function must be a torch.nn.Module"
+        assert issubclass(self.loss, torch.nn.Module) and not isinstance(
+            self.loss,
+            torch.nn.ModuleList,
+        ), "Loss function must be a torch.nn.Module"
 
         self.metrics = self.get_loss_function(config.training.loss_functions.metrics, **loss_kwargs)
         if not isinstance(self.metrics, torch.nn.ModuleList):
-            self.metrics = torch.nn.ModuleList(self.metrics)
+            self.metrics = torch.nn.ModuleList([self.metrics])
 
         if config.training.loss_functions.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
