@@ -80,8 +80,13 @@ class GraphForecaster(pl.LightningModule):
         self.save_hyperparameters()
 
         self.latlons_data = graph_data[config.graph.data].x
-        # TODO: Default output mask should be 1s
-        self.output_mask = graph_data[config.graph.data][config.model.output_mask].squeeze().bool()
+
+        # Set mask of data nodes to be output
+        if config.model.get("output_mask", None) is not None:
+            self.output_mask = graph_data[config.graph.data][config.model.output_mask].squeeze().bool()
+        else:
+            self.output_mask = torch.ones(self.latlons_data.shape[0], dtype=torch.bool, device=self.device)
+
         self.loss_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
         self.loss_weights[~self.output_mask] = 0.0
 
