@@ -157,7 +157,7 @@ class BasePlotCallback(Callback, ABC):
             anim.save(save_path, writer="pillow", fps=8)
 
             if self.config.diagnostics.log.wandb.enabled:
-                LOGGER.warning("Saving gif animations not tested for wandb.")
+                LOGGER.warning("Saving gif animations not implemented for wandb.")
 
             if self.config.diagnostics.log.mlflow.enabled:
                 run_id = logger.run_id
@@ -310,7 +310,27 @@ class RolloutEval(Callback):
 
 
 class LongRolloutPlots(BasePlotCallback):
-    """Evaluates the model performance over a (longer) rollout window."""
+    """Evaluates the model performance over a (longer) rollout window.
+
+    This function allows evaluating the performance of the model over an extended number
+    of rollout steps to observe long-term behavior.
+
+    Configure in the diagnostics config file:
+    ```
+    diagnostics:
+        plots:
+            longrollout:
+                enable: True # enable plotting of long rollout
+                rollout: [30, 60] # number of rollout steps for plots
+                frequency: 20 # every X epochs
+                video_enabled: True # enable creation of videos
+                video_rollout: 56 # 14 days in 6h steps
+    ```
+    The runtime of creating one animation of one variable for 56 rollout steps is about 1 minute.
+
+    Recommended use: Fork the run using fork_run_id for 1 additional epochs and enabled videos.
+    During the first validation epoch, the animations are created and saved.
+    """
 
     def __init__(self, config) -> None:
         """Initialize RolloutEval callback.
@@ -459,6 +479,10 @@ class LongRolloutPlots(BasePlotCallback):
                     # update min and max values for each variable for the colorbar
                     vmin = np.minimum(vmin, np.nanmin(data_over_time[-1], axis=1))
                     vmax = np.maximum(vmax, np.nanmax(data_over_time[-1], axis=1))
+
+            LOGGER.info(
+                f"Time taken to plot and collect samples for longer rollout: {int(time.time() - start_time)} seconds"
+            )
 
             if self.video_rollout:
                 pc_lat, pc_lon = equirectangular_projection(self.latlons)
