@@ -27,19 +27,20 @@ class WeightedRMSELoss(WeightedMSELoss):
         node_weights: torch.Tensor,
         feature_weights: torch.Tensor | None = None,
         ignore_nans: bool = False,
+        **kwargs,
     ) -> None:
         """Latitude- and (inverse-)variance-weighted RMSE Loss.
 
         Parameters
         ----------
-        node_weights : torch.Tensor
-            Weights by area
+        node_weights : torch.Tensor of shape (N, )
+            Weight of each node in the loss function
         feature_weights : Optional[torch.Tensor], optional
             precomputed, per-variable stepwise variance estimate, by default None
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
         """
-        super().__init__(node_weights=node_weights, feature_weights=feature_weights, ignore_nans=ignore_nans)
+        super().__init__(node_weights=node_weights, feature_weights=feature_weights, ignore_nans=ignore_nans, **kwargs)
 
     def forward(
         self,

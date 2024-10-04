@@ -13,21 +13,23 @@ import logging
 from functools import cached_property
 
 import torch
-from torch import nn
+
+from anemoi.training.losses.weightedloss import WeightedLoss
 
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedLogCoshLoss(nn.Module):
+class WeightedLogCoshLoss(WeightedLoss):
     """Latitude-weighted LogCosh loss."""
 
     def __init__(
         self,
         node_weights: torch.Tensor,
         feature_weights: torch.Tensor | None = None,
-        ignore_nans: bool | None = False,
+        ignore_nans: bool = False,
+        **kwargs,
     ) -> None:
-        """Latitude- and (inverse-)variance-weighted LogCosh Loss.
+        """Latitude- and feature weighted LogCosh Loss.
 
         Parameters
         ----------
@@ -39,14 +41,7 @@ class WeightedLogCoshLoss(nn.Module):
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
 
         """
-        super().__init__()
-
-        self.avg_function = torch.nanmean if ignore_nans else torch.mean
-        self.sum_function = torch.nansum if ignore_nans else torch.sum
-
-        self.register_buffer("weights", node_weights, persistent=True)
-        if feature_weights is not None:
-            self.register_buffer("ivar", feature_weights, persistent=True)
+        super().__init__(node_weights=node_weights, feature_weights=feature_weights, ignore_nans=ignore_nans, **kwargs)
 
     def forward(
         self,
@@ -83,26 +78,8 @@ class WeightedLogCoshLoss(nn.Module):
 
         out = torch.log(torch.cosh(pred - target))
 
-        # Use feature_weights if available and feature_scale is True
-        if feature_scale and hasattr(self, "feature_weights"):
-            if feature_indices is None:
-                out *= self.feature_weights
-            else:
-                out *= self.feature_weights[..., feature_indices]
-
-        # Squash by last dimension
-        if squash:
-            out = self.avg_function(out, dim=-1)
-            # Weight by area
-            out *= self.weights.expand_as(out)
-            out /= self.sum_function(self.weights.expand_as(out))
-            return self.sum_function(out)
-
-        # Weight by area, due to weighting construction is analagous to a mean
-        out *= self.weights[..., None].expand_as(out)
-        # keep last dimension (variables) when summing weights
-        out /= self.sum_function(self.weights[..., None].expand_as(out), axis=(0, 1, 2))
-        return self.sum_function(out, axis=(0, 1, 2))
+        out = self.scale_by_feature_weights(out, feature_indices, feature_scale)
+        return self.scale_by_node_weights(out, squash)
 
     @cached_property
     def name(self) -> str:
