@@ -125,8 +125,12 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         r = self.rollout
         if self.config.diagnostics.eval.enabled:
             r = max(r, self.config.diagnostics.eval.rollout)
-        if self.config.diagnostics.plot.get("longrollout") and self.config.diagnostics.plot.longrollout.enabled:
+        if self.config.diagnostics.plot.get("longrollout") and self.config.diagnostics.plot.longrollout.get("enabled"):
             r = max(r, max(self.config.diagnostics.plot.longrollout.rollout))
+        if self.config.diagnostics.plot.get("longrollout") and self.config.diagnostics.plot.longrollout.get(
+            "video_enabled",
+        ):
+            r = max(r, self.config.diagnostics.plot.longrollout.video_rollout)
         assert self.config.dataloader.training.end < self.config.dataloader.validation.start, (
             f"Training end date {self.config.dataloader.training.end} is not before"
             f"validation start date {self.config.dataloader.validation.start}"
