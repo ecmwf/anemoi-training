@@ -69,7 +69,6 @@ CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str | Callable[[DictConfig], bo
     ),
 ]
 
-
 def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint] | None:
     """Get checkpointing callback"""
 <<<<<<< HEAD
@@ -166,8 +165,10 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
 =======
     for deprecated_key, callback_list in DEPRECATED_CONFIGS:
         if check_key(config, deprecated_key):
+            suggested_change = f""" - _target_: {callback_list.__module__}.{callback_list.__name__}"""
             warnings.warn(
-                f"Deprecated config {deprecated_key} found. Please update your config file to use the new callback initialisation method.",
+                f"Deprecated config {deprecated_key} found. Please update your config file to use the new callback initialisation method."
+                + f"This will be removed in a future release.\n Add the following to the `callbacks` list:\n{suggested_change}",
                 DeprecationWarning,
             )
             callbacks.append(callback_list(config))
