@@ -25,7 +25,7 @@ LOGGER = logging.getLogger(__name__)
 class RolloutEval(Callback):
     """Evaluates the model performance over a (longer) rollout window."""
 
-    def __init__(self, config: OmegaConf) -> None:
+    def __init__(self, config: OmegaConf, rollout: int, frequency: int) -> None:
         """Initialize RolloutEval callback.
 
         Parameters
@@ -35,14 +35,15 @@ class RolloutEval(Callback):
 
         """
         super().__init__()
+        self.config = config
 
         LOGGER.debug(
             "Setting up RolloutEval callback with rollout = %d, frequency = %d ...",
-            config.diagnostics.eval.rollout,
-            config.diagnostics.eval.frequency,
+            rollout,
+            frequency,
         )
-        self.rollout = config.diagnostics.eval.rollout
-        self.frequency = config.diagnostics.eval.frequency
+        self.rollout = rollout
+        self.frequency = frequency
 
     def _eval(
         self,
