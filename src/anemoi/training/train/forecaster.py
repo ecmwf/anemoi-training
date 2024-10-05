@@ -91,7 +91,7 @@ class GraphForecaster(pl.LightningModule):
         loss_kwargs = {"node_weights": self.loss_weights, "feature_weights": loss_scaling}
 
         self.loss = self.get_loss_function(config.training.loss_functions.loss, **loss_kwargs)
-        assert issubclass(self.loss, torch.nn.Module) and not isinstance(
+        assert isinstance(self.loss, torch.nn.Module) and not isinstance(
             self.loss,
             torch.nn.ModuleList,
         ), "Loss function must be a torch.nn.Module"
@@ -176,11 +176,11 @@ class GraphForecaster(pl.LightningModule):
             # If key starts with include_, remove the include_ prefix
             # and check if the key is in kwargs, if it is add it to the loss_init_config
             # if it is not raise a ValueError
-            key_suffix = key.removesuffix("include_")
+            key_suffix = key.removeprefix("include_")
             if key_suffix in kwargs:
-                loss_init_config[key] = kwargs[key_suffix]
+                loss_init_config[key_suffix] = kwargs[key_suffix]
                 continue
-            raise ValueError(f"Key {key_suffix} not found in kwargs")  # noqa: TRY003, EM102
+            raise ValueError(f"Key {key_suffix!r} not found in kwargs, {kwargs.keys()!s}")  # noqa: TRY003, EM102
         return instantiate(loss_init_config)
 
     @staticmethod

@@ -45,7 +45,7 @@ class WeightedLoss(nn.Module, ABC):
         node_weights : torch.Tensor of shape (N, )
             Weight of each node in the loss function
         feature_weights : Optional[torch.Tensor], optional
-            precomputed, per-variable stepwise variance estimate, by default None
+            precomputed, per-variable weights, by default None
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
 
