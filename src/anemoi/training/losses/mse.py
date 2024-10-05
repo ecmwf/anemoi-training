@@ -71,10 +71,6 @@ class WeightedMSELoss(WeightedLoss):
         torch.Tensor
             Weighted MSE loss
         """
-        # If pred is 4D, average over ensemble dimension
-        if pred.ndim == 4:
-            pred = pred.mean(dim=1)
-
         out = torch.square(pred - target)
 
         out = self.scale_by_feature_weights(out, feature_indices, feature_scale)

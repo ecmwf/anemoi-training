@@ -72,10 +72,6 @@ class WeightedLogCoshLoss(WeightedLoss):
             Weighted LogCosh loss
 
         """
-        # If pred is 4D, average over ensemble dimension
-        if pred.ndim == 4:
-            pred = pred.mean(dim=1)
-
         out = torch.log(torch.cosh(pred - target))
 
         out = self.scale_by_feature_weights(out, feature_indices, feature_scale)
