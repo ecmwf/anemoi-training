@@ -167,10 +167,21 @@ class GraphForecaster(pl.LightningModule):
 
         # Create loss_config including elements from kwargs if they
         # are specified in the config with include_{key}: True
-        for key in kwargs:
-            if loss_config.pop(f"include_{key}", False):
-                loss_config[key] = kwargs[key]
-        return instantiate(loss_config)
+        loss_init_config = {}
+        for key in loss_config:  # Go through all keys given in the config
+            # If key does not start with include_, add it to the loss_init_config
+            if not key.startswith("include_"):
+                loss_init_config[key] = loss_config[key]
+                continue
+            # If key starts with include_, remove the include_ prefix
+            # and check if the key is in kwargs, if it is add it to the loss_init_config
+            # if it is not raise a ValueError
+            key_suffix = key.removesuffix("include_")
+            if key_suffix in kwargs:
+                loss_init_config[key] = kwargs[key_suffix]
+                continue
+            raise ValueError(f"Key {key_suffix} not found in kwargs")  # noqa: TRY003, EM102
+        return instantiate(loss_init_config)
 
     @staticmethod
     def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
