@@ -84,4 +84,4 @@ class WeightedMAELoss(WeightedLoss):
 
     @cached_property
     def name(self) -> str:
-        return "mae"
+        return "wmae"

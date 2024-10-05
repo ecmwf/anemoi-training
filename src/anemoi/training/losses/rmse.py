@@ -81,4 +81,4 @@ class WeightedRMSELoss(WeightedMSELoss):
 
     @cached_property
     def name(self) -> str:
-        return "rmse"
+        return "wrmse"
