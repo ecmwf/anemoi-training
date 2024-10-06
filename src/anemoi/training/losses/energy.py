@@ -107,7 +107,7 @@ class GroupedEnergyScore(GroupedMultivariatekCRPS):
                  cuda_stream_count: int = 1, op_batching: int = 1, **kwargs) -> None:
             Initializes the GroupedEnergyScore_voronoi instance.
 
-        forward(self, preds: Tensor, target: Tensor, squash: bool = True, enum_feature_weight_scalenorm: int = 0,
+        forward(self, preds: Tensor, target: Tensor, squash: Union[bool, tuple] = True, enum_feature_weight_scalenorm: int = 0,
                 enum_area_weight_scalenorm: int = 0, indices_adjusted=None) -> Tensor:
             Forward pass of the Grouped Energy Score computation.
 

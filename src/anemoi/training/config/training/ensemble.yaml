@@ -1,2 +1,0 @@
-<<: *{training.default}
-ensemble_size_per_device: 4

@@ -1,0 +1,11 @@
+<<: *{model.gnn}
+
+model:
+  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiEnsModelEncProcDec
+
+noise_injector:
+  _target_: anemoi.models.layers.noise_injection.NoiseInjector
+  _convert_: all
+  noise_channels_dim: 4
+  noise_mlp_hidden_dim: 32
+  inject_noise: True

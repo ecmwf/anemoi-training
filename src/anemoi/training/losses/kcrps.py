@@ -13,7 +13,7 @@ import einops
 from omegaconf.dictconfig import DictConfig
 import logging
 LOGGER = logging.getLogger(__name__)
-
+from typing import Union
 
 class kCRPS(nn.Module): 
     """Area-weighted kernel CRPS loss.
@@ -160,7 +160,7 @@ class kCRPS(nn.Module):
         self,
         pred: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scaling: bool = True,
         feature_indices: Optional[torch.Tensor] = None,
         **kwargs,
@@ -197,7 +197,7 @@ class kCRPS(nn.Module):
 
         # Squash (reduce spatial and feature dimensions)
         if squash:
-            kcrps = self.sum_function(kcrps, dim=(-3, -2, -1)) 
+            kcrps = self.sum_function(kcrps, dim=squash if isinstance(squash, tuple) else (-3, -2, -1)) 
 
         return kcrps.mean(dim=0)  # (timestep) or (timestep, latlon, nvar)
 
@@ -384,7 +384,7 @@ class MultivariatekCRPS(nn.Module):
         self,
         preds: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_indices: torch.Tensor | None = None,
         feature_scale: bool = True,
         **kwargs,
@@ -446,7 +446,11 @@ class MultivariatekCRPS(nn.Module):
     def _reduce_output(self, kcrps: torch.Tensor, squash: bool) -> torch.Tensor:
         """Reduce the output to a single value or return the tensor."""
         if squash:
-            kcrps = kcrps.sum(dim=(-2, -1))
+
+            # Since this loss removes a dim, we have to adjust the squash_dims appropriately considering where the removed dim was
+            dim = tuple( (dim if dim>self.group_on_dim else dim+1) for dim in dim if dim != self.group_on_dim ) if isinstance(squash, tuple) else (-2, -1)
+            
+            kcrps = self.sum_function(kcrps, dim=dim)
 
         return kcrps.mean(0)
 
@@ -493,7 +497,7 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
                  cuda_stream_count: int = 1, op_batching: int = 1, **kwargs) -> None:
             Initializes the GroupedMutlivariatekCRPSScore_voronoi instance.
 
-        forward(self, preds: Tensor, target: Tensor, squash: bool = True, enum_feature_weight_scalenorm: int = 0,
+        forward(self, preds: Tensor, target: Tensor, squash: Union[bool, tuple] = True, enum_feature_weight_scalenorm: int = 0,
                 enum_area_weight_scalenorm: int = 0, indices_adjusted=None) -> Tensor:
             Forward pass of the Grouped MutlivariatekCRPS Score computation.
 
@@ -722,7 +726,7 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
         self,
         preds: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         deterministic: bool = False,
         feature_indices: torch.Tensor | None = None,
         feature_scale: bool = True,
@@ -754,7 +758,7 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
         preds: torch.Tensor,
         target: torch.Tensor,
         patch_set: dict[str, torch.Tensor],
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_indices: torch.Tensor | None = None,
         feature_scale: bool = True,
     ) -> torch.Tensor:
@@ -807,7 +811,7 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
         preds: torch.Tensor,
         target: torch.Tensor,
         patch_set: dict[str, torch.Tensor],
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_indices: torch.Tensor | None = None,
         feature_scale: bool = True,
     ) -> torch.Tensor:

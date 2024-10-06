@@ -26,13 +26,13 @@ from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
-from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
+from anemoi.training.data.datamodule import AnemoiBaseDataModule
 from anemoi.training.diagnostics.callbacks import get_callbacks
 from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
-from anemoi.training.train.forecaster import ForecastingLightningModule
+from anemoi.training.lightning_module.anemoi import AnemoiLightningModule
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
 # import lovely_tensors as lt
@@ -76,9 +76,9 @@ class AnemoiTrainer:
         self._log_information()
 
     @cached_property
-    def datamodule(self) -> AnemoiDatasetsDataModule:
+    def datamodule(self) -> AnemoiBaseDataModule:
         """DataModule instance and DataSets."""
-        datamodule = AnemoiDatasetsDataModule(self.config)
+        datamodule = hydra.utils.instantiate(self.config.dataloader.datamodule, config=self.config)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
         return datamodule
 
@@ -132,8 +132,8 @@ class AnemoiTrainer:
         )
 
     @cached_property
-    def model(self) -> ForecastingLightningModule:
-        """Provide the model instance."""
+    def model(self) -> AnemoiLightningModule:
+        """Provide the LightningModule instance."""
         kwargs = {
             "config": self.config,
             "data_indices": self.data_indices,
@@ -142,10 +142,15 @@ class AnemoiTrainer:
             "statistics": self.datamodule.statistics,
             "statistics_tendencies": self.datamodule.statistics_tendencies,
         }
+
+        #NOTE(rilwan-ade): logic to load a composite model containing parts of a pre-trained model needs to be added here
         if self.load_weights_only:
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-            return ForecastingLightningModule.load_from_checkpoint(self.last_checkpoint, **kwargs)
-        return ForecastingLightningModule(**kwargs)
+            return hydra.utils.get_class(self.config.training.lightning_module).load_from_checkpoint(self.last_checkpoint, **kwargs)
+        
+        return hydra.utils.instantiate(self.config.training.lightning_module, **kwargs)
+    
+    
 
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:

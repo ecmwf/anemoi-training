@@ -5,7 +5,7 @@ import logging
 import torch
 from torch import nn
 from torch import Tensor
-from typing import Optional
+from typing import Optional, Union
 from functools import cached_property
 LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class KLDivergenceLoss(nn.Module):
         self,
         mu: Tensor,
         logvar: Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scaling: bool = False,
         feature_indices: Optional[torch.Tensor] = None,
         **kwargs,
@@ -87,7 +87,7 @@ class KLDivergenceLoss(nn.Module):
 
         # Squash - reduce spatial and feature dimensions
         if squash:
-            kl_loss = self.sum_function(kl_loss, axis=(-3, -2, -1))
+            kl_loss = self.sum_function(kl_loss, axis=squash if isinstance(squash, tuple) else (-3, -2, -1))
 
         return self.avg_function(kl_loss, axis=(0))  # (timesteps, latlon, dim)
 
@@ -140,7 +140,7 @@ class RenyiDivergenceLoss(nn.Module):
         self,
         mu: Tensor,
         logvar: Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scaling: bool = False,
         feature_indices: Optional[torch.Tensor] = None,
         **kwargs,
@@ -176,8 +176,9 @@ class RenyiDivergenceLoss(nn.Module):
         renyi_loss *= (self.node_weights / self.sum_function(self.node_weights))
 
         # Squash - reduce spatial and feature dimensions
+
         if squash:
-            renyi_loss = self.sum_function(renyi_loss, axis=(-3, -2, -1))
+            renyi_loss = self.sum_function(renyi_loss, axis=squash if isinstance(squash, tuple) else (-3, -2, -1))
         
         return self.avg_function(renyi_loss, axis=(0))  # (latlon, dim)
 

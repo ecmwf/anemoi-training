@@ -1,5 +1,6 @@
 
 
+from functools import cached_property
 import os
 import math
 import torch.distributed as dist
@@ -43,6 +44,7 @@ class EnsembleCommunicationMixin:
         self.ens_comm_group_id: int = 0
         self.ens_comm_group_rank: int = 0
         self.ens_comm_num_groups: int = 1
+        self.nens_per_device = self.config.training.ic_ensemble_size * self.config.training.noise_sample_per_ic
 
         """Setup communication groups for ensemble and model."""
         LOGGER.debug("Setting up communication groups...")
@@ -93,6 +95,7 @@ class EnsembleCommunicationMixin:
         self.ens_comm_group = ens_comm_group
         self.ens_comm_group_size = dist.get_world_size(group=ens_comm_group)
 
+    @cached_property
     def _build_gather_matrix(self) -> Tensor:
         """Builds a matrix of shape (ens_comm_group_size * nens_per_device,
         num_model_groups * nens_per_device). This matrix is used to average the

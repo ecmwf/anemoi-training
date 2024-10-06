@@ -1,0 +1,5 @@
+<<: *{dataloader.native_grid}
+
+_datamodule:
+  _target_: anemoi.training.data.datamodule.AnemoiForecastingDataModule
+  _partial_: true

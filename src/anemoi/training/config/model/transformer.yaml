@@ -1,9 +1,9 @@
+model:
+  _target_: anemoi.models.models.encoder_decoder_processor.AnemoiModelEncProcDec
+
 activation: GELU
 num_channels: 1024
 
-lightning_module_type:
-  _target_: anemoi.training.train.ForecastingLightningModule
-  
 processor:
   _target_: anemoi.models.layers.processor.TransformerProcessor
   _convert_: all
@@ -25,7 +25,6 @@ encoder:
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
 
-
 decoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
   _convert_: all
@@ -42,7 +41,6 @@ trainable_parameters:
   data2hidden: 8
   hidden2data: 8
 
-
 attributes:
   edges:
   - edge_length
@@ -50,3 +48,7 @@ attributes:
   nodes: []
 
 node_loss_weight: area_weight
+
+
+    
+

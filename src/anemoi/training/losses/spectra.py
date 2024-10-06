@@ -8,12 +8,18 @@ import torch
 import torch.nn as nn
 import einops
 from typing import Optional
-
+from typing import Union
 #TODO(rilwan-ade): Probably need to add optional weightings for frequencies since this will just focus on the larger scales
 #TODO(rilwan-ade): maybe make loss across amplitudes proportional difference for scales - or (scale it proportional to how it generally varies for each variable)
 
 class SHTBaseLoss(TargetEachEnsIndepMixin, nn.Module):
     """Base class for spectral losses using Spherical Harmonic Transforms."""
+
+    map_spectral_loss_impl_to_group_on_dim = {
+        "2D_spatial": (-2),
+        "1D_temporal": (-3,),
+        "3D_spatiotemporal": (-3, -2),
+    }
 
     def __init__(
         self,
@@ -52,12 +58,13 @@ class SHTBaseLoss(TargetEachEnsIndepMixin, nn.Module):
             "1D_temporal": self._spectral_loss_1D_temporal,
             "3D_spatiotemporal": self._spectral_loss_3D_spatiotemporal,
         }
+        self.group_on_dim: tuple = self.map_spectral_loss_impl_to_group_on_dim[spectral_loss_method]
 
     def forward(
         self,
         preds: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scale: bool = True,
         feature_indices: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
@@ -81,7 +88,10 @@ class SHTBaseLoss(TargetEachEnsIndepMixin, nn.Module):
 
         # Squash (reduce spatial and feature dimensions)
         if squash:
-            loss = loss.sum(dim=(-3, -2, -1))
+            # Since this loss removes a dim, we have to adjust the squash_dims appropriately considering where the removed dim was
+            dim = tuple( (dim if dim>max(self.group_on_dim) else dim+len(self.group_on_dim)) for dim in dim if dim not in self.group_on_dim ) if isinstance(squash, tuple) else (range(-1, -4+len(self.group_on_dim) ,-1)) 
+            
+            output = self.sum_function(output, dim=dim)
 
         return loss.mean(dim=0)
 
@@ -98,6 +108,7 @@ class SHTBaseLoss(TargetEachEnsIndepMixin, nn.Module):
 
     def _spectral_loss_3D_spatiotemporal(self, preds: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
+
 
 class SpectralEnergyLoss(SHTBaseLoss):
     """Spectral Energy Loss with area- and feature-weighting support."""

@@ -51,7 +51,7 @@ class CompositeLoss(nn.Module):  # A composite loss that combines multiple losse
         self.register_buffer("loss_weights", torch.as_tensor(loss_weights))
         self.losses = losses
 
-    def forward(self, preds: Tensor, target: Tensor, squash: bool = True, **kwargs) -> Tensor:
+    def forward(self, preds: Tensor, target: Tensor, squash: Union[bool, tuple] = True, **kwargs) -> Tensor:
         """Forward pass of the composite loss.
 
         Args:

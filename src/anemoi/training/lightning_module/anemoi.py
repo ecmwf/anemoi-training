@@ -14,7 +14,7 @@ from torch_geometric.data import HeteroData
 
 
 from omegaconf import OmegaConf
-
+from typing import Optional
 
 LOGGER = logging.getLogger(__name__)
 from anemoi.models.data_indices.collection import IndexCollection
@@ -23,7 +23,7 @@ from anemoi.models.data_indices.collection import IndexCollection
 class AnemoiLightningModule(pl.LightningModule):
     """Base class for Anemoi Lightning Modules (Forecasting and Reconstruction)."""
 
-    def __init__(self, config: DictConfig, graph_data: HeteroData, statistics: dict, statistics_tendencies: dict, data_indices: dict, metadata: dict, model_cls):
+    def __init__(self, config: DictConfig, graph_data: HeteroData, statistics: dict, statistics_tendencies: Optional[dict], data_indices: dict, metadata: dict, model_cls):
         super().__init__()
 
         graph_data = graph_data.to(self.device)
@@ -31,6 +31,7 @@ class AnemoiLightningModule(pl.LightningModule):
         # Initialize the model (either Forecasting or Reconstruction)
         self.model = model_cls(
             statistics=statistics,
+            statistics_tendencies=statistics_tendencies,
             data_indices=data_indices,
             metadata=metadata,
             graph_data=graph_data,
@@ -103,9 +104,50 @@ class AnemoiLightningModule(pl.LightningModule):
 
         return val_metric_ranges
 
-    @staticmethod
-    def get_feature_weights(config: DictConfig, data_indices) -> torch.Tensor:
-        return torch.ones((len(data_indices.data.output.full),), dtype=torch.float32) * config.training.feature_weighting.default
+    def get_feature_weights(self, config: DictConfig, data_indices: IndexCollection) -> torch.Tensor:
+        """
+        Calculates the feature weights for each output feature based on the configuration, data indices. User can specify weighting strategies based on pressure level, feature type, and inverse variance scaling. Any strategies provided are combined.
+
+        Parameters
+        ----------
+        config (DictConfig): A configuration object that contains the training parameters.
+        data_indices (IndexCollection): An object that contains the indices of the data.
+
+        Returns
+        -------
+        torch.Tensor: A tensor that contains the calculates weights for the feature dimension during loss computation.
+
+        """
+        feature_weights = np.ones((len(data_indices.data.output.full),), dtype=np.float32) * config.training.feature_weighting.default
+        pressure_level = instantiate(config.training.pressure_level_scaler)
+
+        LOGGER.info(
+            "Pressure level scaling: use scaler %s with slope %.4f and minimum %.2f",
+            type(pressure_level).__name__,
+            pressure_level.slope,
+            pressure_level.minimum,
+        )
+
+        for key, idx in data_indices.model.output.name_to_index.items():
+            split = key.split("_")
+            if len(split) > 1:
+                # Apply pressure level scaling
+                if split[0] in config.training.feature_weighting.pl:
+                    feature_weights[idx] = config.training.feature_weighting.pl[split[0]] * pressure_level.scaler(int(split[1]))
+                else:
+                    LOGGER.debug("Parameter %s was not scaled.", key)
+            else:
+                # Apply surface variable scaling
+                if key in config.training.feature_weighting.sfc:
+                    feature_weights[idx] = config.training.feature_weighting.sfc[key]
+                else:
+                    LOGGER.debug("Parameter %s was not scaled.", key)
+
+        if config.training.feature_weighting.inverse_tendency_variance_scaling:
+            variances = self.model.statistics_tendencies["stdev"][data_indices.data.output.full]
+            feature_weights /= variances
+
+        return torch.from_numpy(feature_weights)
 
     def configure_optimizers(self):
         if self.config.training.zero_optimizer:
@@ -153,3 +195,53 @@ class AnemoiLightningModule(pl.LightningModule):
 
         """
         scheduler.step(epoch=self.trainer.global_step)
+    
+    def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
+        train_loss, _, _ = self._step(batch, batch_idx, validation_mode=False)    
+        self.log(
+            f"train/loss/{self.loss.name}",
+            train_loss,
+            on_epoch=True,
+            on_step=True,
+            prog_bar=True,
+            logger=self.logger_enabled,
+            batch_size=batch.shape[0],
+            sync_dist=True,
+        )
+        return train_loss
+    
+    def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
+        # TODO: change this to use the name from the loss function to avoid hardcoding
+        with torch.no_grad():
+            val_loss, metrics, outputs = self._step(batch, batch_idx, validation_mode=True)
+        
+        self.log(
+            f"val/loss/{self.loss.name}",
+            val_loss,
+            on_epoch=True,
+            on_step=True,
+            prog_bar=True,
+            logger=self.logger_enabled,
+            batch_size=batch.shape[0],
+            sync_dist=True,
+        )
+        for mname, mvalue in metrics.items():
+            self.log(
+                "val/" + mname,
+                mvalue,
+                on_epoch=True,
+                on_step=False,
+                prog_bar=False,
+                logger=self.logger_enabled,
+                batch_size=batch.shape[0],
+                sync_dist=True,
+            )
+        return val_loss, outputs
+
+    def predict_step(self, batch: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            batch = self.model.pre_processors_state(batch, in_place=False)
+            x = batch[:, :, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, inp_ens, multi_step, latlon, nvar)
+            y_hat = self(x)
+
+        return self.model.post_processors_state(y_hat, in_place=False)

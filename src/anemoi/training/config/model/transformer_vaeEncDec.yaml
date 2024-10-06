@@ -1,0 +1,28 @@
+# This is used to load a forecaster model that is a composite of a transformer and the encoder-decoder parts of a pretrained VAE
+model: 
+  _target_: anemoi.models.models.encoder_decoder_processor.AnemoiModelVAEEncProcVAEDec
+  use_quantization: False # True uses the quantization codebook output, False uses the input to the qunatization codebook
+
+
+activation: GELU
+num_channels: 256
+
+trainable_parameters: ${model.transformer.trainable_parameters}
+attributes: ${model.transformer.attributes}
+
+
+vae: ${model.vae_vq}
+  checkpoint_path: Null # Used to load this sub-module from a pre-trained model
+  freeze_parameters: True # freeze the parameters of this sub-module
+  _target_: anemoi.models.models.reconstruction.AnemoiVQVAE
+
+processor:
+  _target_: anemoi.models.layers.processor.TransformerProcessor
+  _convert_: all
+  activation: ${model.activation}
+  num_layers: 16
+  num_chunks: 2
+  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
+  num_heads: 16 # GraphTransformer or Transformer only
+  window_size: 512
+  dropout_p: 0.0 # GraphTransformer

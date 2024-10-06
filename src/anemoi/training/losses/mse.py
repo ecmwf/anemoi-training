@@ -16,6 +16,7 @@ import torch
 from torch import nn
 from .mixins import TargetEachEnsIndepMixin
 LOGGER = logging.getLogger(__name__)
+from typing import Union
 
 # TODO(rilwan-ade): make parent loss calss that holds the common methods avg_function and sum_function
 
@@ -53,7 +54,7 @@ class WeightedMSELoss(TargetEachEnsIndepMixin,nn.Module):
         self,
         pred: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scale: bool = True,
         feature_indices: torch.Tensor | None = None,
         **kwargs,
@@ -97,9 +98,9 @@ class WeightedMSELoss(TargetEachEnsIndepMixin,nn.Module):
 
         # Squash - reduce spatial and feature dimensions
         if squash:
-            mse = self.sum_function(mse, axis=(-3, -2, -1))  # (bs, timesteps)
+            mse = self.sum_function(mse, axis=squash if isinstance(squash, tuple) else (-3, -2, -1))
 
-        return self.avg_function(mse, axis=(0))  # (timesteps) or (timesteps, latlon, nvars)
+        return self.avg_function(mse, axis=0)  # (timesteps) or (timesteps, latlon, nvars)
 
     @cached_property
     def name(self) -> str:

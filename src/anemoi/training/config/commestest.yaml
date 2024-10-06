@@ -1,0 +1,71 @@
+defaults:
+  - hardware: atos_slurm
+  - data: zarr
+  - dataloader: ensemble_eda
+  - graph: default
+  - model: gnn
+  - training: default
+  - diagnostics: eval_rollout
+  - _self_
+
+hardware:
+  files:
+    graph: graph_mappings_normed_edge_attrs1_${data.resolution}_h_0_1_2_3_4.pt
+    # keep the checkpoint name in sync with the loss type
+  checkpoint:
+    every_n_epochs: aifs-by_epoch-epoch_{epoch:03d}-rollout_{rollout:.0f}-train_kcrps_{train_kcrps_epoch:.3e}
+    every_n_train_steps: aifs-by_step-epoch_{epoch:03d}-step_{step:06d}-rollout_{rollout:.0f}
+    every_n_minutes: aifs-by_time-epoch_{epoch:03d}-step_{step:06d}-rollout_{rollout:.0f}
+  num_gpus_per_model: 4
+  num_gpus_per_ensemble: 4
+
+model:
+  num_channels: 64
+  processor:
+    num_layers: 4
+    num_noise_channels: 4
+    # must have (num_channels + num_noise_channels) % num_heads == 0 !
+    num_heads: 4
+  trainable_parameters:
+    era: 2
+    hidden: 2
+    era2hidden: 2
+    hidden2era: 2
+    hidden2hidden: 2
+
+dataloader:
+  num_workers:
+    training: 1
+    validation: 1
+  batch_size:
+    training: 2
+    validation: 2
+  limit_batches:
+    training: 50
+    validation: 50
+
+training:
+  max_epochs: 1
+  rollout:
+    start: 1
+    epoch_increment: 0
+    max: 1
+  # ensemble_size_per_device: 5
+  ic_ensemble_size: 5
+  noise_sample_per_ic: 1
+  loss: kcrps
+
+diagnostics:
+  log:
+    wandb:
+      offline: True
+  eval:
+    enabled: False
+    rollout: 2
+    frequency: 5
+  plot:
+    parameters:
+      - t_850
+      - u_850
+      - v_850
+      - z_500

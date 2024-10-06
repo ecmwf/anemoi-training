@@ -21,7 +21,7 @@ import torch
 from torch import nn
 from .mixins import TargetEachEnsIndepMixin
 LOGGER = logging.getLogger(__name__)
-
+from typing import Union
 
 class WeightedMAELoss(TargetEachEnsIndepMixin, nn.Module):
     """Latitude-weighted MAE loss."""
@@ -57,7 +57,7 @@ class WeightedMAELoss(TargetEachEnsIndepMixin, nn.Module):
         self,
         pred: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scale: bool = True,
         feature_indices: Optional[torch.Tensor] = None,
         **kwargs,
@@ -86,7 +86,7 @@ class WeightedMAELoss(TargetEachEnsIndepMixin, nn.Module):
 
         # Squash - reduce spatial and feature dimensions
         if squash:
-            out = self.sum_function(out, axis=(-3, -2, -1))  # (bs, timesteps)
+            out = self.sum_function(out, axis=squash if isinstance(squash, tuple) else (-3, -2, -1))
 
         return self.avg_function(out, axis=(0))  # (timesteps) or (timesteps, latlon, nvars)
 

@@ -2,7 +2,7 @@ from typing import Optional
 
 import einops
 import torch
-
+from typing import Union
 
 class TargetEachEnsIndepMixin:
     """Mixin to handle target_each_ens_indep logic for SpectralEnergyLoss.
@@ -14,7 +14,7 @@ class TargetEachEnsIndepMixin:
         self,
         preds: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scale: bool = True,
         feature_indices: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:

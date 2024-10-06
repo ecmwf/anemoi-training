@@ -11,7 +11,7 @@ from _pytest.fixtures import SubRequest
 from anemoi.models.data_indices.collection import IndexCollection
 from omegaconf import DictConfig
 
-from anemoi.training.train.forecaster import ForecastingLightningModule
+from anemoi.training.lightning_module.forecasting import ForecastingLightningModule
 
 
 @pytest.fixture

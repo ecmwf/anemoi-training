@@ -9,8 +9,9 @@ from anemoi.datasets.data import open_dataset
 from anemoi.models.data_indices.collection import IndexCollection
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
+import abc
 
-from anemoi.training.data.dataset import NativeGridDataset, worker_init_func
+from anemoi.training.data.dataset import NativeGridDataset, EnsNativeGridDataset, worker_init_func
 
 LOGGER = logging.getLogger(__name__)
 
@@ -75,28 +76,19 @@ class AnemoiBaseDataModule(pl.LightningDataModule):
     @cached_property
     def data_indices(self) -> IndexCollection:
         return IndexCollection(self.config, self.ds_train.name_to_index)
-
+    
+    @abc.abstractmethod
     def _get_dataset(
         self,
         data_reader: Callable,
         shuffle: bool = True,
         label: str = "generic",
-        rollout: int = 1,  # Default rollout of 1 for reconstruction tasks
     ) -> NativeGridDataset:
-        data = NativeGridDataset(
-            data_reader=data_reader,
-            multistep=self.config.training.multistep_input,
-            timeincrement=self.timeincrement,
-            timestep=self.config.data.timestep,
-            model_comm_group_rank=self.model_comm_group_rank,
-            model_comm_group_id=self.model_comm_group_id,
-            model_comm_num_groups=self.model_comm_num_groups,
-            model_comm_group_nworkers=self.config.dataloader.num_workers[label],
-            shuffle=shuffle,
-            label=label,
-        )
-        self._check_resolution(data.resolution)
-        return data
+        """
+        Get the dataset.
+        This method must be implemented by child classes.
+        """
+        pass
 
     def _get_dataloader(self, ds: NativeGridDataset, stage: str) -> DataLoader:
         assert stage in {"training", "validation", "test"}
@@ -119,7 +111,6 @@ class AnemoiBaseDataModule(pl.LightningDataModule):
 
     def test_dataloader(self) -> DataLoader:
         return self._get_dataloader(self.ds_test, "test")
-
 
 class AnemoiForecastingDataModule(AnemoiBaseDataModule):
     """Data module for forecasting models, with rollout functionality."""
@@ -162,6 +153,72 @@ class AnemoiForecastingDataModule(AnemoiBaseDataModule):
             label="test",
         )
 
+class AnemoiEnsForecastingDataModule(AnemoiForecastingDataModule):
+    """Anemoi Ensemble data module for PyTorch Lightning."""
+
+    def __init__(self, config: DictConfig) -> None:
+        """Initialize Anemoi data module.
+
+        Parameters
+        ----------
+        config : DictConfig
+            Job configuration
+        """
+        super().__init__(config=config)
+        self.nens_per_device = self.config.training.ic_ensemble_size * self.config.training.noise_sample_per_ic
+        self.ens_comm_group_id = (
+            self.global_rank // self.config.hardware.num_gpus_per_ensemble
+        )  # id of the ensemble communication group the rank is participating in
+        self.ens_comm_group_rank = (
+            self.global_rank % self.config.hardware.num_gpus_per_ensemble
+        )  # rank within one ensemble communication group
+
+        total_gpus = self.config.hardware.num_gpus_per_node * self.config.hardware.num_nodes
+
+        assert (
+            total_gpus
+        ) % self.config.hardware.num_gpus_per_ensemble == 0, (
+            f"GPUs per ensemble {self.config.hardware.num_gpus_per_ensemble} does not divide total GPUs {total_gpus}"
+        )
+
+        self.ens_comm_num_groups = (
+            self.config.hardware.num_gpus_per_node * self.config.hardware.num_nodes // self.config.hardware.num_gpus_per_ensemble
+        )  # number of ensemble communication groups
+        LOGGER.debug(
+            "Rank %d ensemble communication group number %d, with local group rank %d",
+            self.global_rank,
+            self.ens_comm_group_id,
+            self.ens_comm_group_rank,
+        )
+
+
+    def _get_dataset(
+        self,
+        data_reader,
+        shuffle: bool = True,
+        rollout: int = 1,
+        label: str = "generic",
+    ) -> EnsNativeGridDataset:
+
+        r = max(rollout, self.rollout)
+
+        data = EnsNativeGridDataset(
+            data_reader=data_reader,
+            rollout=r,
+            multistep=self.config.training.multistep_input,
+            timeincrement=self.timeincrement,
+            comm_group_rank=self.ens_comm_group_rank,
+            comm_group_id=self.ens_comm_group_id,
+            comm_num_groups=self.ens_comm_num_groups,
+            shuffle=shuffle,
+            label=label,
+            ens_members_per_device=self.nens_per_device,
+            num_gpus_per_ens=self.config.hardware.num_gpus_per_ensemble,
+            num_gpus_per_model=self.config.hardware.num_gpus_per_model,
+        )
+
+        self._check_resolution(data.resolution)
+        return data
 
 class AnemoiReconstructionDataModule(AnemoiBaseDataModule):
     """Data module for reconstruction tasks, without rollout functionality."""
@@ -174,7 +231,6 @@ class AnemoiReconstructionDataModule(AnemoiBaseDataModule):
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.training, resolve=True)),
             label="train",
-            rollout=0,
         )
 
     @cached_property
@@ -182,7 +238,6 @@ class AnemoiReconstructionDataModule(AnemoiBaseDataModule):
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.validation, resolve=True)),
             shuffle=False,
-            rollout=0,
             label="validation",
             
         )
@@ -192,6 +247,85 @@ class AnemoiReconstructionDataModule(AnemoiBaseDataModule):
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.test, resolve=True)),
             shuffle=False,
-            rollout=0,
             label="test"
         )
+
+    def _get_dataset(
+        self,
+        data_reader: Callable,
+        shuffle: bool = True,
+        label: str = "generic",
+    ) -> NativeGridDataset:
+        data = NativeGridDataset(
+            data_reader=data_reader,
+            rollout=0,
+            multistep=self.config.training.multistep_input,
+            timeincrement=self.timeincrement,
+            timestep=self.config.data.timestep,
+            model_comm_group_rank=self.model_comm_group_rank,
+            model_comm_group_id=self.model_comm_group_id,
+            model_comm_num_groups=self.model_comm_num_groups,
+            model_comm_group_nworkers=self.config.dataloader.num_workers[label],
+            shuffle=shuffle,
+            label=label,
+        )
+        self._check_resolution(data.resolution)
+        return data
+
+class AnemoiEnsReconstructionDataModule(AnemoiReconstructionDataModule):
+    """Data module for reconstruction tasks, without rollout functionality."""
+
+    def __init__(self, config: DictConfig) -> None:
+        super().__init__(config)
+        self.nens_per_device = self.config.training.ic_ensemble_size * self.config.training.noise_sample_per_ic
+        self.ens_comm_group_id = (
+            self.global_rank // self.config.hardware.num_gpus_per_ensemble
+        )  # id of the ensemble communication group the rank is participating in
+        self.ens_comm_group_rank = (
+            self.global_rank % self.config.hardware.num_gpus_per_ensemble
+        )  # rank within one ensemble communication group
+
+        total_gpus = self.config.hardware.num_gpus_per_node * self.config.hardware.num_nodes
+
+        assert (
+            total_gpus
+        ) % self.config.hardware.num_gpus_per_ensemble == 0, (
+            f"GPUs per ensemble {self.config.hardware.num_gpus_per_ensemble} does not divide total GPUs {total_gpus}"
+        )
+
+        self.ens_comm_num_groups = (
+            self.config.hardware.num_gpus_per_node * self.config.hardware.num_nodes // self.config.hardware.num_gpus_per_ensemble
+        )  # number of ensemble communication groups
+        LOGGER.debug(
+            "Rank %d ensemble communication group number %d, with local group rank %d",
+            self.global_rank,
+            self.ens_comm_group_id,
+            self.ens_comm_group_rank,
+        )
+
+
+    def _get_dataset(
+        self,
+        data_reader,
+        shuffle: bool = True,
+        label: str = "generic",
+    ) -> EnsNativeGridDataset:
+
+
+        data = EnsNativeGridDataset(
+            data_reader=data_reader,
+            rollout=0,
+            multistep=self.config.training.multistep_input,
+            timeincrement=self.timeincrement,
+            comm_group_rank=self.ens_comm_group_rank,
+            comm_group_id=self.ens_comm_group_id,
+            comm_num_groups=self.ens_comm_num_groups,
+            shuffle=shuffle,
+            label=label,
+            ens_members_per_device=self.config.training.nens_per_device,
+            num_gpus_per_ens=self.config.hardware.num_gpus_per_ensemble,
+            num_gpus_per_model=self.config.hardware.num_gpus_per_model,
+        )
+
+        self._check_resolution(data.resolution)
+        return data

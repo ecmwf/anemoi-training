@@ -1,3 +1,7 @@
+_datamodule:
+  _target_: ??
+  _partial_: true
+
 prefetch_factor: 2
 
 num_workers:
@@ -24,8 +28,9 @@ batch_size:
 # if null then we run through all the batches
 limit_batches:
   training: null
-  test: 20
-  predict: 20
+  validation: null
+  test: null
+  predict: null
 
 val_check_interval: 100
 

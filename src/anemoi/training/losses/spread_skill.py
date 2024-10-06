@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from functools import cached_property
 LOGGER = logging.getLogger(__name__)
-
+from typing import Union
 
 class SpreadSkillLoss(nn.Module):
     def __init__(
@@ -38,7 +38,7 @@ class SpreadSkillLoss(nn.Module):
         self,
         preds: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scale: bool = True,
         feature_indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
@@ -55,8 +55,10 @@ class SpreadSkillLoss(nn.Module):
         ens_stdev *= (self.node_weights / self.sum_function(self.node_weights))
 
         if squash:
-            rmse = self.sum_function(rmse, axis=(-3, -2, -1))
-            ens_stdev = self.sum_function(ens_stdev, axis=(-3, -2, -1))
+            dim = squash if isinstance(squash, tuple) else (-3, -2, -1)
+
+            rmse = self.sum_function(rmse, dim=dim)
+            ens_stdev = self.sum_function(ens_stdev, dim=dim)
 
         return self.avg_function(ens_stdev / rmse, axis=0)
 
@@ -99,7 +101,7 @@ class SpreadLoss(nn.Module):
         self,
         preds: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scale: bool = True,
         feature_indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
@@ -115,7 +117,7 @@ class SpreadLoss(nn.Module):
         spread *= (self.node_weights / self.sum_function(self.node_weights))
 
         if squash:
-            spread = self.sum_function(spread, axis=(-3, -2, -1))
+            spread = self.sum_function(spread, dim=squash if isinstance(squash, tuple) else (-3, -2, -1))
 
         return self.avg_function(spread, axis=0)
 
@@ -153,7 +155,7 @@ class ZeroSpreadRateLoss(nn.Module):
         self,
         preds: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scale: bool = True,
         feature_indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
@@ -168,7 +170,7 @@ class ZeroSpreadRateLoss(nn.Module):
         spread_occurence *= (self.node_weights / self.sum_function(self.node_weights))
 
         if squash:
-            spread_occurence = self.sum_function(spread_occurence, axis=(-3, -2, -1))
+            spread_occurence = self.sum_function(spread_occurence, dim=squash if isinstance(squash, tuple) else (-3, -2, -1))
 
         return self.avg_function(spread_occurence, axis=0)
 

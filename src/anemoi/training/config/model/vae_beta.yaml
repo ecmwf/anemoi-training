@@ -1,5 +1,6 @@
 model:
-  _target_: anemoi.models.models.reconstruction.AnemoiVQVAE
+  _target_: anemoi.models.models.reconstruction.AnemoiBetaVAE
+  _partial_: True
 
 activation: GELU
 num_channels: 256
@@ -7,14 +8,10 @@ no_latent_levels: 1 # Hierarchical VAE setting
 no_z_samples: 1 # No of Z samples
 
 
-vector_quantizer:
-  _target_: anemoi.models.layers.vector_quantizer.AnemoiVectorQuantizer
-  num_embeddings: ${model.num_embeddings}
-  embedding_dim: ${model.embedding_dim}
-  commitment_cost: ${model.commitment_cost}
 
 encoder:
  _target_: anemoi.models.layers.coderblock.AnemoiEncoderBlocks
+ num_channels: ${model.num_channels}
  num_latent_levels: 3
  freeze_parameters: False
  mapper:
@@ -39,6 +36,7 @@ encoder:
 
 decoder:
  _target_: anemoi.models.layers.coderblock.AnemoiDecoderBlocks
+ num_channels: ${model.num_channels}
  num_latent_levels: ${model.encoder.num_latent_levels}
  freeze_parameters: False
  mapper:

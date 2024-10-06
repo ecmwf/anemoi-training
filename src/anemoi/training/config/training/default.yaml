@@ -3,6 +3,9 @@ run_id: null
 fork_run_id: null
 load_weights_only: null # only load model weights, do not restore optimiser states etc.
 
+lightning_module:
+  _target_: ??
+
 # run in deterministic mode ; slows down
 deterministic: False
 

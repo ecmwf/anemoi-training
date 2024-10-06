@@ -1,7 +1,7 @@
 import torch
 from torch import nn, Tensor
 from typing import Optional
-
+from typing import Union
 
 class IgnoranceScore(nn.Module):
     """Latitude-weighted Ignorance Score."""
@@ -50,7 +50,7 @@ class IgnoranceScore(nn.Module):
         self,
         preds: Tensor,
         target: Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scaling: bool = True,
         feature_indices: Optional[torch.Tensor] = None,
     ) -> Tensor:
@@ -90,7 +90,7 @@ class IgnoranceScore(nn.Module):
 
         # Squash: reduce the dimensions to a single value
         if squash:
-            ignorance_score = self.sum_function(ignorance_score, dim=(-3, -2, -1))
+            ignorance_score = self.sum_function(ignorance_score, dim=squash if isinstance(squash, tuple) else (-3, -2, -1))
 
         return ignorance_score.mean(dim=0)  # (timesteps, latlon, nvar)
 

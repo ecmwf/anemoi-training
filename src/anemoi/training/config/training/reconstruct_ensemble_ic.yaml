@@ -1,0 +1,10 @@
+<<: *{training.default}
+
+lightning_module:
+  _target_: anemoi.training.train.reconstructor.ReconstructionLightningModuleICEnsemble
+
+# ensemble_size_per_device: 4
+
+target_ic: false # if false, then we calculate loss against the highest resolution signal, if true we calculate loss against the ICs recentered on the highest resolution signal
+ic_ensemble_size: 4
+noise_sample_per_ic: 1 # number of times to sample noise for each IC

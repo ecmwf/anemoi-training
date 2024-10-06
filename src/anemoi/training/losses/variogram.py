@@ -7,7 +7,7 @@ from torch import nn
 import logging
 LOGGER = logging.getLogger(__name__)
 from .mixins import TargetEachEnsIndepMixin
-
+from typing import Union
 # TODO(rilwan-adewoyin): Extend this variogram score to allow variogram on temporal patches
 # TODO(rilwan-adewoyin): Add support for a sliding window for the variogram score (kinda)
 # TODO(rilwan-adewoyin): Add support for asymetric variogram score e.g. if the model under-predicts variance
@@ -172,7 +172,7 @@ class VariogramScore(TargetEachEnsIndepMixin, nn.Module):
         self,
         preds: torch.Tensor,
         target: torch.Tensor,
-        squash: bool = True,
+        squash: Union[bool, tuple] = True,
         feature_scale: bool = True,
         feature_indices: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
@@ -200,7 +200,7 @@ class VariogramScore(TargetEachEnsIndepMixin, nn.Module):
         vario_score = self.forward_funcs[self.group_on_dim](preds, target, feature_scale, feature_indices, squash)
         return vario_score
 
-    def _forward_feature(self, preds: torch.Tensor, target: torch.Tensor, feature_scale: bool = True, feature_indices: Optional[torch.Tensor] = None, squash: bool = True) -> torch.Tensor:
+    def _forward_feature(self, preds: torch.Tensor, target: torch.Tensor, feature_scale: bool = True, feature_indices: Optional[torch.Tensor] = None, squash: Union[bool, tuple] = True) -> torch.Tensor:
         """Forward pass for feature dimension.
 
         Parameters
@@ -226,7 +226,7 @@ class VariogramScore(TargetEachEnsIndepMixin, nn.Module):
 
         return self._reduce_output(vario_score, squash)
 
-    def _forward_spatial(self, preds: torch.Tensor, target: torch.Tensor, feature_scale: bool = True, feature_indices: Optional[torch.Tensor] = None, squash: bool = True) -> torch.Tensor:
+    def _forward_spatial(self, preds: torch.Tensor, target: torch.Tensor, feature_scale: bool = True, feature_indices: Optional[torch.Tensor] = None, squash: Union[bool, tuple] = True) -> torch.Tensor:
         """Forward pass for spatial dimension.
 
         Parameters
@@ -264,7 +264,7 @@ class VariogramScore(TargetEachEnsIndepMixin, nn.Module):
 
         # Scale in the spatial dimension
     
-    def _forward_temporal(self, preds: torch.Tensor, target: torch.Tensor, feature_scale: bool = True, feature_indices: Optional[torch.Tensor] = None, squash: bool = True) -> torch.Tensor:
+    def _forward_temporal(self, preds: torch.Tensor, target: torch.Tensor, feature_scale: bool = True, feature_indices: Optional[torch.Tensor] = None, squash: Union[bool, tuple] = True) -> torch.Tensor:
         """Forward pass for temporal dimension.
 
         Parameters
@@ -287,7 +287,7 @@ class VariogramScore(TargetEachEnsIndepMixin, nn.Module):
 
         return self._reduce_output(vario_score, squash)
 
-    def _forward_ensemble(self, preds: torch.Tensor, target: torch.Tensor, feature_scale: bool = True, feature_indices: Optional[torch.Tensor] = None, squash: bool = True) -> torch.Tensor:
+    def _forward_ensemble(self, preds: torch.Tensor, target: torch.Tensor, feature_scale: bool = True, feature_indices: Optional[torch.Tensor] = None, squash: Union[bool, tuple] = True) -> torch.Tensor:
         
         # Calculate the variogram score
         vario_score = self._calc_variogram_score(preds, target)  # (batch_size, timesteps, latlon, n_vars) 
@@ -301,14 +301,15 @@ class VariogramScore(TargetEachEnsIndepMixin, nn.Module):
 
         return self._reduce_output(vario_score, squash)
 
-    def _reduce_output(self, vario_score: torch.Tensor, squash: bool = True) -> torch.Tensor:
+    def _reduce_output(self, vario_score: torch.Tensor, squash: Union[bool, tuple] = True) -> torch.Tensor:
         """Reduce the output to a scalar."""
         if squash:
             if self.group_on_dim == -4:
-                vario_score = self.sum_function(vario_score, axis=(-3, -2, -1))
+                vario_score = self.sum_function(vario_score, dim=squash if isinstance(squash, tuple) else (-3, -2, -1))
             else:
-                vario_score = self.sum_function(vario_score, axis=(-2, -1))
-
+                dim = tuple( (dim if dim>self.group_on_dim else dim+1) for dim in dim if dim != self.group_on_dim ) if isinstance(squash, tuple) else (-2, -1)
+                vario_score = self.sum_function(vario_score, dim=dim)   
+            
         return self.avg_function(vario_score, axis=0)
 
     @cached_property
