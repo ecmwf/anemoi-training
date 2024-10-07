@@ -165,10 +165,13 @@ active tracing (active=6 steps), during this phase profiler traces and records d
 It's possible to also generate additional products/reports with the memory profiler, the memory timeline and the memory traces. Those take more time to generate and hence it is possible to choose if we want them (extra_plots: True) or not (extra_plots: False).  For details about those exact plots please check the section below about 'Memory Profiler Extras'. If using multiple GPUs, the output of the memory traces will be significantly larger. Since usually there are certain operations that just happen on rank 0, it might be we are just interested in the outputs coming from this device. It's possible then to generate traces and results just from rank 0 by settings trace_rank0_only to True. Note if we just have one device, then this flag doesn't make any difference, it's just relevant in case we have more than 1.
 
 **Note Memory Profiler - Patch**
+
 We identified a bug in the PytorchProfiler and we awaiting for the fix (see PR) to be included as part of the next Pytorch Release (so far it's just included in the nightly version). To avoid hitting the error, in the current AnemoiProfiler we have introduce a patch (see PatchedProfile class in the profilers.py script). This patch will be removed from the codebase as soon as we have a new Pytorch official release that include the fix
 
 **Memory Profiler Extras - Memory Traces & Memory Timeline**
+
 **Memory Timeline**
+
 PytorchProfiler automatically generates categories based on the graph of tensor operations recorded during profiling, it's possible to visualise this categories and its evolution across the execution using the 'export_memory_timeline' method. You can find an example of the memory timeline plot below (this is an example from https://pytorch.org/blog/understanding-gpu-memory-1/ ). The exported timeline plot is in html format. 
 
 .. figure:: ../images/profiler/example_memory_timeline.png
@@ -202,7 +205,9 @@ Since these traces files are complex and challenging to interpret, it's very use
 For more examples using HTA you can check https://github.com/facebookresearch/HolisticTraceAnalysis/tree/main/examples  and the package docs https://hta.readthedocs.io/en/latest/. Additionally we recommend this blog from Pytorch https://pytorch.org/blog/trace-analysis-for-masses/
 
 
-**Model Summary**
+Model Summary
+^^^^^^^^^^^^^^^^
+
 
 While the ModelSummary does not fall within the category of any report associated to computational performance, there is usually a connection between the size of the model and it's demand for computational resources. The ModelSummary provides a summary table breaking down the model architecture and the number of trainable parameters per layer. The functionality used to create this diagram relies on https://github.com/TylerYep/torchinfo, and for the exact details one can check the function get_model_summary defined as part of the BenchmarkProfiler class. Below you can find an example of the Model Summary produced. Note due to the size of the summary, the screenshot below is truncated, to see a complete summary check the model_summary_.txt file uploaded.
 
@@ -248,7 +253,7 @@ With the latest pytorch versions (Pytorch equal or higher than 2.1), the library
 
 
 .. code:: yaml
-  
+
    snapshot:
      enabled: True
      steps: 6
