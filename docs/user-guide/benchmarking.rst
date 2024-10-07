@@ -11,26 +11,26 @@ time, speed and hardware (memory, CPU/GPU usage) to profile training
 runs executed with anemoi-training. Apart from those reports, it is also
 possible to generate a model summary and a CUDA memory snapshot.
 
--  **Speed Report** - Report with metrics associated to the throughput at
-   training and validation time
+-  **Speed Report** - Report with metrics associated to the throughput
+   at training and validation time
 
--  **Time Report** - Report with metrics associated to the time it takes to
-   executes certain steps across the code
+-  **Time Report** - Report with metrics associated to the time it takes
+   to executes certain steps across the code
 
--  **Memory Report** - Report with metrics associated to GPU and CPU memory
-   allocation: focusing on listing those operations that are more
+-  **Memory Report** - Report with metrics associated to GPU and CPU
+   memory allocation: focusing on listing those operations that are more
    memory-intensive.
 
--  **System/hardware Report** - Report with aggregated metrics in terms of
-   GPU utilisation & memory usage, CPU usage (system), average disk
+-  **System/hardware Report** - Report with aggregated metrics in terms
+   of GPU utilisation & memory usage, CPU usage (system), average disk
    usage and total execution time
 
--  **Model Summary** - table summary with information regarding the layers
-   and parameters of the model.
+-  **Model Summary** - table summary with information regarding the
+   layers and parameters of the model.
 
 -  **Memory (GPU) Snapshot** - memory snapshot that records the state of
    allocated CUDA memory at any point in time, and optionally record the
-   history of allocation events that led up to that snapshot.​ 
+   history of allocation events that led up to that snapshot.​
 
 .. figure:: ../images/profiler/anemoi_profiler_high_level.png
    :alt: Schematic of the concept behind AnemoiProfiler
@@ -114,28 +114,29 @@ diagnostics folder) file under benchmark_profiler key.
 
 As we mentioned the benchmark profiler can generate different reports.
 For each report there is an entry in the config, that decide if we want
-or not to generate the report ( if ``enabled:True`` the report is generated,
-if enable:False, then the report is skipped). Some reports have
-additional keys:
+or not to generate the report ( if ``enabled:True`` the report is
+generated, if enable:False, then the report is skipped). Some reports
+have additional keys:
 
--  For the **time report**, we can also control the length/verbosity of the
-   report. If ``verbose: True``, the report will provide a more concise
-   set of actions while if False, the report will include the full list
-   of profiled actions. See Time Report section for more information
-
--  In the case of the **memory report**, aside from the summary statistics
-   the MemoryProfiler can also provide some additional insights that
-   include memory traces and memory timeline, those can be switched on
-   by settings extra_plots entry. Additional config entries: ``warmup``,
-   ``steps`` and ``track_rank0_only`` provide more control regarding the
-   generation of the memory timeline and traces and are explained in the
-   memory profiler section.
-
--  For the **(memory) snapshot**, we can also control the length/verbosity
-   of the report. If ``verbose: True``, the report will provide a more
+-  For the **time report**, we can also control the length/verbosity of
+   the report. If ``verbose: True``, the report will provide a more
    concise set of actions while if False, the report will include the
    full list of profiled actions. See Time Report section for more
    information
+
+-  In the case of the **memory report**, aside from the summary
+   statistics the MemoryProfiler can also provide some additional
+   insights that include memory traces and memory timeline, those can be
+   switched on by settings extra_plots entry. Additional config entries:
+   ``warmup``, ``steps`` and ``track_rank0_only`` provide more control
+   regarding the generation of the memory timeline and traces and are
+   explained in the memory profiler section.
+
+-  For the **(memory) snapshot**, we can also control the
+   length/verbosity of the report. If ``verbose: True``, the report will
+   provide a more concise set of actions while if False, the report will
+   include the full list of profiled actions. See Time Report section
+   for more information
 
 .. figure:: ../images/profiler/anemoi_profiler_config.png
    :alt: AnemoiProfiler Config Settings
@@ -144,12 +145,13 @@ additional keys:
 BenchmarkProfiler
 =================
 
-The ``BenchmarkProfiler`` is the object in charge of generating the memory
-report, time report, model summary and the system report. As the diagram
-indicates, this class inherits from Pytorch Lightning Base Profiler
-Class. Pytorch Lightning already provides built in functionality that
-can be easily integrated with the Pytorch Lightning Trainer to profile
-the code. In particular, it provides access to some profilers
+The ``BenchmarkProfiler`` is the object in charge of generating the
+memory report, time report, model summary and the system report. As the
+diagram indicates, this class inherits from Pytorch Lightning Base
+Profiler Class. Pytorch Lightning already provides built in
+functionality that can be easily integrated with the Pytorch Lightning
+Trainer to profile the code. In particular, it provides access to some
+profilers
 (https://pytorch-lightning.readthedocs.io/en/1.5.10/advanced/profiler.html)
 that track performance across the training cycle in terms of execution
 time (``Simple`` and ``Advanced`` Profilers) and in terms of CPU and GPU
@@ -167,8 +169,8 @@ Report as output.
 
 In the diagram, orange boxes mean output, dotted boxes refer to parent
 classes. And ``get_memory_profiler_df``, ``get_time_profiler_df``,
-``get_model_summary``, and ``get_system_profiler_df`` are the main function
-interfaces of the BenchmarkProfiler.
+``get_model_summary``, and ``get_system_profiler_df`` are the main
+function interfaces of the BenchmarkProfiler.
 
 Time Report
 -----------
