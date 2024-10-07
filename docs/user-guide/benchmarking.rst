@@ -548,7 +548,7 @@ provided a normalised dataloader throughput.
 .. figure:: ../images/profiler/anemoi_profiler_speedreport_diagram.png
    :alt: AnemoiProfiler's Speed Report Architecture
    :align: center
-   :width: 300px
+   :width: 200px
 
 Note, this is not just the ``training_step`` as we had recorded in the
 'Time Profiler Report' but it also includes all the callbacks/hooks that
@@ -563,6 +563,7 @@ Profiler``:
 .. figure:: ../images/profiler/anemoi_profiler_speed_report.png
    :alt: Example of AnemoiProfiler's Speed Report
    :align: center
+   :width: 300px
 
 ** CUDA and CPU total time as just time metrics (in seconds) computed by
 the Memory Profiler. For now we have decided to ingrate and display them
@@ -610,7 +611,7 @@ will star as soon as the training starts.
 .. figure:: ../images/profiler/memory_snapshot_diagram.png
    :alt: AnemoiProfiler's MemorySnapshotRecorder Architecture
    :align: center
-   :width: 300px
+   :width: 200px
 
 In the example below you can see how a ``memory snapshot`` for 6 steps
 looks:
@@ -618,7 +619,6 @@ looks:
 .. figure:: ../images/profiler/memory_snapshot_output.png
    :alt: Example of AnemoiProfiler's Memory Snapshot
    :align: center
-   :width: 300px
 
 ********************
  Mlflow Integration
