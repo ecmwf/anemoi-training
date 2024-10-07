@@ -87,7 +87,8 @@ The BenchmarkProfiler is the object in charge of generating the memory report, t
 In the diagram, orange boxes mean output, dotted boxes refer to parent classes. And 'get_memory_profiler_df', 'get_time_profiler_df', 'get_model_summary', and 'get_system_profiler_df' are the main function interfaces of the BenchmarkProfiler.  
 
 
-**Time Report**
+Time Report
+^^^^^^^^^^^^^^^^
 
 For the time report of our Benchmark Profiler we have decided to use the 'Simple Profiler'. This profiler provides support to profile both callbacks, DataHooks and ModelHooks in the training and validation loops. By default, the SimplerProfiler will record and output time estimates for any of the callbacks, DataHooks and ModelHooks that AnemoiTraining defines. To see this report, one just need to set in the config verbose:True. However, since this might quite extensive, there is an option to generate a shorter and more concise version of the time report with verbose:False, so that it focuses on the callbacks and hooks coming from 3 main categories:
 
@@ -113,7 +114,8 @@ Below you can find an example of the report the 'Time Profiler' issues after its
 Note the above example corresponder to the time report generated when verbose is set to False according to the config settings. If verbose is set to True, then there is no filtering applied to the actions profiled, and the time report will include many more entries.
 
 
-**System Report**
+System Report
+^^^^^^^^^^^^^^^^
 
 This report provides a table with summary metrics in terms of GPU utilisation & memory usage, CPU usage (system), average disk usage and total execution time. For now the System profiler relies on the metrics tracked by MlFlow which is the tool we use to track out ML-experiments. If you run the profiler without MlFlow, it would still be possible to generate all the other reports, but the code will indicate that the system report can't be generated.
 
