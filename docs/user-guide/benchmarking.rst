@@ -27,17 +27,17 @@ How it works
 Conceptual Diagram
 *************
 
-As described in the high-level idea section the AnemoiProfiler includes a series of features and report to help benchmark the model training performance. Anemoi-training implementation uses PyTorch Lightning as deep learning framework.  We have designed the AnemoiProfiler taking advantage of this functionality and building on top of it. AnemoiProfiler then inherits from AnemoiTrainer and generate the different reports via 3 main objects:
+As described in the high-level idea section the `AnemoiProfiler` includes a series of features and report to help benchmark the model training performance. Anemoi-training implementation uses PyTorch Lightning as deep learning framework.  We have designed the AnemoiProfiler taking advantage of this functionality and building on top of it. AnemoiProfiler then inherits from AnemoiTrainer and generate the different reports via 3 main objects:
 
-- BenchmarkProfiler
-- ProfilerProgressBar
-- MemorySnapshotRecorder
+- ``BenchmarkProfiler``
+- ``ProfilerProgressBar``
+- ``MemorySnapshotRecorder``
 
-Each of these objects is described in more details in the sections below. With the exception of the MemorySnapshotRecorder, all the above reports are defined as properties of the AnemoiProfiler. The Memory snapshot is abstracted as an additional callback that can be switched on/off through the config.
+Each of these objects is described in more details in the sections below. With the exception of the ``MemorySnapshotRecorder``, all the above reports are defined as properties of the AnemoiProfiler. The Memory snapshot is abstracted as an additional callback that can be switched on/off through the config.
 
-- Details about the definition of AnemoiProfiler can be found in 'src/anemoi/training/commands/profiler.py'
-- Details about the definition of the different classes used by the AnemoiProfiler can be found in: src/anemoi/training/diagnostics/profilers.py
-- Details about the definition of the memory snapshot recorder: src/anemoi/training/diagnostics/callbacks/__init__.py
+- Details about the definition of AnemoiProfiler can be found in ``src/anemoi/training/commands/profiler.py``
+- Details about the definition of the different classes used by the AnemoiProfiler can be found in: ``src/anemoi/training/diagnostics/profilers.py``
+- Details about the definition of the memory snapshot recorder: ``src/anemoi/training/diagnostics/callbacks/__init__.py``
 
 .. figure:: ../images/profiler/anemoi_profiler_architecture.png
    :alt: Schematic of the AnemoiProfiler architecture
@@ -46,7 +46,7 @@ Each of these objects is described in more details in the sections below. With t
 How to run it
 *************
 
-The profiler has been built on top of the work already run in anemoi-training. For that we have defined a new class 'AnemoiProfiler' that inherits from 'AnemoiTrainer' where we just add new features and methods relevant to the generation of the reports and activation of the profiling mode. Similarly to how we do 'anemoi-trainining train' to submit a new training job, we had added an new command to execute a profiler job, so we just need to do 'anemoi-training profiler'. 
+The profiler has been built on top of the work already run in anemoi-training. For that we have defined a new class ``AnemoiProfiler`` that inherits from ``AnemoiTrainer`` where we just add new features and methods relevant to the generation of the reports and activation of the profiling mode. Similarly to how we do `anemoi-trainining train` to submit a new training job, we had added an new command to execute a profiler job, so we just need to do ``anemoi-training profiler``. 
 
 Following the same concept as we have with the train command, the profiler command is also controlled via the definition of a config. For details about the config and the different fields required please refer to the Config section. The full command to then execute the profiler is:
 
@@ -54,7 +54,7 @@ Following the same concept as we have with the train command, the profiler comma
 
   anemoi-training profiler --config-name=config.yaml
 
-The profiler requires certain new packages to be installed, and hence has a specific section in the pyproject.toml (optional-dependencies.profile). Hence the first time you'd like to use you first need to make sure you have the dependencies installed by doing:
+The profiler requires certain new packages to be installed, and hence has a specific section in the `pyproject.toml` (`optional-dependencies.profile`). Hence the first time you'd like to use you first need to make sure you have the dependencies installed by doing:
 
 .. code:: bash
 
@@ -68,9 +68,9 @@ To control the execution of the anemoi benchmark profiler, we have to define the
 
 As we mentioned the benchmark profiler can generate different reports. For each report there is an entry in the config, that decide if we want or not to generate the report ( if enable:True the report is generated, if enable:False, then the report is skipped). Some reports have additional keys:
 
-- For the time report, we can also control the length/verbosity of the report. If verbose: True, the report will provide a more concise set of actions while if False, the report will include the full list of profiled actions. See Time Report section for more information
-- In the case of the memory report, aside from the summary statistics the MemoryProfiler can also provide some additional insights that include memory traces and memory timeline, those can be switched on by settings extra_plots entry. Additional config entries, warmup, steps and track_rank0_only provide more control regarding the generation of the memory timeline and traces and are explained in the memory profiler section.
-- For the (memory) snapshot, we can also control the length/verbosity of the report. If verbose: True, the report will provide a more concise set of actions while if False, the report will include the full list of profiled actions. See Time Report section for more information
+- For the time report, we can also control the length/verbosity of the report. If `verbose: True`, the report will provide a more concise set of actions while if False, the report will include the full list of profiled actions. See Time Report section for more information
+- In the case of the memory report, aside from the summary statistics the MemoryProfiler can also provide some additional insights that include memory traces and memory timeline, those can be switched on by settings extra_plots entry. Additional config entries, warmup, steps and `track_rank0_only` provide more control regarding the generation of the memory timeline and traces and are explained in the memory profiler section.
+- For the (memory) snapshot, we can also control the length/verbosity of the report. If `verbose: True`, the report will provide a more concise set of actions while if False, the report will include the full list of profiled actions. See Time Report section for more information
 
 .. figure:: ../images/profiler/anemoi_profiler_config.png
    :alt: AnemoiProfiler Config Settings
@@ -86,28 +86,28 @@ The BenchmarkProfiler is the object in charge of generating the memory report, t
    :alt: AnemoiProfiler Config Settings
    :align: center
 
-In the diagram, orange boxes mean output, dotted boxes refer to parent classes. And 'get_memory_profiler_df', 'get_time_profiler_df', 'get_model_summary', and 'get_system_profiler_df' are the main function interfaces of the BenchmarkProfiler.  
+In the diagram, orange boxes mean output, dotted boxes refer to parent classes. And `get_memory_profiler_df`, `get_time_profiler_df`, `get_model_summary`, and `get_system_profiler_df` are the main function interfaces of the BenchmarkProfiler.  
 
 
 Time Report
 ^^^^^^^^^^^^^^^^
 
-For the time report of our Benchmark Profiler we have decided to use the 'Simple Profiler'. This profiler provides support to profile both callbacks, DataHooks and ModelHooks in the training and validation loops. By default, the SimplerProfiler will record and output time estimates for any of the callbacks, DataHooks and ModelHooks that AnemoiTraining defines. To see this report, one just need to set in the config verbose:True. However, since this might quite extensive, there is an option to generate a shorter and more concise version of the time report with verbose:False, so that it focuses on the callbacks and hooks coming from 3 main categories:
+For the time report of our Benchmark Profiler we have decided to use the `Simple Profiler`. This profiler provides support to profile both callbacks, DataHooks and ModelHooks in the training and validation loops. By default, the SimplerProfiler will record and output time estimates for any of the callbacks, DataHooks and ModelHooks that AnemoiTraining defines. To see this report, one just need to set in the config verbose:True. However, since this might quite extensive, there is an option to generate a shorter and more concise version of the time report with verbose:False, so that it focuses on the callbacks and hooks coming from 3 main categories:
 
-- LightningDataModule (AnemoiDatasetDataModule)
-- LightningModule (GraphForecaster) -
-- ParallelisationStrategy (DDPGroupStrategy)
+- `LightningDataModule (AnemoiDatasetDataModule)`
+- `LightningModule (GraphForecaster)` 
+- `ParallelisationStrategy (DDPGroupStrategy)`
 
 Aside from these 3 categories, the report also includes:
 
 - the execution time for the training_epoch (and training_batch)
-    - run_training_epoch/run_training_batch → Time it takes to execute the 'training_step' per batch and per epoch ( check https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/fit_loop.py and https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/training_epoch_loop.py for reference)
+    - `run_training_epoch/run_training_batch` → Time it takes to execute the 'training_step' per batch and per epoch ( check https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/fit_loop.py and https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/training_epoch_loop.py for reference)
 - the time it takes the training dataloader and validation dataloader to fetch one batch:
-    - [_TrainingEpochLoop].train_dataloader_next   - https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/training_epoch_loop.py
-    - [_EvaluationLoop].val_next  -  https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/evaluation_loop.py 
+    - `[_TrainingEpochLoop].train_dataloader_next`   - https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/training_epoch_loop.py
+    - `[_EvaluationLoop].val_next`  -  https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/evaluation_loop.py 
 - For the callbacks, the SimplerProfiler provides time estimates of all the different steps defined for each class, so for simplicity the report just aggregate all those times into a single quantity (see below example of AnemoiCheckpoint Callback)
 
-Below you can find an example of the report the 'Time Profiler' issues after its execution. 
+Below you can find an example of the report the ``Time Profiler`` issues after its execution. 
 
 .. figure:: ../images/profiler/example_time_report.png
    :alt: AnemoiProfiler Time Report
@@ -121,11 +121,11 @@ System Report
 
 This report provides a table with summary metrics in terms of GPU utilisation & memory usage, CPU usage (system), average disk usage and total execution time. For now the System profiler relies on the metrics tracked by MlFlow which is the tool we use to track out ML-experiments. If you run the profiler without MlFlow, it would still be possible to generate all the other reports, but the code will indicate that the system report can't be generated.
 
-When running anemoi-training with MlFlow  activated, then this tool also track a set of system metrics and log them into the UI. MlFlow does this through the SystemMetricsMonitor (https://github.com/mlflow/mlflow/tree/master/mlflow/system_metrics).For all the metrics tracked with it and their exact  definition you can check their docs - https://mlflow.org/docs/latest/system-metrics/index.html
+When running anemoi-training with MlFlow  activated, then this tool also track a set of system metrics and log them into the UI. MlFlow does this through the `SystemMetricsMonitor<https://github.com/mlflow/mlflow/tree/master/mlflow/system_metric>`).For all the metrics tracked with it and their exact  definition you can check their docs - https://mlflow.org/docs/latest/system-metrics/index.html
 
 In this report we just simply take the average of those metrics, in the case of those associated to the GPUS we also include metrics per GPU device. 
 
-Below you can find an example of the System Report
+Below you can find an example of the ``System Report``
 
 .. figure:: ../images/profiler/example_system_report.png
    :alt: AnemoiProfiler System Report
@@ -137,7 +137,7 @@ Memory Profiler
 
 As we mentioned above, PTL provides functionality to profile the code. In particular one can use the PyTorch profiler to measure the time and memory consumption of the model’s operators (https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html). The report includes including GPU/CPU utilisation, memory usage, and execution time for different operations within the model. So far we have configured it, so that report includes the top 20 operators with the largest GPU utilisation (Note this can be adapted and we are keen to get feedback).
 
-Below you can find an example of the report generated by the 'Memory Profiler':
+Below you can find an example of the report generated by the ``Memory Profiler``:
 
 .. figure:: ../images/profiler/example_memory_report.png
    :alt: AnemoiProfiler Memory Report
@@ -160,8 +160,8 @@ To use this functionality, one just needs to specify the following entries in th
 
 The enabled flag will trigger the generation of the report showed above. Tracing all of the execution can be slow and result in very large trace files. To avoid this, we have some optional arguments that are passed to the profiler scheduler. 
 
-- warming up (warmup=2 steps), during this phase profiler starts tracing, but the results are discarded; this phase is used to discard the samples obtained by the profiler at the beginning of the trace since they are usually skewed by an extra overhead;
-- active tracing (active=6 steps), during this phase profiler traces and records data;
+- warming up (`warmup=2` steps), during this phase profiler starts tracing, but the results are discarded; this phase is used to discard the samples obtained by the profiler at the beginning of the trace since they are usually skewed by an extra overhead;
+- active tracing (`active=6` steps), during this phase profiler traces and records data;
 
 It's possible to also generate additional products/reports with the memory profiler, the memory timeline and the memory traces. Those take more time to generate and hence it is possible to choose if we want them (extra_plots: True) or not (extra_plots: False).  For details about those exact plots please check the section below about 'Memory Profiler Extras'. 
 If using multiple GPUs, the output of the memory traces will be significantly larger. Since usually there are certain operations that just happen on rank 0, it might be we are just interested in the outputs coming from this device. It's possible then to generate traces and results just from rank 0 by settings trace_rank0_only to True. Note if we just have one device, then this flag doesn't make any difference, it's just relevant in case we have more than 1.
@@ -174,7 +174,8 @@ We identified a bug in the PytorchProfiler and we awaiting for the fix (see PR) 
 
 **Memory Timeline**
 
-PytorchProfiler automatically generates categories based on the graph of tensor operations recorded during profiling, it's possible to visualise this categories and its evolution across the execution using the 'export_memory_timeline' method. You can find an example of the memory timeline plot below (this is an example from https://pytorch.org/blog/understanding-gpu-memory-1/ ). The exported timeline plot is in html format. 
+PytorchProfiler automatically generates categories based on the graph of tensor operations recorded during profiling, it's possible to visualise this categories and its evolution across the execution using the `export_memory_timeline` method. You can find an example of the memory timeline plot below (this is an example from https://pytorch.org/blog/understanding-gpu-memory-1/ ).
+The exported timeline plot is in html format. 
 
 .. figure:: ../images/profiler/example_memory_timeline.png
    :alt: Example of PytorchProfiler's Memory Timeline
@@ -183,14 +184,16 @@ PytorchProfiler automatically generates categories based on the graph of tensor 
 
 **Memory Traces**
 
-The PytorchProfiler enables recording of stack traces associated with memory allocations, and results can be outputted as a .json trace file.  The PyTorch Profiler leverages the Kineto library to collect GPU traces.  . Kineto is the subsystem within Profiler that interfaces with CUPTI. GPU kernels execute asynchronously, and GPU-side support is needed to create the trace. NVIDIA provides this visibility via the CUPTI library. 
+The PytorchProfiler enables recording of stack traces associated with memory allocations, and results can be outputted as a .json trace file.  The PyTorch Profiler leverages the `Kineto` library to collect GPU traces.  . Kineto is the subsystem within Profiler that interfaces with CUPTI. GPU kernels execute asynchronously, and GPU-side support is needed to create the trace. NVIDIA provides this visibility via the CUPTI library. 
 
-The Kineto project enables: (https://github.com/pytorch/kineto)
+The `Kineto<https://github.com/pytorch/kineto>` project enables: 
 
 - performance observability and diagnostics across common ML bottleneck components
 - actionable recommendations for common issues
 - integration of external system-level profiling tools
 - integration with popular visualization platforms and analysis pipelines
+
+
 Since these traces files are complex and challenging to interpret, it's very useful to have other supporting packages to analyse them. Holistic Trace Analysis (HTA), it's an open source performance analysis and visualization Python library for PyTorch users. Holistic Trace Analysis package, provides the following features:
 
 - Temporal Breakdown - Breakdown of time taken by the GPUs in terms of time spent in computation, communication, memory events, and idle time across all ranks.
@@ -288,7 +291,7 @@ Model Summary
 ^^^^^^^^^^^^^^^^
 
 
-While the ModelSummary does not fall within the category of any report associated to computational performance, there is usually a connection between the size of the model and it's demand for computational resources. The ModelSummary provides a summary table breaking down the model architecture and the number of trainable parameters per layer. The functionality used to create this diagram relies on https://github.com/TylerYep/torchinfo, and for the exact details one can check the function get_model_summary defined as part of the BenchmarkProfiler class. Below you can find an example of the Model Summary produced. Note due to the size of the summary, the screenshot below is truncated, to see a complete summary check the model_summary_.txt file uploaded.
+While the `ModelSummary` does not fall within the category of any report associated to computational performance, there is usually a connection between the size of the model and it's demand for computational resources. The `ModelSummary`  provides a summary table breaking down the model architecture and the number of trainable parameters per layer. The functionality used to create this diagram relies on https://github.com/TylerYep/torchinfo, and for the exact details one can check the function `get_model_summary`  defined as part of the `BenchmarkProfiler`  class. Below you can find an example of the Model Summary produced. Note due to the size of the summary, the screenshot below is truncated.
 
 .. figure:: ../images/profiler/example_model_summary.png
    :alt: Example of AnemoiProfiler's Model Summary - Part I
@@ -305,16 +308,16 @@ ProfilerProgressBar
 
 **Speed Report**
 
-While time and speed are related, we wanted to have a separate 'Speed Report' that would just focus on the metrics associated to training and validation loops throughput. To get those metrics we take advantage of the iterations per second reported by the TQDMProgress bar, that can be easily integrated when running a model with PTL. As indicated in the diagram below, the ProfilerProgressBar inherits from (TQDMProgress) and generates as main output the SpeedReport.
+While time and speed are related, we wanted to have a separate `Speed Report`  that would just focus on the metrics associated to training and validation loops throughput. To get those metrics we take advantage of the iterations per second reported by the TQDMProgress bar, that can be easily integrated when running a model with PTL. As indicated in the diagram below, the ProfilerProgressBar inherits from (TQDMProgress) and generates as main output the SpeedReport.
 
-The progress bar measures the  iteration per second (it/s) by computing the elapsed time at the start and end of each training and validation iteration** (where iteration in this case refers to number of batches in each epoch). The report provides an aggregated throughput by taking the average across all epochs. Since this metric can be sensitive to the number of samples per batch, the report includes a throughput_per_sample where we simply just normalised the aggregated metrics taking into account the batch size used for training and validation. Ib the case of the dataloader(s) throughput this refers to the performance of dataloader in terms of fetching and collating a batch, and again since this metric can be influence by the selected batch size, we also provided a normalised dataloader throughput.
+The progress bar measures the  iteration per second `it/s`  by computing the elapsed time at the start and end of each training and validation iteration** (where iteration in this case refers to number of batches in each epoch). The report provides an aggregated throughput by taking the average across all epochs. Since this metric can be sensitive to the number of samples per batch, the report includes a throughput_per_sample where we simply just normalised the aggregated metrics taking into account the batch size used for training and validation. Ib the case of the dataloader(s) throughput this refers to the performance of dataloader in terms of fetching and collating a batch, and again since this metric can be influence by the selected batch size, we also provided a normalised dataloader throughput.
 
 .. figure:: ../images/profiler/anemoi_profiler_speedreport_diagram.png
    :alt: AnemoiProfiler's Speed Report Architecture
    :align: center
    :width: 300px
 
-Note, this is not just the 'training_step' as we had recorded in the 'Time Profiler Report' but it also includes all the callbacks/hooks that are executed during each training/validation iteration. Since most of our callbacks are related to sanity and validation plots carried out during the validation, we should expect lower throughputs compared to training
+Note, this is not just the `training_step`  as we had recorded in the 'Time Profiler Report' but it also includes all the callbacks/hooks that are executed during each training/validation iteration. Since most of our callbacks are related to sanity and validation plots carried out during the validation, we should expect lower throughputs compared to training
 
 Below you can find an example of the report generated by the 'Speed Profiler': 
 
@@ -377,10 +380,10 @@ Speed report - train/validation rates
 
 When using MlFlow, there are two additional metrics that can be explored, 
 
-- training_rate - that's the iterations per second (it/s) recorded by the ProfilerProgressBar across the training cycle. While the SpeedReport provides the averaged throughput 'training_avg_throughput' the rate allows to see the evolution of the throughput in time.
-- validation_rate - that's the iterations per second (it/s) recorded by the ProfilerProgressBar across the valiadtion cycle. While the SpeedReport provides the averaged throughput 'validation_avg_throughput' the rate allows to see the evolution of the throughput in time.
+- ``training_rate`` - that's the iterations per second (it/s) recorded by the `ProfilerProgressBar`  across the training cycle. While the SpeedReport provides the averaged throughput `training_avg_throughput`  the rate allows to see the evolution of the throughput in time.
+- ``validation_rate`` - that's the iterations per second (it/s) recorded by the `ProfilerProgressBar`  across the validation cycle. While the SpeedReport provides the averaged throughput `validation_avg_throughput`  the rate allows to see the evolution of the throughput in time.
 
-Note - to get those metrics it's need to enable the SpeedProfiler. Below you can find an example of how the training_rate and validation_rate look like for two different runs. 
+Note - to get those metrics it's need to enable the `SpeedProfiler`. Below you can find an example of how the training_rate and validation_rate look like for two different runs. 
 
 
 .. figure:: ../images/profiler/anemoi_profiler_training_rates.png
