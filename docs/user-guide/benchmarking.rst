@@ -51,12 +51,12 @@ The profiler has been built on top of the work already run in anemoi-training. F
 Following the same concept as we have with the train command, the profiler command is also controlled via the definition of a config. For details about the config and the different fields required please refer to the Config section. The full command to then execute the profiler is:
 
 .. code:: bash
-   anemoi-training profiler --config-name=config.yaml
+  anemoi-training profiler --config-name=config.yaml
 
 The profiler requires certain new packages to be installed, and hence has a specific section in the pyproject.toml (optional-dependencies.profile). Hence the first time you'd like to use you first need to make sure you have the dependencies installed by doing:
 
 .. code:: bash
-   pip install -e .[profile]
+  pip install -e .[profile]
 
 
 Config
@@ -206,7 +206,7 @@ While the ModelSummary does not fall within the category of any report associate
    :alt: Example of AnemoiProfiler's Model Summary - Part I
    :align: center
 
-.. figure:: ../images/profiler/example_model_summary.png
+.. figure:: ../images/profiler/example_model_summary_2.png
    :alt: Example of AnemoiProfiler's Model Summary - Part II
    :align: center
 
@@ -224,8 +224,7 @@ The progress bar measures the  iteration per second (it/s) by computing the ela
 .. figure:: ../images/profiler/anemoi_profiler_speedreport_diagram.png
    :alt: AnemoiProfiler's Speed Report Architecture
    :align: center
-
-
+   :width: 300px
 
 Note, this is not just the 'training_step' as we had recorded in the 'Time Profiler Report' but it also includes all the callbacks/hooks that are executed during each training/validation iteration. Since most of our callbacks are related to sanity and validation plots carried out during the validation, we should expect lower throughputs compared to training
 
