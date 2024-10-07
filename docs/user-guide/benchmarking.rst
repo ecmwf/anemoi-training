@@ -51,11 +51,13 @@ The profiler has been built on top of the work already run in anemoi-training. F
 Following the same concept as we have with the train command, the profiler command is also controlled via the definition of a config. For details about the config and the different fields required please refer to the Config section. The full command to then execute the profiler is:
 
 .. code:: bash
+
   anemoi-training profiler --config-name=config.yaml
 
 The profiler requires certain new packages to be installed, and hence has a specific section in the pyproject.toml (optional-dependencies.profile). Hence the first time you'd like to use you first need to make sure you have the dependencies installed by doing:
 
 .. code:: bash
+
   pip install -e .[profile]
 
 
@@ -130,7 +132,8 @@ Below you can find an example of the System Report
    :align: center
 
 
-**Memory Profiler**
+Memory Profiler
+^^^^^^^^^^^^^^^^
 
 As we mentioned above, PTL provides functionality to profile the code. In particular one can use the PyTorch profiler to measure the time and memory consumption of the model’s operators (https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html). The report includes including GPU/CPU utilisation, memory usage, and execution time for different operations within the model. So far we have configured it, so that report includes the top 20 operators with the largest GPU utilisation (Note this can be adapted and we are keen to get feedback).
 
@@ -144,14 +147,15 @@ Note the difference between self cpu time and cpu time - operators can call othe
 
 To use this functionality, one just needs to specify the following entries in the config (Benchmark Profiler section):
 
-.. code:: yaml
-   memory:
-    enabled: True
-    steps: 6
-    warmup: 2
-    extra_plots: False
-    trace_rank0_only: True
 
+.. code:: yaml
+
+   memory:
+      enabled: True
+      steps: 6
+      warmup: 2
+      extra_plots: False
+      trace_rank0_only: True
 
 The enabled flag will trigger the generation of the report showed above. Tracing all of the execution can be slow and result in very large trace files. To avoid this, we have some optional arguments that are passed to the profiler scheduler. 
 
@@ -244,6 +248,7 @@ With the latest pytorch versions (Pytorch equal or higher than 2.1), the library
 
 
 .. code:: yaml
+  
    snapshot:
      enabled: True
      steps: 6
