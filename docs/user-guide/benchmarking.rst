@@ -11,28 +11,26 @@ time, speed and hardware (memory, CPU/GPU usage) to profile training
 runs executed with anemoi-training. Apart from those reports, it is also
 possible to generate a model summary and a CUDA memory snapshot.
 
--  Speed Report - Report with metrics associated to the throughput at
+-  **Speed Report** - Report with metrics associated to the throughput at
    training and validation time
 
--  Time Report - Report with metrics associated to the time it takes to
+-  **Time Report** - Report with metrics associated to the time it takes to
    executes certain steps across the code
 
--  Memory Report - Report with metrics associated to GPU and CPU memory
+-  **Memory Report** - Report with metrics associated to GPU and CPU memory
    allocation: focusing on listing those operations that are more
    memory-intensive.
 
--  System/hardware Report - Report with aggregated metrics in terms of
+-  **System/hardware Report** - Report with aggregated metrics in terms of
    GPU utilisation & memory usage, CPU usage (system), average disk
    usage and total execution time
 
--  Model Summary - table summary with information regarding the layers
+-  **Model Summary** - table summary with information regarding the layers
    and parameters of the model.
 
--  Memory (GPU) Snapshot - memory snapshot that records the state of
+-  **Memory (GPU) Snapshot** - memory snapshot that records the state of
    allocated CUDA memory at any point in time, and optionally record the
-   history of allocation events that led up to that snapshot.​ The
-   generated snapshots can then be drag and dropped onto the interactive
-   viewer hosted at pytorch.org/memory_viz to explore the snapshot.
+   history of allocation events that led up to that snapshot.​ 
 
 .. figure:: ../images/profiler/anemoi_profiler_high_level.png
    :alt: Schematic of the concept behind AnemoiProfiler
@@ -45,7 +43,7 @@ possible to generate a model summary and a CUDA memory snapshot.
 Conceptual Diagram
 ==================
 
-As described in the high-level idea section the `AnemoiProfiler`
+As described in the high-level idea section the ``AnemoiProfiler``
 includes a series of features and report to help benchmark the model
 training performance. Anemoi-training implementation uses PyTorch
 Lightning as deep learning framework. We have designed the
@@ -84,7 +82,7 @@ The profiler has been built on top of the work already run in
 anemoi-training. For that we have defined a new class ``AnemoiProfiler``
 that inherits from ``AnemoiTrainer`` where we just add new features and
 methods relevant to the generation of the reports and activation of the
-profiling mode. Similarly to how we do `anemoi-trainining train` to
+profiling mode. Similarly to how we do ``anemoi-trainining train`` to
 submit a new training job, we had added an new command to execute a
 profiler job, so we just need to do ``anemoi-training profiler``.
 
@@ -98,8 +96,8 @@ to the Config section. The full command to then execute the profiler is:
    anemoi-training profiler --config-name=config.yaml
 
 The profiler requires certain new packages to be installed, and hence
-has a specific section in the\ `pyproject.toml`
-(`optional-dependencies.profile`). Hence the first time you'd like to
+has a specific section in the\ ``pyproject.toml``
+(``optional-dependencies.profile``). Hence the first time you'd like to
 use you first need to make sure you have the dependencies installed by
 doing:
 
@@ -116,25 +114,25 @@ diagnostics folder) file under benchmark_profiler key.
 
 As we mentioned the benchmark profiler can generate different reports.
 For each report there is an entry in the config, that decide if we want
-or not to generate the report ( if enable:True the report is generated,
+or not to generate the report ( if ``enabled:True`` the report is generated,
 if enable:False, then the report is skipped). Some reports have
 additional keys:
 
--  For the time report, we can also control the length/verbosity of the
-   report. If `verbose: True`, the report will provide a more concise
+-  For the **time report**, we can also control the length/verbosity of the
+   report. If ``verbose: True``, the report will provide a more concise
    set of actions while if False, the report will include the full list
    of profiled actions. See Time Report section for more information
 
--  In the case of the memory report, aside from the summary statistics
+-  In the case of the **memory report**, aside from the summary statistics
    the MemoryProfiler can also provide some additional insights that
    include memory traces and memory timeline, those can be switched on
-   by settings extra_plots entry. Additional config entries, warmup,
-   steps and `track_rank0_only` provide more control regarding the
+   by settings extra_plots entry. Additional config entries: ``warmup``,
+   ``steps`` and ``track_rank0_only`` provide more control regarding the
    generation of the memory timeline and traces and are explained in the
    memory profiler section.
 
--  For the (memory) snapshot, we can also control the length/verbosity
-   of the report. If `verbose: True`, the report will provide a more
+-  For the **(memory) snapshot**, we can also control the length/verbosity
+   of the report. If ``verbose: True``, the report will provide a more
    concise set of actions while if False, the report will include the
    full list of profiled actions. See Time Report section for more
    information
@@ -146,7 +144,7 @@ additional keys:
 BenchmarkProfiler
 =================
 
-The BenchmarkProfiler is the object in charge of generating the memory
+The ``BenchmarkProfiler`` is the object in charge of generating the memory
 report, time report, model summary and the system report. As the diagram
 indicates, this class inherits from Pytorch Lightning Base Profiler
 Class. Pytorch Lightning already provides built in functionality that
@@ -154,8 +152,8 @@ can be easily integrated with the Pytorch Lightning Trainer to profile
 the code. In particular, it provides access to some profilers
 (https://pytorch-lightning.readthedocs.io/en/1.5.10/advanced/profiler.html)
 that track performance across the training cycle in terms of execution
-time ('Simple' and 'Advanced' Profilers) and in terms of CPU and GPU
-usage ('Pytorch Profiler'). We have designed the Benchmark Profiler
+time (``Simple`` and ``Advanced`` Profilers) and in terms of CPU and GPU
+usage (``Pytorch Profiler``). We have designed the Benchmark Profiler
 taking advantage of that functionality and have extended it so it also
 provides a system report and model summary. The diagram below
 illustrates this. As can be seen the MemoryProfiler inherits from the
@@ -168,8 +166,8 @@ Report as output.
    :align: center
 
 In the diagram, orange boxes mean output, dotted boxes refer to parent
-classes. And `get_memory_profiler_df`, `get_time_profiler_df`,
-`get_model_summary`, and `get_system_profiler_df` are the main function
+classes. And ``get_memory_profiler_df``, ``get_time_profiler_df``,
+``get_model_summary``, and ``get_system_profiler_df`` are the main function
 interfaces of the BenchmarkProfiler.
 
 Time Report
