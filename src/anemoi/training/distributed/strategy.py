@@ -24,19 +24,26 @@ LOGGER = logging.getLogger(__name__)
 class DDPGroupStrategy(DDPStrategy):
     """Distributed Data Parallel strategy with group communication."""
 
-    def __init__(self, num_gpus_per_model: int, **kwargs: dict) -> None:
+    def __init__(
+        self, 
+        num_gpus_per_model: int,
+        read_frequency: int,
+        **kwargs: dict) -> None:
         """Initialize the distributed strategy.
 
         Parameters
         ----------
         num_gpus_per_model : int
             Number of GPUs per model to shard over.
+        read_frequency : int
+            Frequency of dataloader readers per model group.
         **kwargs : dict
             Additional keyword arguments.
 
         """
         super().__init__(**kwargs)
         self.model_comm_group_size = num_gpus_per_model
+        self.read_frequency = read_frequency
 
     def setup(self, trainer: pl.Trainer) -> None:
         assert self.accelerator is not None, "Accelerator is not initialized for distributed strategy"
@@ -69,6 +76,35 @@ class DDPGroupStrategy(DDPStrategy):
             model_comm_group_id,
             model_comm_group_rank,
             str(model_comm_group_ranks[model_comm_group_id]),
+        )
+
+        # set up reader groups by further splitting model_comm_group_ranks with read_frequency
+        assert self.model_comm_group_size % self.read_frequency == 0, (
+            f"Number of GPUs per model ({self.model_comm_group_size}) must be divisible by the read frequency "
+            f"({self.read_frequency})."
+        )
+
+        reader_group_ranks = np.array([
+            np.split(group_ranks, int(self.model_comm_group_size / self.read_frequency))
+            for group_ranks in model_comm_group_ranks
+        ]) # Shape: (num_model_comm_groups, model_comm_grp_size/read_freq, read_freq)
+        reader_groups = [
+            [torch.distributed.new_group(x) for x in group_ranks]
+            for group_ranks in reader_group_ranks
+        ] 
+        reader_group_id = model_comm_group_rank // self.read_frequency
+        reader_group_rank = model_comm_group_rank % self.read_frequency
+        # get all reader groups of the current model group
+        model_reader_groups = reader_groups[model_comm_group_id]
+        self.model.set_reader_groups(model_reader_groups)
+
+        LOGGER.debug(
+            "Rank %d reader group is %s, model_comm_group number %d, local reader group number %d, local reader group rank %d",
+            self.global_rank,
+            str(reader_group_ranks[model_comm_group_id, reader_group_id]),
+            model_comm_group_id,
+            reader_group_id,
+            reader_group_rank, 
         )
 
         # register hooks for correct gradient reduction

@@ -110,6 +110,7 @@ class GraphForecaster(pl.LightningModule):
         self.use_zero_optimizer = config.training.zero_optimizer
 
         self.model_comm_group = None
+        self.reader_groups = None
 
         LOGGER.debug("Rollout window length: %d", self.rollout)
         LOGGER.debug("Rollout increase every : %d epochs", self.rollout_epoch_increment)
@@ -122,6 +123,21 @@ class GraphForecaster(pl.LightningModule):
         self.model_comm_group_rank = int(os.environ.get("SLURM_PROCID", "0")) % config.hardware.num_gpus_per_model
         self.model_comm_num_groups = math.ceil(
             config.hardware.num_gpus_per_node * config.hardware.num_nodes / config.hardware.num_gpus_per_model,
+        )
+
+        self.reader_group_size = config.dataloader.read_frequency
+        self.reader_group_id = self.model_comm_group_rank // self.reader_group_size
+        self.reader_group_rank = self.model_comm_group_rank % self.reader_group_size
+        # root rank (global rank) of the reader group
+        self.reader_group_root = (int(os.environ.get("SLURM_PROCID", "0")) // self.reader_group_size) * self.reader_group_size
+
+        LOGGER.debug(
+            f"GraphForecaster: "
+            f"Rank {os.environ.get('SLURM_PROCID', '0')} model_comm_group_id: {self.model_comm_group_id}"
+            f" model_comm_group_rank: {self.model_comm_group_rank}" 
+            f" reader_group_id: {self.reader_group_id}"
+            f" reader_group_rank: {self.reader_group_rank}"   
+            f" reader_group_root: {self.reader_group_root}",
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -187,6 +203,10 @@ class GraphForecaster(pl.LightningModule):
         LOGGER.debug("set_model_comm_group: %s", model_comm_group)
         self.model_comm_group = model_comm_group
 
+    def set_reader_groups(self, reader_groups: list[ProcessGroup]) -> None:
+        LOGGER.debug("set_reader_groups: %s", reader_groups)
+        self.reader_groups = reader_groups
+
     def advance_input(
         self,
         x: torch.Tensor,
@@ -220,16 +240,26 @@ class GraphForecaster(pl.LightningModule):
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         del batch_idx
 
+        # TODO: change to reader group
         # preprocess batch and broadcast from gpu0 to model comm group
-        if self.model_comm_group_rank == 0: # note that this defaults to 0 if model_comm_group is None
+        if self.reader_group_rank == 0: 
             # for validation not normalized in-place because remappers cannot be applied in-place
             batch = self.model.pre_processors(batch, in_place=not validation_mode)
         else: 
             shape = (batch.shape[0],) + tuple(batch[0].tolist())
             batch = torch.zeros(shape, device=self.device)
 
-        if self.model_comm_group is not None:
-            torch.distributed.broadcast(batch, src=0, group=self.model_comm_group)
+        if self.reader_groups is not None and self.reader_group_size > 1:
+            if self.reader_group_rank == 0:
+                LOGGER.debug(f"Rank {int(os.environ.get('SLURM_PROCID', '0'))} broadcasting batch")
+            else: 
+                LOGGER.debug(f"Rank {int(os.environ.get('SLURM_PROCID', '0'))} waiting for broadcast from rank {self.reader_group_root}")
+
+            torch.distributed.broadcast(batch, src=self.reader_group_root, group=self.reader_groups[self.reader_group_id])
+
+            # Synchronize after the broadcast to ensure that model_comm_group and reader_group don't overlap
+            # see https://pytorch.org/docs/stable/distributed.html#torch.distributed.new_group WARNING
+            torch.distributed.barrier(group=self.reader_groups[self.reader_group_id])
 
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}

@@ -308,6 +308,7 @@ class AnemoiTrainer:
         """Training strategy."""
         return DDPGroupStrategy(
             self.config.hardware.num_gpus_per_model,
+            self.config.dataloader.read_frequency,
             static_graph=not self.config.training.accum_grad_batches > 1,
         )
 

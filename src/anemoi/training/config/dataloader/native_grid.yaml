@@ -1,5 +1,7 @@
 prefetch_factor: 2
 
+read_frequency: 1
+
 num_workers:
   training: 8
   validation: 8
