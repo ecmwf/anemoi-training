@@ -77,7 +77,8 @@ As we mentioned the benchmark profiler can generate different reports. For each 
 
 BenchmarkProfiler
 *************
-The BenchmrkProfiler is the object in charge of generating the memory report, time report, model summary and the system report. As the diagram indicates, this class inherits from Pytorch Lightning Base Profiler Class. Pytorch Lightning already provides built in functionality that can be easily integrated with the Pytorch Lightning Trainer to profile the code. In particular, it provides access to some profilers (https://pytorch-lightning.readthedocs.io/en/1.5.10/advanced/profiler.html) that track performance across the training cycle in terms of execution time ('Simple' and 'Advanced' Profilers) and in terms of CPU and GPU usage ('Pytorch Profiler'). We have designed the Benchmark Profiler taking advantage of that functionality and have extended it so it also provides a system report and model summary. The diagram below illustrates this. As can be seen the MemoryProfiler inherits from the PytorchProfiler and generates the MemoryReport as main output, and the TimeProfiler inherits from the SimlerProfiler and generates the Time Report as output.
+
+The BenchmarkProfiler is the object in charge of generating the memory report, time report, model summary and the system report. As the diagram indicates, this class inherits from Pytorch Lightning Base Profiler Class. Pytorch Lightning already provides built in functionality that can be easily integrated with the Pytorch Lightning Trainer to profile the code. In particular, it provides access to some profilers (https://pytorch-lightning.readthedocs.io/en/1.5.10/advanced/profiler.html) that track performance across the training cycle in terms of execution time ('Simple' and 'Advanced' Profilers) and in terms of CPU and GPU usage ('Pytorch Profiler'). We have designed the Benchmark Profiler taking advantage of that functionality and have extended it so it also provides a system report and model summary. The diagram below illustrates this. As can be seen the MemoryProfiler inherits from the PytorchProfiler and generates the MemoryReport as main output, and the TimeProfiler inherits from the SimlerProfiler and generates the Time Report as output.
 
 .. figure:: ../images/profiler/anemoi_profiler_benchmark_profiler.png
    :alt: AnemoiProfiler Config Settings
@@ -85,7 +86,9 @@ The BenchmrkProfiler is the object in charge of generating the memory report, ti
 
 In the diagram, orange boxes mean output, dotted boxes refer to parent classes. And 'get_memory_profiler_df', 'get_time_profiler_df', 'get_model_summary', and 'get_system_profiler_df' are the main function interfaces of the BenchmarkProfiler.  
 
+
 **Time Report**
+
 For the time report of our Benchmark Profiler we have decided to use the 'Simple Profiler'. This profiler provides support to profile both callbacks, DataHooks and ModelHooks in the training and validation loops. By default, the SimplerProfiler will record and output time estimates for any of the callbacks, DataHooks and ModelHooks that AnemoiTraining defines. To see this report, one just need to set in the config verbose:True. However, since this might quite extensive, there is an option to generate a shorter and more concise version of the time report with verbose:False, so that it focuses on the callbacks and hooks coming from 3 main categories:
 
 - LightningDataModule (AnemoiDatasetDataModule)
@@ -95,20 +98,23 @@ For the time report of our Benchmark Profiler we have decided to use the 'Simple
 Aside from these 3 categories, the report also includes:
 
 - the execution time for the training_epoch (and training_batch)
-  - run_training_epoch/run_training_batch → Time it takes to execute the 'training_step' per batch and per epoch ( check https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/fit_loop.py and https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/training_epoch_loop.py for reference)
+    - run_training_epoch/run_training_batch → Time it takes to execute the 'training_step' per batch and per epoch ( check https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/fit_loop.py and https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/training_epoch_loop.py for reference)
 - the time it takes the training dataloader and validation dataloader to fetch one batch:
-  - [_TrainingEpochLoop].train_dataloader_next   - https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/training_epoch_loop.py
-  - [_EvaluationLoop].val_next  -  https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/evaluation_loop.py 
+    - [_TrainingEpochLoop].train_dataloader_next   - https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/training_epoch_loop.py
+    - [_EvaluationLoop].val_next  -  https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/loops/evaluation_loop.py 
 - For the callbacks, the SimplerProfiler provides time estimates of all the different steps defined for each class, so for simplicity the report just aggregate all those times into a single quantity (see below example of AnemoiCheckpoint Callback)
 
 Below you can find an example of the report the 'Time Profiler' issues after its execution. 
+
 .. figure:: ../images/profiler/example_time_report.png
    :alt: AnemoiProfiler Time Report
    :align: center
 
 Note the above example corresponder to the time report generated when verbose is set to False according to the config settings. If verbose is set to True, then there is no filtering applied to the actions profiled, and the time report will include many more entries.
 
+
 **System Report**
+
 This report provides a table with summary metrics in terms of GPU utilisation & memory usage, CPU usage (system), average disk usage and total execution time. For now the System profiler relies on the metrics tracked by MlFlow which is the tool we use to track out ML-experiments. If you run the profiler without MlFlow, it would still be possible to generate all the other reports, but the code will indicate that the system report can't be generated.
 
 When running anemoi-training with MlFlow  activated, then this tool also track a set of system metrics and log them into the UI. MlFlow does this through the SystemMetricsMonitor (https://github.com/mlflow/mlflow/tree/master/mlflow/system_metrics).For all the metrics tracked with it and their exact  definition you can check their docs - https://mlflow.org/docs/latest/system-metrics/index.html
@@ -120,6 +126,7 @@ Below you can find an example of the System Report
 .. figure:: ../images/profiler/example_system_report.png
    :alt: AnemoiProfiler System Report
    :align: center
+
 
 **Memory Profiler**
 
@@ -201,7 +208,8 @@ While the ModelSummary does not fall within the category of any report associate
    :alt: Example of AnemoiProfiler's Model Summary - Part II
    :align: center
 
-*************
+
+
 ProfilerProgressBar
 *************
 
@@ -227,7 +235,7 @@ Below you can find an example of the report generated by the 'Speed Profiler': 
 
 ** CUDA and CPU total time as just time metrics (in seconds) computed by the Memory Profiler. For now we have decided to ingrate and display them as part of the Speed Report, but we can revisit that decision based on user feedback
 
-*************
+
 MemorySnapshotRecorder
 *************
 
@@ -243,6 +251,7 @@ With the latest pytorch versions (Pytorch equal or higher than 2.1), the library
 
 
 If we don't want to generate a snapshot we simply set the enabled flag to False. If we enable the snapshot recorder, then we need to define the number of steps we want to record. Note a bigger number of steps will generate a heavier file that then might take longer to render in the website (pytorch.org/memory_viz). The Callback so far is defined to start tracking the CUDA memory at the start of the training batch, when the global step matches the number of warmup steps and end at the end of the training batch when the global step matches the number of total steps (steps+warmup) defined. Note if warmup is null then no warmup steps are considered, and the recording will star as soon as the training starts.  
+
 .. figure:: ../images/profiler/memory_snapshot_diagram.png
    :alt: AnemoiProfiler's MemorySnapshotRecorder Architecture
    :align: center
@@ -269,7 +278,10 @@ One of the advantages of logging the reports as jsons, it's that those files can
    :alt: AnemoiProfiler - Example Table Evaluation
    :align: center
 
-**Speed report - train/validation rates**
+
+
+Speed report - train/validation rates
+*************
 
 When using MlFlow, there are two additional metrics that can be explored, 
 
@@ -288,10 +300,12 @@ Note - to get those metrics it's need to enable the SpeedProfiler. Below you can
    :alt: Example of AnemoiProfiler's Validation Rates
    :align: center
 
+*************
 Limitations & Improvements
 *************
 
 **Limitations​**
+
 - General challenge for AI code benchmarking results → Noise coming from hardware and AI stochastic behaviour​
 - SpeedReport → Robustness of the metrics (val/train rates and throughput) ​​
 - TimeProfiler → Ability to profile just part of the code (so far the SimplerProfiler just records 'pre-defined' hardcoded actions according to the PROFILER_ACTIONS defined in the codebase. And as mentioned above those actions need to be a DataHook, ModelHook or Callback. ​
