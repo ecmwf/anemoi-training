@@ -237,9 +237,9 @@ system report can't be generated.
 When running anemoi-training with MlFlow activated, then this tool also
 track a set of system metrics and log them into the UI. MlFlow does this
 through the `SystemMetricsMonitor
-<https://github.com/mlflow/mlflow/tree/master/mlflow/system_metric>`_.For
-all the metrics tracked with it and their exact definition you can check
-their docs - https://mlflow.org/docs/latest/system-metrics/index.html
+<https://github.com/mlflow/mlflow/tree/master/mlflow/system_metric>`_.
+For more information you can check their docs -
+https://mlflow.org/docs/latest/system-metrics/index.html
 
 In this report we just simply take the average of those metrics, in the
 case of those associated to the GPUS we also include metrics per GPU
@@ -356,12 +356,12 @@ CUPTI library.
 
 The `Kineto <https://github.com/pytorch/kineto>`_ project enables:
 
--  performance observability and diagnostics across common ML bottleneck
-   components
--  actionable recommendations for common issues
--  integration of external system-level profiling tools
--  integration with popular visualization platforms and analysis
-   pipelines
+-  Performance observability and diagnostics across common ML bottleneck
+   components.
+-  Actionable recommendations for common issues.
+-  Integration of external system-level profiling tools.
+-  Integration with popular visualization platforms and analysis
+   pipelines.
 
 Since these traces files are complex and challenging to interpret, it's
 very useful to have other supporting packages to analyse them. Holistic
