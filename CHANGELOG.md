@@ -11,6 +11,8 @@ Keep it human-readable, your future self will thank you!
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.1.0...HEAD)
 
 ### Added
+- Codeowners file (#56)
+- Changelog merge strategy (#56)
 
 #### Miscellaneous
 
@@ -20,8 +22,21 @@ Keep it human-readable, your future self will thank you!
 
 - Enable the callback for plotting a histogram for variables containing NaNs
 - Enforce same binning for histograms comparing true data to predicted data
-- Fix: Inference checkpoints are now saved according the frequency settings defined in the config
+- Fix: Inference checkpoints are now saved according the frequency settings defined in the config [#37](https://github.com/ecmwf/anemoi-training/pull/37)
 - Feature: Add configurable models [#50](https://github.com/ecmwf/anemoi-training/pulls/50)
+- Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
+- Long Rollout Plots
+
+### Fixed
+
+- Fix `TypeError` raised when trying to JSON serialise `datetime.timedelta` object - [#43](https://github.com/ecmwf/anemoi-training/pull/43)
+- Bugfixes for CI (#56)
+- Fix `mlflow` subcommand on python 3.9 [#62](https://github.com/ecmwf/anemoi-training/pull/62)
+- Show correct subcommand in MLFlow - Addresses [#39](https://github.com/ecmwf/anemoi-training/issues/39) in [#61](https://github.com/ecmwf/anemoi-training/pull/61)
+
+### Changed
+
+- Updated configuration examples in documentation and corrected links - [#46](https://github.com/ecmwf/anemoi-training/pull/46)
 
 ## [0.1.0 - Anemoi training - First release](https://github.com/ecmwf/anemoi-training/releases/tag/0.1.0) - 2024-08-16
 
@@ -35,7 +50,6 @@ Keep it human-readable, your future self will thank you!
 - Subcommand for checkpoint handling
 
 #### Functionality
-
 - Searchpaths for Hydra configs, to enable configs in CWD, `ANEMOI_CONFIG_PATH` env, and `.config/anemoi/training` in addition to package defaults
 - MlFlow token authentication
 - Configurable pressure level scaling
