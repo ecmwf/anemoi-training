@@ -275,6 +275,7 @@ In the example below you can see how a memory snapshot for 6 steps looks:
 .. figure:: ../images/profiler/memory_snapshot_output.png
    :alt: Example of AnemoiProfiler's Memory Snapshot
    :align: center
+   :width: 300px
 
 *************
 Mlflow Integration
@@ -318,7 +319,8 @@ Note - to get those metrics it's need to enable the SpeedProfiler. Below you can
 Limitations & Improvements
 *************
 
-**Limitations​**
+Limitations​
+*************
 
 - General challenge for AI code benchmarking results → Noise coming from hardware and AI stochastic behaviour​
 - SpeedReport → Robustness of the metrics (val/train rates and throughput) ​​
@@ -328,7 +330,8 @@ Limitations & Improvements
 - SpeedReport → Train/val rates categorisation
 
 
-**Improvements​​**
+Improvements​​
+*************
 
 - https://pytorch.org/tutorials/recipes/recipes/benchmark.html​
 - Decorator style to do partial profiling - https://github.com/pythonprofilers/memory_profiler or https://github.com/pyutils/line_profiler
