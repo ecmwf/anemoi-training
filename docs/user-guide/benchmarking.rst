@@ -204,7 +204,84 @@ Since these traces files are complex and challenging to interpret, it's very use
 - Trace Comparison - A trace comparison tool to identify and visualize the differences between traces.
 - CUPTI Counter Analysis - An experimental API to get GPU performance counters. By attributing performance measurements from kernels to PyTorch operators roofline analysis can be performed and kernels can be optimized.
 
+
+To be able to load the traces and explore them using HTA, one can set up a jupyter notebook and run:
+
+
+.. code-block:: python
+
+   from hta.trace_analysis import TraceAnalysis
+   from pathlib import Path
+   from hydra import initialize, compose
+   from omegaconf import OmegaConf
+ 
+   base_path=Path.cwd().parent
+   with initialize(version_base=None, config_path="./"):
+       cfg = compose(config_name='config.yaml')
+       OmegaConf.resolve(cfg)
+  
+ 
+   # Run anemoi-training profiler to generate the traces and get the run_id
+   run_id = 'b0cc5f6fa6c0476aa1264ad7aacafb4d/' 
+   tracepath = cfg.hardware.paths.profiler + run_id
+   analyzer = TraceAnalysis(trace_dir = tracepath)
+
+
+   # Temporal Breakdown
+   time_df=analyzer.get_temporal_breakdown()
+
+The function returns a dataframe containing the temporal breakdown for each rank. See figure below.
+
+.. figure:: ../images/profiler/temporal_breakdown.png
+   :alt: Temporal Breakdown HTA Example
+   :align: center
+
+
+The idle time breakdown can be generated as follows:
+
+.. code-block:: python
+
+   # Idle Time Breakdown
+   idle_time_df_r0 = analyzer.get_idle_time_breakdown()
+
+
+The function returns a dataframe containing the idle breakdown for each rank. See figure below.
+
+.. figure:: ../images/profiler/idle_time_breakdown.png
+   :alt: Idle Time Breakdown HTA Example
+   :align: center
+
+Additionally, we can also look at kernel breakdown feature which breakds down the time spent for each kernel type i.e. communication (COMM), computation (COMP), and memory (MEM) across all ranks and presents the proportion of time spent in each category. 
+The percentage of time spent in each category as a pie chart.
+
+.. code-block:: python
+
+   # Kernel Breakdown
+   # NCCL changed their kernel naming convention so HTA v2.0 doesnt recognise communication kernels
+   # This can be fixed by editing one line of hta/utils/util.py, see https://github.com/facebookresearch/HolisticTraceAnalysis/pull/123
+    
+   # see https://github.com/facebookresearch/HolisticTraceAnalysis/blob/main/examples/kernel_breakdown_demo.ipynb
+   kernel_type_metrics_df, kernel_metrics_df = analyzer.get_gpu_kernel_breakdown(num_kernels=5,include_memory_kernels=True,visualize=True)
+
+The first dataframe returned by the function contains the raw values used to generate the Pie chart. The second dataframe returned by get_gpu_kernel_breakdown contains duration summary statistics for each kernel. In particular, this includes the count, min, max, average, standard deviation, sum and kernel type for each kernel on each rank.
+
+.. figure:: ../images/profiler/kernel_breakdown_dfs.png
+   :alt: Kernel Breakdown HTA - Dataframes Example
+   :align: center
+
+
+Using this data HTA creates many visualizations to identify performance bottlenecks.
+- Pie charts of the top kernels for each kernel type for each rank.
+- Bar graphs of the average duration across all ranks for each of the top kernels and for each kernel type.
+
+.. figure:: ../images/profiler/kernel_breakdown_plots.png
+   :alt: Kernel Breakdown HTA - Plots Example
+   :align: center
+
+
 For more examples using HTA you can check https://github.com/facebookresearch/HolisticTraceAnalysis/tree/main/examples  and the package docs https://hta.readthedocs.io/en/latest/. Additionally we recommend this blog from Pytorch https://pytorch.org/blog/trace-analysis-for-masses/
+
+
 
 
 Model Summary
