@@ -142,6 +142,16 @@ have additional keys:
    :alt: AnemoiProfiler Config Settings
    :align: center
 
+**Note** - Anemoi Training also provides some functionality for quick
+troubleshooting using just the PytorchProfiler. To know more about this
+you can check the Troubleshooting section. This functionality is
+activated by setting ``profiler:True`` in the diagnostics config. **When
+using the benchmark profiler it's not necessary to set this flag**,
+since the benchmark profiler will automatically activate the
+PytorchProfiler when enabling the memory profiler. When running
+``anemoi-training profiler`` it's then **recommended** to set
+``profiler:False`` in the diagnostics config to avoid any conflicts.
+
 BenchmarkProfiler
 =================
 
