@@ -144,3 +144,4 @@ def get_monitored_metric_name(monitored_metrics, target_metric_name):
         ), f"Default monitor value not found in monitored metrics: {monitored_metrics}"
 
     return target_metric_name
+

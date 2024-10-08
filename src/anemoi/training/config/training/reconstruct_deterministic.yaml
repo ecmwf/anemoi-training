@@ -1,5 +1,5 @@
 <<: *{training.default}
 
 lightning_module:
-  _target_: anemoi.training.train.reconstructor.ReconstructionLightningModuleDeterministic
+  _target_: anemoi.training.lightning_module.reconstruction.ReconstructionLightningModuleDeterministic
 

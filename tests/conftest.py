@@ -14,7 +14,7 @@ from hydra import initialize
 from omegaconf import DictConfig
 import sys
 
-from anemoi.training.data.datamodule import AnemoiBaseDataModule
+from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
 
 
 @pytest.fixture
@@ -26,11 +26,11 @@ def config(request: SubRequest) -> DictConfig:
 
 
 @pytest.fixture
-def datamodule() -> AnemoiBaseDataModule:
+def datamodule() -> AnemoiDatasetsDataModule:
     with initialize(version_base=None, config_path="../src/anemoi/training/config"):
         # config is relative to a module
         cfg = compose(config_name="config")
-    return AnemoiBaseDataModule(cfg)
+    return AnemoiDatasetsDataModule(cfg)
 
 # enable_stop_on_exceptions if the debugger is running during a test
 def is_debugging():

@@ -48,25 +48,25 @@ training:
   start: null
   end: 2020
   frequency: ${data.frequency}
-  drop:  []
+  drop:  ['2d', '100u', '100v', 'cp', 'hcc', 'lcc', 'mcc', 'msl', 'skt', 'sp', 'tcc', 'tcw', 'strd', 'ssrd']
 
 validation:
   dataset: ${dataloader.dataset}
   start: 2021
   end: 2021
   frequency: ${data.frequency}
-  drop:  []
+  drop:  ['2d', '100u', '100v', 'cp', 'hcc', 'lcc', 'mcc', 'msl', 'skt', 'sp', 'tcc', 'tcw', 'strd', 'ssrd']
 
 test:
   dataset: ${dataloader.dataset}
   start: 2022
   end: null
   frequency: ${data.frequency}
-  drop:  []
+  drop:  ['2d', '100u', '100v', 'cp', 'hcc', 'lcc', 'mcc', 'msl', 'skt', 'sp', 'tcc', 'tcw', 'strd', 'ssrd']
 
 predict:
   dataset: ${dataloader.dataset}
   start: 2022
   end: null
   frequency: ${data.frequency}
-  drop:  []
+  drop:  ['2d', '100u', '100v', 'cp', 'hcc', 'lcc', 'mcc', 'msl', 'skt', 'sp', 'tcc', 'tcw', 'strd', 'ssrd']

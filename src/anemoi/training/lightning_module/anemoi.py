@@ -150,19 +150,30 @@ class AnemoiLightningModule(pl.LightningModule):
         return torch.from_numpy(feature_weights)
 
     def configure_optimizers(self):
+
+        if self.config.training.optimizer.scale_by_gpus:
+            lr = (
+                (self.config.hardware.num_nodes
+                    * self.config.hardware.num_gpus_per_node
+                    * self.config.training.optimizer.lr)
+                    / self.config.hardware.num_gpus_per_model
+                )
+        else:
+            lr = self.config.training.optimizer.lr
+
         if self.config.training.zero_optimizer:
             optimizer = ZeroRedundancyOptimizer(
                 self.model.parameters(),
                 optimizer_class=torch.optim.AdamW,
                 betas=(0.9, 0.95),
-                lr=self.config.training.optimizer.lr,
+                lr=lr,
                 weight_decay=self.config.training.optimizer.weight_decay,
             )
         else:
             optimizer = torch.optim.AdamW(
                 self.model.parameters(),
                 betas=(0.9, 0.95),
-                lr=self.config.training.optimizer.lr,
+                lr=lr,
                 weight_decay=self.config.training.optimizer.weight_decay,
             )
 
@@ -182,6 +193,10 @@ class AnemoiLightningModule(pl.LightningModule):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
+
+    def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:
+        LOGGER.debug("set_model_comm_group: %s", model_comm_group)
+        self.model_comm_group = model_comm_group
 
     def lr_scheduler_step(self, scheduler: CosineLRScheduler, metric: None = None) -> None:
         """Step the learning rate scheduler by Pytorch Lightning.

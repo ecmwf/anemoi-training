@@ -9,7 +9,6 @@
 # * This functionality will be restructured in the near future
 # * so for now callbacks are under __init__.py
 
-# TODO: (Rilwan-Ade) Make sure that in logs we include epoch and step within epoch to circumvent having to figure out validation epoch
 from __future__ import annotations
 
 import logging
@@ -48,6 +47,7 @@ import cartopy.crs as ccrs
 
 if TYPE_CHECKING:
     import pytorch_lightning as pl
+    from omegaconf import DictConfig
     from omegaconf import OmegaConf
 
 LOGGER = logging.getLogger(__name__)
@@ -283,7 +283,6 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
 
     TODO: How best to visualize the learned edge embeddings? Offline, perhaps - using code from @Simon's notebook?
 
-    #TODO: is this to be included in further code???
     """
 
     def __init__(self, config: OmegaConf) -> None:
@@ -320,7 +319,7 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
         epoch = trainer.current_epoch
 
         if model.trainable_data is not None:
-            data_coords = np.rad2deg(graph[self._graph_name_data, "to", self._graph_name_data].ecoords_rad.numpy())
+            data_coords = np.rad2deg(graph[(self._graph_name_data, "to", self._graph_name_data)].ecoords_rad.numpy())
 
             self.plot(
                 trainer,
@@ -333,7 +332,7 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
 
         if model.trainable_hidden is not None:
             hidden_coords = np.rad2deg(
-                graph[self._graph_name_hidden, "to", self._graph_name_hidden].hcoords_rad.numpy(),
+                graph[(self._graph_name_hidden, "to", self._graph_name_hidden)].hcoords_rad.numpy(),
             )
 
             self.plot(
@@ -421,7 +420,6 @@ class BaseLossBarPlot(BasePlotCallback):
             return_counts=True,
         )
 
-        LOGGER.info("Order of parameters in loss histogram: %s", sorted_parameter_names)
 
         # get a color per group and project to parameter list
         cmap = "tab10" if len(unique_group_list) <= 10 else "tab20"
@@ -429,7 +427,9 @@ class BaseLossBarPlot(BasePlotCallback):
             LOGGER.warning("More than 20 groups detected, but colormap has only 20 colors.")
         # if all groups have count 1 use black color
         bar_color_per_group = (
-            "k" if not np.any(group_counts - 1) else plt.get_cmap(cmap)(np.linspace(0, 1, len(unique_group_list)))
+            np.tile("k", len(group_counts))
+            if not np.any(group_counts - 1)
+            else plt.get_cmap(cmap)(np.linspace(0, 1, len(unique_group_list)))
         )
 
         # set x-ticks
@@ -464,18 +464,22 @@ class BaseLossBarPlot(BasePlotCallback):
         del batch_idx  # unused
         logger = trainer.logger
 
-        parameter_names = list(pl_module.data_indices.model.output.name_to_index.keys())
-        paramter_positions = list(pl_module.data_indices.model.output.name_to_index.values())
+        parameter_names = list(pl_module.data_indices.internal_model.output.name_to_index.keys())
+        parameter_positions = list(pl_module.data_indices.internal_model.output.name_to_index.values())
         # reorder parameter_names by position
-        self.parameter_names = [parameter_names[i] for i in np.argsort(paramter_positions)]
+        self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
+
+        y_hat = outputs[1]
+        y_true = batch[:, pl_module.multi_step: pl_module.multi_step + rollout_step, ..., pl_module.data_indices.data.output.full]
+        loss = pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()
 
         for rollout_step in range(pl_module.rollout):
-            y_hat = outputs[1][rollout_step]
-            y_true = batch[:, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.data.output.full]
-            loss = pl_module.loss(y_hat, y_true, squash=False).mean(0).cpu().numpy()
+            # y_hat = outputs[1][rollout_step]
+            # y_true = batch[:, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.data.output.full]
+            # loss = pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()
 
             sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group
-            fig = plot_loss(loss[sort_by_parameter_group], colors, xticks, legend_patches)
+            fig = plot_loss(loss[rollout_step][sort_by_parameter_group], colors, xticks, legend_patches)
 
             self._output_figure(
                 logger,

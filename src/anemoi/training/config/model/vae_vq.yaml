@@ -18,9 +18,8 @@ encoder:
  num_latent_levels: 3
  freeze_parameters: False
  mapper:
-   _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
-    _convert_: all
     trainable_size: ${model.trainable_parameters.data2hidden}
+    _convert_: all
     activation: ${model.activation}
     num_chunks: 1
     mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
@@ -38,7 +37,6 @@ encoder:
 
 
 decoder:
- _target_: anemoi.models.layers.coderblock.AnemoiDecoderBlocks
  num_latent_levels: ${model.encoder.num_latent_levels}
  freeze_parameters: False
  mapper:

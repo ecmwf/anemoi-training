@@ -1,4 +1,15 @@
+# (C) Copyright 2024 ECMWF.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+#
+
 import logging
+import math
+import os
 from collections import defaultdict
 from collections.abc import Mapping
 
@@ -6,213 +17,193 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.models.interface import AnemoiForecastingModelInterface
-
+from anemoi.models.interface import AnemoiModelInterface
+from anemoi.utils.config import DotDict
 from hydra.utils import instantiate
 from omegaconf import DictConfig
-
+from omegaconf import OmegaConf
+from timm.scheduler import CosineLRScheduler
+from torch.distributed.distributed_c10d import ProcessGroup
+from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
+from torch_geometric.data import HeteroData
 
-from anemoi.training.lightning_module.mixins import DeterministicCommunicationMixin, EnsembleCommunicationMixin
+from anemoi.training.losses.mse import WeightedMSELoss
+from anemoi.training.losses.utils import grad_scaler
+from anemoi.training.utils.jsonify import map_config_to_primitives
 
-from anemoi.training.lightning_module.anemoi import AnemoiLightningModule
-from typing import Optional
 LOGGER = logging.getLogger(__name__)
-from torch import Tensor
-from anemoi.training.data.inicond import EnsembleInitialConditions
 
-class ForecastingLightningModule(AnemoiLightningModule):
-    def __init__(self, config, graph_data, statistics, statistics_tendencies, data_indices, metadata):
-        super().__init__(config, graph_data, statistics, statistics_tendencies,data_indices, metadata, model_cls=AnemoiForecastingModelInterface)
+
+class GraphForecaster(pl.LightningModule):
+    """Graph neural network forecaster for PyTorch Lightning."""
+
+    def __init__(
+        self,
+        *,
+        config: DictConfig,
+        graph_data: HeteroData,
+        statistics: dict,
+        statistics_tendencies: dict,
+        data_indices: IndexCollection,
+        metadata: dict,
+    ) -> None:
+        """Initialize graph neural network forecaster.
+
+        Parameters
+        ----------
+        config : DictConfig
+            Job configuration
+        graph_data : HeteroData
+            Graph object
+        statistics : dict
+            Statistics of the training data
+        statistics_tendencies : dict
+            Statistics of the training data tendencies
+        data_indices : IndexCollection
+            Indices of the training data,
+        metadata : dict
+            Provenance information
+
+        """
+        super().__init__()
+
+        graph_data = graph_data.to(self.device)
+
+        self.model = AnemoiModelInterface(
+            statistics=statistics,
+            statistics_tendencies=statistics_tendencies,
+            data_indices=data_indices,
+            metadata=metadata,
+            graph_data=graph_data,
+            config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
+        )
+
+        # Prediction strategy can be either residual, state or tendency
+        self.prediction_strategy = config.training.prediction_strategy
         self.step_functions = {
-            "residual": self._step_residual,
+            "state": self._step_state,
+            "residual": self._step_state,
             "tendency": self._step_tendency,
         }
-        self.prediction_mode = "tendency" if self.model.tendency_mode else "residual"
-        LOGGER.info("Using stepping mode: %s", self.prediction_mode)
+        assert self.prediction_strategy in self.step_functions, f"Invalid prediction mode: {self.prediction_strategy}"
+        if self.prediction_strategy == "tendency":
+            assert statistics_tendencies is not None, "Tendency mode requires statistics_tendencies in dataset."
+        LOGGER.info("Using prediction strategy: %s", self.prediction_strategy)
 
+        self.data_indices = data_indices
+
+        self.save_hyperparameters()
+
+        self.latlons_data = graph_data[config.graph.data].x
+        self.node_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
+
+        self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
+
+        self.metric_ranges, self.metric_ranges_validation, self.feature_weights = self.metrics_loss_scaling(
+            config,
+            data_indices,
+        )
+        self.loss = WeightedMSELoss(node_weights=self.node_weights, feature_weights=self.feature_weights)
+        self.metrics = WeightedMSELoss(node_weights=self.node_weights, feature_weights=None, ignore_nans=True)
+
+        if config.training.loss_gradient_scaling:
+            self.loss.register_full_backward_hook(grad_scaler, prepend=False)
+
+        self.multi_step = config.training.multistep_input
+
+        self.lr = (
+            config.hardware.num_nodes
+            * config.hardware.num_gpus_per_node
+            * config.training.lr.rate
+            / config.hardware.num_gpus_per_model
+        )
+        self.lr_iterations = config.training.lr.iterations
+        self.lr_min = config.training.lr.min
+        self.optimizer_warmup_steps = config.training.lr.warmup_steps
         self.rollout = config.training.rollout.start
         self.rollout_epoch_increment = config.training.rollout.epoch_increment
         self.rollout_max = config.training.rollout.max
 
-    def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
-        
-        train_loss, _ = super().training_step(batch, batch_idx)
+        self.rho = config.training.noise.rho
 
-        self.log(
-            "rollout",
-            float(self.rollout),
-            on_step=True,
-            logger=self.logger_enabled,
-            rank_zero_only=True,
-            sync_dist=False,
+        self.use_zero_optimizer = config.training.zero_optimizer
+
+        self.model_comm_group = None
+
+        LOGGER.debug("Rollout window length: %d", self.rollout)
+        LOGGER.debug("Rollout increase every : %d epochs", self.rollout_epoch_increment)
+        LOGGER.debug("Rollout max : %d", self.rollout_max)
+        LOGGER.debug("Multistep: %d", self.multi_step)
+
+        self.enable_plot = config.diagnostics.plot.enabled
+
+        self.model_comm_group_id = int(os.environ.get("SLURM_PROCID", "0")) // config.hardware.num_gpus_per_model
+        self.model_comm_group_rank = int(os.environ.get("SLURM_PROCID", "0")) % config.hardware.num_gpus_per_model
+        self.model_comm_num_groups = math.ceil(
+            config.hardware.num_gpus_per_node * config.hardware.num_nodes / config.hardware.num_gpus_per_model,
         )
-        return train_loss
 
-    def _step(
-        self,
-        batch: torch.Tensor,
-        batch_idx: int,
-        validation_mode: bool = False,
-        batch_target: Optional[torch.Tensor] = None,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], Mapping[str, list]]:
-        return self.step_functions[self.prediction_mode](batch, batch_idx, validation_mode, batch_target)
+    def forward(self, x: torch.Tensor, state_in: torch.Tensor, sigma: torch.Tensor) -> torch.Tensor:
+        return self.model(x, state_in, sigma, self.model_comm_group)
 
-
-    def _step_residual(
-        self,
-        batch: torch.Tensor,
-        batch_idx: int,
-        validation_mode: bool = False,
-        batch_target: Optional[torch.Tensor] = None,
-        ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], Mapping[str, list]]:
-        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
-        batch = self.model.pre_processors_state(batch, in_place=False)  # normalized in-place
-        if batch_target is not None:
-            batch_target = self.model.pre_processors_state(batch_target, in_place=False)
-        else:
-            batch_target = batch
-
-        # start rollout
-        x = batch[:, :, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, inp_ens, multi_step, latlon, nvar)
-
-        # Version 2 - which assume loss function takes in all the data at once. In this version we have to rollout and hold y_pred in memory
-        y_preds = torch.zeros(batch.shape[0], self.rollout, *batch.shape[2:], device=self.device, dtype=batch.dtype)
-        for rollout_step in range(self.rollout):
-            y_pred = self(x)
-            y_preds[:, rollout_step, ...] = y_pred
-            x = self.advance_input(x, y_pred, batch, rollout_step)
-
-        loss += checkpoint(self.loss, y_preds, batch_target[:, self.multi_step:, ..., self.data_indices.data.output.full], use_reentrant=False)
-        loss *= 1.0 / self.rollout
-
-        outputs = defaultdict(list)
-        if validation_mode:
-            dict_outputs = self.get_proc_and_unproc_data(y_preds, batch[:, : self.multi_step: self.multi_step + rollout_step, ..., self.data_indices.data.output.full])
-
-            metrics = self.calculate_val_metrics(**dict_outputs)
-    
-
-        return loss, metrics, dict_outputs
-    
-    def _step_tendency(
-        self,
-        batch: torch.Tensor,
-        batch_idx: int,
-        validation_mode: bool = False,
-        batch_target: Optional[torch.Tensor] = None,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], Mapping[str, list]]:
-        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
-        metrics = {}
-
-        # x ( non-processed )
-        x = batch[:, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, multi_step, latlon, nvar)
-        y_preds = torch.zeros(batch.shape[0], self.rollout, *batch.shape[2:], device=self.device, dtype=batch.dtype)
-        outputs = defaultdict(list)
-        for rollout_step in range(self.rollout):
-
-            # normalise inputs
-            x_in = self.model.pre_processors_state(x, in_place=False, data_index=self.data_indices.data.input.full)
-
-            # prediction (normalized tendency)
-            tendency_pred = self(x_in)
-
-            # re-construct non-processed predicted state
-            y_pred = self.model.add_tendency_to_state(x[:, :, -1, ...], tendency_pred)
-            y_preds[:, :, rollout_step, ...] = y_pred
-            # advance input using non-processed x, y_pred and batch
-            x = self.advance_input(x, y_pred, batch, rollout_step)
-
-        # calculate loss
-        batch_target = batch_target if batch_target is not None else batch
-
-        y_target = batch_target[:, :, self.multi_step: self.multi_step + rollout_step, ..., self.data_indices.data.output.full]
-        loss += checkpoint(
-            self.loss,
-            self.model.pre_processors_state(y_pred, in_place=False, data_index=self.data_indices.data.output.full),
-            self.model.pre_processors_state(y_target, in_place=False, data_index=self.data_indices.data.output.full),
-            use_reentrant=False,
+    def metrics_loss_scaling(self, config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
+        metric_ranges = defaultdict(list)
+        metric_ranges_validation = defaultdict(list)
+        loss_scaling = (
+            np.ones((len(data_indices.data.output.full),), dtype=np.float32) * config.training.feature_weighting.default
         )
-            # TODO: We should try that too
-            # loss += checkpoint(self.loss, y_pred, y_target, use_reentrant=False)
-        loss *= 1.0 / self.rollout
-            
 
-        if validation_mode:
-            dict_outputs = self.get_proc_and_unproc_data(y_preds, batch[:, self.multi_step: self.multi_step + rollout_step, ..., self.data_indices.data.output.full])
+        pressure_level = instantiate(config.training.pressure_level_scaler)
 
-            metrics = self.calculate_val_metrics(**dict_outputs)
+        LOGGER.info(
+            "Pressure level scaling: use scaler %s with slope %.4f and minimum %.2f",
+            type(pressure_level).__name__,
+            pressure_level.slope,
+            pressure_level.minimum,
+        )
 
-        # scale loss
-        loss *= 1.0 / self.rollout
-
-        return loss, metrics, dict_outputs
-
-    def get_proc_and_unproc_data(self, y_pred, y, y_pred_postprocessed=None, y_postprocessed=None):
-        assert y_pred is not None or y_pred_postprocessed is not None, "Either y_pred or y_pred_postprocessed must be provided"
-        assert y is not None or y_postprocessed is not None, "Either y or y_postprocessed must be provided"
-
-        if y_postprocessed is None:
-            y_postprocessed = self.model.post_processors_state(y, in_place=False)
-        if y_pred_postprocessed is None:
-            y_pred_postprocessed = self.model.post_processors_state(y_pred, in_place=False)
-
-        if y_pred is None:
-            y_pred = self.model.pre_processors_state(y_pred_postprocessed, in_place=False, data_index=self.data_indices.data.output.full)
-        if y is None:
-            y = self.model.pre_processors_state(y_postprocessed, in_place=False, data_index=self.data_indices.data.output.full)
-
-        return {
-            "y": y,
-            "y_pred": y_pred,
-            "y_postprocessed": y_postprocessed,
-            "y_pred_postprocessed": y_pred_postprocessed,
-        }
-
-    def calculate_val_metrics(self, y_pred, y, y_pred_postprocessed, y_postprocessed):
-        """
-        Calculate validation metrics.
-
-        Parameters
-        ----------
-        y_pred : torch.Tensor (bs, ens_pred, timesteps, latlon, nvar)
-            Predicted output tensor.
-        y : torch.Tensor (bs, ens_target, timesteps, latlon, nvar)
-            Target output tensor.
-        y_pred_postprocessed : torch.Tensor (bs, end_pred, timesteps, latlon, nvar)
-            Postprocessed predicted output tensor.
-        y_postprocessed : torch.Tensor (bs, end_target, timesteps, latlon, nvar)
-            Postprocessed target output tensor.
-
-        Returns
-        -------
-        dict[str, torch.Tensor]
-        
-        """
-        metric_vals = {}
-        timesteps = y_pred.shape[2]
-
-        for metric in self.val_metrics:
-            for mkey, indices in self.val_metric_ranges.items():
-
-                # for single metrics do no variable scaling and non processed data
-                # TOOD (rilwan-ade): Update logging to use get_time_step and report lead time in hours
-                
-                if len(indices) == 1:
-                    _args = (y_pred_postprocessed[..., indices], y_postprocessed[..., indices])
+        for key, idx in data_indices.internal_model.output.name_to_index.items():
+            # Split pressure levels on "_" separator
+            split = key.split("_")
+            if len(split) > 1 and split[-1].isdigit():
+                # Create grouped metrics for pressure levels (e.g. Q, T, U, V, etc.) for logger
+                metric_ranges[f"pl_{split[0]}"].append(idx)
+                # Create pressure levels in loss scaling vector
+                if split[0] in config.training.feature_weighting.pl:
+                    loss_scaling[idx] = config.training.feature_weighting.pl[split[0]] * pressure_level.scaler(
+                        int(split[-1]),
+                    )
                 else:
-                    _args = (y_pred[..., indices], y[..., indices])
-
-                m_value = metric(*_args, feature_scaling=False, squash=(-2, -1))  # squash spatial and feature dims
-                    
-                # determining if metric has squashed in time dimension
-                if m_value.shape[0] == y_pred.shape[2]:
-                    for i in range(timesteps):
-                        metric_vals[f"{mkey}_{i + 1}"] = m_value[i]
+                    LOGGER.debug("Parameter %s was not scaled.", key)
+            else:
+                metric_ranges[f"sfc_{key}"].append(idx)
+                # Create surface variables in loss scaling vector
+                if key in config.training.feature_weighting.sfc:
+                    loss_scaling[idx] = config.training.feature_weighting.sfc[key]
                 else:
-                    metric_vals[f"{mkey}"] = m_value
+                    LOGGER.debug("Parameter %s was not scaled.", key)
+            # Create specific metrics from hydra to log in logger
+            if key in config.training.metrics:
+                metric_ranges[key] = [idx]
+        loss_scaling = torch.from_numpy(loss_scaling)
+        # metric for validation, after postprocessing
+        for key, idx in data_indices.model.output.name_to_index.items():
+            # Split pressure levels on "_" separator
+            split = key.split("_")
+            if len(split) > 1 and split[1].isdigit():
+                # Create grouped metrics for pressure levels (e.g. Q, T, U, V, etc.) for logger
+                metric_ranges_validation[f"pl_{split[0]}"].append(idx)
+            else:
+                metric_ranges_validation[f"sfc_{key}"].append(idx)
+            # Create specific metrics from hydra to log in logger
+            if key in config.training.metrics:
+                metric_ranges_validation[key] = [idx]
+        return metric_ranges, metric_ranges_validation, loss_scaling
 
-        return metric_vals
+    def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:
+        LOGGER.debug("set_model_comm_group: %s", model_comm_group)
+        self.model_comm_group = model_comm_group
 
     def advance_input(
         self,
@@ -224,76 +215,317 @@ class ForecastingLightningModule(AnemoiLightningModule):
         x = x.roll(-1, dims=1)
 
         # Get prognostic variables
-        x[:, :, -1, :, self.data_indices.model.input.prognostic] = y_pred[
+        x[:, -1, :, :, self.data_indices.internal_model.input.prognostic] = y_pred[
             ...,
-            self.data_indices.model.output.prognostic,
+            self.data_indices.internal_model.output.prognostic,
         ]
 
         # get new "constants" needed for time-varying fields
-        x[:, :, -1, :, self.data_indices.model.input.forcing] = batch[
-            :,
+        x[:, -1, :, :, self.data_indices.internal_model.input.forcing] = batch[
             :,
             self.multi_step + rollout_step,
-            ...,
-            self.data_indices.data.input.forcing,
+            :,
+            :,
+            self.data_indices.internal_data.input.forcing,
         ]
         return x
 
-
-class ForecastingLightningModuleDeterministic(DeterministicCommunicationMixin, pl.LightningModule):
-    """Deterministic version of Forecasting Lightning Module."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-
-class ForecastingLightningModuleICEnsemble(EnsembleCommunicationMixin, pl.LightningModule):
-    """Ensemble version of Forecasting Lightning Module."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.ensemble_ic_generator = EnsembleInitialConditions(config=self.config, data_indices=self.data_indices)
-        
-
     def _step(
         self,
-        batch: list[Tensor],  # shape (bs, multistep, latlon, nvars_full)
+        batch: torch.Tensor,
         batch_idx: int,
         validation_mode: bool = False,
-    ) -> tuple[Tensor, Mapping, Tensor]:
+        in_place_proc: bool = True,
+        use_checkpoint: bool = True,
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        return self.step_functions[self.prediction_strategy](
+            batch,
+            batch_idx,
+            validation_mode,
+            in_place_proc,
+            use_checkpoint,
+        )
 
-        """Run one  step.
+    def _step_state(
+        self,
+        batch: torch.Tensor,
+        batch_idx: int,
+        validation_mode: bool = False,
+        in_place_proc: bool = True,
+        use_checkpoint: bool = True,
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        """Forward pass of trainer for state and residual prediction strategy."""
+        del batch_idx, in_place_proc
+        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
+        batch = self.model.pre_processors_state(batch, in_place=not validation_mode)  # normalized in-place
+        metrics = {}
 
-        Args:
-            batch: tuple
-                Batch data..
-                batch[0]: analysis, shape (bs, timesteps, nvar, latlon)
-                batch[1] (optional): EDA perturbations, shape (timesteps, nens_input, nvar, latlon)
-            batch_idx: int
-                batch index   
-            validation_mode: bool
+        # start rollout of preprocessed batch
+        x = batch[
+            :,
+            0 : self.multi_step,
+            ...,
+            self.data_indices.internal_data.input.full,
+        ]  # (bs, multi_step, latlon, nvar)
+
+        y_preds = []
+        for rollout_step in range(self.rollout):
+            # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
+            y_pred = self(x)
+
+            y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
+            # y includes the auxiliary variables, so we must leave those out when computing the loss
+
+            if use_checkpoint:
+                loss += checkpoint(self.loss, y_pred, y, use_reentrant=False)
+            else:
+                loss += self.loss(y_pred, y)
+
+            x = self.advance_input(x, y_pred, batch, rollout_step)
+
+            if validation_mode:
+                metrics_next, y_preds_next = self.calculate_val_metrics(
+                    y_pred,
+                    y,
+                    rollout_step,
+                    enable_plot=self.enable_plot,
+                )
+                metrics.update(metrics_next)
+                y_preds.extend(y_preds_next)
+
+        # scale loss
+        loss *= 1.0 / self.rollout
+        return loss, metrics, y_preds, None
+
+    def _step_tendency(
+        self,
+        batch: torch.Tensor,
+        batch_idx: int,
+        validation_mode: bool = False,
+        in_place_proc: bool = True,
+        use_checkpoint: bool = True,
+        batch_target: Optional[torch.Tensor] = None,
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        """Forward pass of trainer for tendency prediction strategy.
+
+        y_pred = model(x_t0)
+        y_target = x_t1 - x_t0
+        loss(y_pred, y_target)
         """
-        x_center, x_ic = batch[0], batch[1]
-        
-        # First we generate the ensemble of initial conditions
-        x_ic = self.ensemble_ic_generator(x_center, x_ic)  # shape (bs, nens_input, timesteps, latlon, nvars_full)
+        del batch_idx, in_place_proc
+        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
+        metrics = {}
 
-        batch_inp = self.model.pre_processor_state(x_ic, inplace=False)  # shape = (bs, nens_input, multistep, latlon, input.full)
-        batch_target_center = self.model.pre_processor_state(x_center, inplace=False)  # shape = (bs, nens_target, multistep, latlon, 
-        batch_target_ic = self.model.pre_processor_state(x_ic, inplace=False)  # shape = (bs, nens_target, multistep, latlon, 
+        # Get batch tendencies from non processed batch
+        batch_tendency_target = self.model.compute_processed_tendency(
+            batch[:, self.multi_step : self.multi_step + self.rollout, ...],
+            batch[:, self.multi_step - 1 : self.multi_step + self.rollout - 1, ...],
+        )
 
-        x_inp = batch_inp[..., self.data_indices.data.input.full]
-        x_target_ic = batch_target_ic[..., self.data_indices.data.output.full] # shape = (bs,1, multistep, latlon, output.full)
-        x_target_center = batch_target_center[..., self.data_indices.data.output.full] # shape = (bs,ens_ic, multistep, latlon, output.full)
+        # state x is not processed)
+        x = batch[:, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, multi_step, latlon, nvar)
+        # why do we need self.data_indices.data.input.full here? removes one variable it seems ...
 
-        if self.config.training.target_ic:
-            x_target = x_target_ic
+        y_preds = []
+        y_noiseds = []  # these are inital state + noised target tendency
+        for rollout_step in range(self.rollout):
+
+            assert rollout_step == 0, "Diffusion model only supports single step training"
+
+            # normalise inputs
+            x_in = self.model.pre_processors_state(x, in_place=False, data_index=self.data_indices.data.input.full)
+
+            # compute target tendency (normalised)
+            tendency_target = batch_tendency_target[:, rollout_step]
+
+            rnd_uniform = torch.rand(
+                [tendency_target.shape[0], tendency_target.shape[1], 1, 1],
+                device=tendency_target.device,
+            )  # bs, ensemble size, latlon, nvar
+
+            sigma = (
+                self.model.sigma_max ** (1.0 / self.rho)
+                + rnd_uniform * (self.model.sigma_min ** (1.0 / self.rho) - self.model.sigma_max ** (1.0 / self.rho))
+            ) ** self.rho
+            weight = (sigma**2 + self.model.sigma_data**2) / (sigma * self.model.sigma_data) ** 2
+
+            # prediction
+            n = torch.randn_like(tendency_target) * sigma
+            tendency_target_noised = tendency_target + n
+
+            tendency_pred = self.model.fwd_with_preconditioning(
+                tendency_target_noised,
+                sigma,
+                x_in,
+                model_comm_group=self.model_comm_group,
+            )
+
+            # calculate loss
+            if use_checkpoint:
+                loss += checkpoint(self.loss, tendency_pred, tendency_target, weights=weight, use_reentrant=False)
+            else:
+                loss += self.loss(tendency_pred, tendency_target, weights=weight)
+
+            # re-construct non-processed predicted state
+            y_pred = self.model.add_tendency_to_state(x[:, -1, ...], tendency_pred)
+
+            # advance input using non-processed x, y_pred and batch
+            x = self.advance_input(x, y_pred, batch, rollout_step)
+
+            if validation_mode:
+                y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.data.output.full]
+                y_noised = self.model.add_tendency_to_state(x[:, -1, ...], tendency_target_noised)
+
+                # calculate_val_metrics requires processed inputs
+                metrics_next, _ = self.calculate_val_metrics(
+                    None,
+                    None,
+                    rollout_step,
+                    self.enable_plot,
+                    y_pred_postprocessed=y_pred,
+                    y_postprocessed=y,
+                )
+
+                metrics.update(metrics_next)
+
+                y_preds.extend(
+                    self.model.pre_processors_state(
+                        y_pred,
+                        in_place=False,
+                        data_index=self.data_indices.data.output.full,
+                    ),
+                )
+                if self.enable_plot:
+                    y_noiseds.extend(
+                        self.model.pre_processors_state(
+                            y_noised,
+                            in_place=False,
+                            data_index=self.data_indices.data.output.full,
+                        ),
+                    )
+        # scale loss
+        loss *= 1.0 / self.rollout
+        return loss, metrics, y_preds, y_noiseds
+
+    def calculate_val_metrics(
+        self,
+        y_pred: torch.Tensor,
+        y: torch.Tensor,
+        rollout_step: int,
+        enable_plot: bool = False,
+        y_pred_postprocessed: torch.Tensor = None,
+        y_postprocessed: torch.Tensor = None,
+    ) -> tuple[dict, list]:
+        metrics = {}
+        y_preds = []
+        if y_postprocessed is None:
+            y_postprocessed = self.model.post_processors_state(y, in_place=False)
+        if y_pred_postprocessed is None:
+            y_pred_postprocessed = self.model.post_processors_state(y_pred, in_place=False)
+
+        for mkey, indices in self.metric_ranges_validation.items():
+            metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(
+                y_pred_postprocessed[..., indices],
+                y_postprocessed[..., indices],
+            )
+
+        if enable_plot:
+            y_preds.append(y_pred)
+        return metrics, y_preds
+
+    def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
+        train_loss, _, _, _ = self._step(batch, batch_idx)
+        self.log(
+            "train_wmse",
+            train_loss,
+            on_epoch=True,
+            on_step=True,
+            prog_bar=True,
+            logger=self.logger_enabled,
+            batch_size=batch.shape[0],
+            sync_dist=True,
+        )
+        self.log(
+            "rollout",
+            float(self.rollout),
+            on_step=True,
+            logger=self.logger_enabled,
+            rank_zero_only=True,
+            sync_dist=False,
+        )
+        return train_loss
+
+    def lr_scheduler_step(self, scheduler: CosineLRScheduler, metric: None = None) -> None:
+        """Step the learning rate scheduler by Pytorch Lightning.
+
+        Parameters
+        ----------
+        scheduler : CosineLRScheduler
+            Learning rate scheduler object.
+        metric : Optional[Any]
+            Metric object for e.g. ReduceLRonPlateau. Default is None.
+
+        """
+        del metric
+        scheduler.step(epoch=self.trainer.global_step)
+
+    def on_train_epoch_end(self) -> None:
+        if self.rollout_epoch_increment > 0 and self.current_epoch % self.rollout_epoch_increment == 0:
+            self.rollout += 1
+            LOGGER.debug("Rollout window length: %d", self.rollout)
+        self.rollout = min(self.rollout, self.rollout_max)
+
+    def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
+        with torch.no_grad():
+            val_loss, metrics, y_preds, y_noiseds = self._step(batch, batch_idx, validation_mode=True)
+        self.log(
+            "val_wmse",
+            val_loss,
+            on_epoch=True,
+            on_step=True,
+            prog_bar=True,
+            logger=self.logger_enabled,
+            batch_size=batch.shape[0],
+            sync_dist=True,
+        )
+        for mname, mvalue in metrics.items():
+            self.log(
+                "val_" + mname,
+                mvalue,
+                on_epoch=True,
+                on_step=False,
+                prog_bar=False,
+                logger=self.logger_enabled,
+                batch_size=batch.shape[0],
+                sync_dist=True,
+            )
+        return val_loss, y_preds, y_noiseds
+
+    def predict_step(self, batch: torch.Tensor, batch_idx: int) -> None:
+        del batch_idx
+        # this here predicts only one forecast step ; could add logic to to full 360h ...
+        with torch.no_grad():
+            return self.model.predict_step(batch, from_trainer=True)
+
+    def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:
+        if self.use_zero_optimizer:
+            optimizer = ZeroRedundancyOptimizer(
+                self.trainer.model.parameters(),
+                optimizer_class=torch.optim.AdamW,
+                betas=(0.9, 0.95),
+                lr=self.lr,
+            )
         else:
-            x_target = x_target_center
+            optimizer = torch.optim.AdamW(
+                self.trainer.model.parameters(),
+                betas=(0.9, 0.95),
+                lr=self.lr,
+            )  # , fused=True)
 
-        return super()._step(x_ic, batch_idx, validation_mode, x_target)
-        # #NOTE (rilwan-ade): If you want to target EDA, then this is where you change the 2nd arg, it should be x_ic
-
-
+        scheduler = CosineLRScheduler(
+            optimizer,
+            lr_min=self.lr_min,
+            t_initial=self.lr_iterations,
+            warmup_t=self.optimizer_warmup_steps,
+        )
+        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]

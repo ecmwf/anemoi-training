@@ -7,7 +7,8 @@ from typing import Callable
 import pytorch_lightning as pl
 from anemoi.datasets.data import open_dataset
 from anemoi.models.data_indices.collection import IndexCollection
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
+from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 import abc
 
@@ -16,10 +17,18 @@ from anemoi.training.data.dataset import NativeGridDataset, EnsNativeGridDataset
 LOGGER = logging.getLogger(__name__)
 
 
-class AnemoiBaseDataModule(pl.LightningDataModule):
+class AnemoiDatasetsDataModule(pl.LightningDataModule):
     """Base class for Anemoi Datasets data module for PyTorch Lightning."""
 
     def __init__(self, config: DictConfig) -> None:
+        """Initialize Anemoi Datasets data module.
+
+        Parameters
+        ----------
+        config : DictConfig
+            Job configuration
+
+        """
         super().__init__()
         self.config = config
 
@@ -54,6 +63,13 @@ class AnemoiBaseDataModule(pl.LightningDataModule):
             total_gpus // self.config.hardware.num_gpus_per_model
         )  # number of model communication groups
 
+        LOGGER.debug(
+            "Rank %d model communication group number %d, with local model communication group rank %d",
+            self.global_rank,
+            self.model_comm_group_id,
+            self.model_comm_group_rank,
+        )
+
     def _check_resolution(self, resolution: str) -> None:
         assert (
             self.config.data.resolution.lower() == resolution.lower()
@@ -65,7 +81,7 @@ class AnemoiBaseDataModule(pl.LightningDataModule):
 
     @cached_property
     def statistics_tendencies(self) -> dict:
-        if self.config.training.tendency_mode or self.config.training.feature_weighting.inverse_tendency_variance_scaling:
+        if self.config.training.prediction_strategy == "tendency":
             return self.ds_train.statistics_tendencies
         return None
 
@@ -102,7 +118,9 @@ class AnemoiBaseDataModule(pl.LightningDataModule):
             persistent_workers=True,
             drop_last=True,
         )
-
+    def predict_dataloader(self) -> DataLoader:
+        return self._get_dataloader(self.ds_predict, "predict")
+    
     def train_dataloader(self) -> DataLoader:
         return self._get_dataloader(self.ds_train, "training")
 
@@ -112,7 +130,7 @@ class AnemoiBaseDataModule(pl.LightningDataModule):
     def test_dataloader(self) -> DataLoader:
         return self._get_dataloader(self.ds_test, "test")
 
-class AnemoiForecastingDataModule(AnemoiBaseDataModule):
+class AnemoiForecastingDataModule(AnemoiDatasetsDataModule):
     """Data module for forecasting models, with rollout functionality."""
 
     def __init__(self, config: DictConfig) -> None:
@@ -151,6 +169,22 @@ class AnemoiForecastingDataModule(AnemoiBaseDataModule):
             shuffle=False,
             rollout=self.rollout,
             label="test",
+        )
+
+    @cached_property
+    def ds_predict(self) -> NativeGridDataset:
+        assert self.config.dataloader.training.end < self.config.dataloader.predict.start, (
+            f"Training end date {self.config.dataloader.training.end} is not before"
+            f"predict start date {self.config.dataloader.predict.start}"
+        )
+        assert self.config.dataloader.validation.end < self.config.dataloader.predict.start, (
+            f"Validation end date {self.config.dataloader.validation.end} is not before"
+            f"predict start date {self.config.dataloader.predict.start}"
+        )
+        return self._get_dataset(
+            open_dataset(OmegaConf.to_container(self.config.dataloader.predict, resolve=True)),
+            shuffle=False,
+            label="predict",
         )
 
 class AnemoiEnsForecastingDataModule(AnemoiForecastingDataModule):
@@ -194,7 +228,7 @@ class AnemoiEnsForecastingDataModule(AnemoiForecastingDataModule):
 
     def _get_dataset(
         self,
-        data_reader,
+        data_reader: Callable,
         shuffle: bool = True,
         rollout: int = 1,
         label: str = "generic",
@@ -220,7 +254,7 @@ class AnemoiEnsForecastingDataModule(AnemoiForecastingDataModule):
         self._check_resolution(data.resolution)
         return data
 
-class AnemoiReconstructionDataModule(AnemoiBaseDataModule):
+class AnemoiReconstructionDataModule(AnemoiDatasetsDataModule):
     """Data module for reconstruction tasks, without rollout functionality."""
 
     def __init__(self, config: DictConfig) -> None:

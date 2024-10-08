@@ -1,6 +1,6 @@
 # This is used to load a forecaster model that is a composite of a transformer and the encoder-decoder parts of a pretrained VAE
 model: 
-  _target_: anemoi.models.models.encoder_decoder_processor.AnemoiModelVAEEncProcVAEDec
+  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDecVAE
   use_quantization: False # True uses the quantization codebook output, False uses the input to the qunatization codebook
 
 

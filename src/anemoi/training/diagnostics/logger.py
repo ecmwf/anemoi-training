@@ -112,7 +112,7 @@ def get_wandb_logger(config: DictConfig, model: pl.LightningModule) -> pl.logger
     ----------
     config : DictConfig
         Job configuration
-    model: ForecastingLightningModule
+    model: pl.LightningModule
         Model to watch
 
     Returns

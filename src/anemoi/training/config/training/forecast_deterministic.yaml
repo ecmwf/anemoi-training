@@ -1,4 +1,4 @@
 <<: *{training.default}
 
 lightning_module:
-  _target_: anemoi.training.train.forecaster.forecasting_lmLightningModuleDeterministic
+  _target_: anemoi.training.lightning_module.forecasting.LightningModuleDeterministic

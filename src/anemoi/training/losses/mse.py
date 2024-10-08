@@ -58,7 +58,7 @@ class WeightedMSELoss(TargetEachEnsIndepMixin,nn.Module):
         feature_scale: bool = True,
         feature_indices: torch.Tensor | None = None,
         **kwargs,
-    ) -> torch.Tensor:
+        ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 
         Parameters
@@ -79,12 +79,22 @@ class WeightedMSELoss(TargetEachEnsIndepMixin,nn.Module):
             Weighted MSE loss
 
         """
+        mse = self.calc(pred, target) 
+
+        mse = self.scale(mse, feature_scale, feature_indices, squash)
+
+        return mse 
+
+    def calc(pred, target):
         pred = pred.mean(dim=1)
         target = target.mean(dim=1)
 
         mse = torch.square(pred - target)
+        return mse
 
+    def scale(self, loss: torch.Tensor, feature_scale: bool = True, feature_indices: torch.Tensor | None = None, squash: Union[bool, tuple] = True):
         # Scale in feature dimension
+        
         if feature_scale:
             mse = (mse * self.feature_weights) if feature_indices is None else (mse * self.feature_weights[..., feature_indices])
             mse = mse / self.feature_weights.numel()
@@ -96,11 +106,14 @@ class WeightedMSELoss(TargetEachEnsIndepMixin,nn.Module):
         # Reduce over ensemble dimension
         mse = mse.mean(1)
 
-        # Squash - reduce spatial and feature dimensions
+        #reduce over batch dimension
+        mse = mse.mean(0)
+
+                # Squash - reduce spatial and feature dimensions
         if squash:
             mse = self.sum_function(mse, axis=squash if isinstance(squash, tuple) else (-3, -2, -1))
 
-        return self.avg_function(mse, axis=0)  # (timesteps) or (timesteps, latlon, nvars)
+        return mse
 
     @cached_property
     def name(self) -> str:

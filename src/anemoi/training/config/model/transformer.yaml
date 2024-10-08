@@ -1,5 +1,5 @@
 model:
-  _target_: anemoi.models.models.encoder_decoder_processor.AnemoiModelEncProcDec
+  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec
 
 activation: GELU
 num_channels: 1024
@@ -22,8 +22,10 @@ encoder:
   sub_graph_edge_attributes: ${model.attributes.edges}
   activation: ${model.activation}
   num_chunks: 1
-  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
-  num_heads: 16 # GraphTransformer or Transformer only
+  mlp_hidden_ratio: 4 
+  num_heads: 16 
+  dropout_p: 0.0 
+
 
 decoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper

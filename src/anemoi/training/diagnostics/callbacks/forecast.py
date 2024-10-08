@@ -895,6 +895,10 @@ def get_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
         validation_batch_end_callbacks = []
         validation_epoch_end_callbacks = []
 
+        if config.diagnostics.plot.plot_sample:
+            sample_plot = PlotSample(config, val_dset_len)
+            validation_batch_end_callbacks.append(sample_plot)
+
         if config.diagnostics.plot.loss_map:
             loss_map_plot = ForecastingLossMapPlot(config, val_dset_len)
             validation_batch_end_callbacks.append(loss_map_plot)

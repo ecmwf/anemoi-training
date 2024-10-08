@@ -127,12 +127,13 @@ class kCRPS(nn.Module):
 
         Args:
             preds: predicted ensemble, shape (batch_size, ens_size, timesteps, latlon, n_vars)
-            targets: ground truth, shape (batch_size, timesteps, latlon, n_vars)
+            targets: ground truth, shape (batch_size, ens_size, timesteps, latlon, n_vars)
             fair: unbiased ensemble variance calculation
         Returns:
             The point-wise kernel CRPS, shape (batch_size, 1, latlon).
         """
         preds = einops.rearrange(preds, "b e t l n -> b t l n e")
+        targets = einops.rearrange(targets, "b e t l n -> b t l n e")
 
         ens_input = preds.shape[-1]
         ens_target = targets.shape[-1]

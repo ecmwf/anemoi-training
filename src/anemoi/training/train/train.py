@@ -26,7 +26,7 @@ from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
-from anemoi.training.data.datamodule import AnemoiBaseDataModule
+from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
 from anemoi.training.diagnostics.callbacks import get_callbacks
 from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
@@ -76,7 +76,7 @@ class AnemoiTrainer:
         self._log_information()
 
     @cached_property
-    def datamodule(self) -> AnemoiBaseDataModule:
+    def datamodule(self) -> AnemoiDatasetsDataModule:
         """DataModule instance and DataSets."""
         datamodule = hydra.utils.instantiate(self.config.dataloader.datamodule, config=self.config)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
@@ -346,6 +346,7 @@ class AnemoiTrainer:
             num_nodes=self.config.hardware.num_nodes,
             precision=self.config.training.precision,
             max_epochs=self.config.training.max_epochs,
+            max_steps = self.config.training.max_steps or -1,
             logger=self.loggers,
             log_every_n_steps=self.config.diagnostics.log.interval,
             # run a fixed no of batches per epoch (helpful when debugging)

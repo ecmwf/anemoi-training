@@ -8,7 +8,7 @@ from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 from anemoi.training.lightning_module.mixins import DeterministicCommunicationMixin, EnsembleCommunicationMixin
 from anemoi.training.lightning_module.anemoi import AnemoiLightningModule
-from anemoi.models.interface import AnemoiReconstructionModelInterface
+from anemoi.models.interface import AnemoiModelInterfaceReconstruction
 from anemoi.training.data.inicond import EnsembleInitialConditions
 from hydra.utils import instantiate
 
@@ -25,7 +25,7 @@ LOGGER = logging.getLogger(__name__)
 # the z_mu, z_logvar wouldn't be in a VQ-VAE, generalize this later
 class ReconstructionLightningModule(AnemoiLightningModule):
     def __init__(self, config, graph_data, statistics, statistics_tendencies, data_indices, metadata):
-        super().__init__(config, graph_data, statistics, data_indices, metadata, model_cls=AnemoiReconstructionModelInterface)
+        super().__init__(config, graph_data, statistics, data_indices, metadata, model_cls=AnemoiModelInterfaceReconstruction)
 
         self.latlons_hidden = [graph_data[h_name].x for h_name in config.graph.hidden]
         self.latent_weights = graph_data[config.graph.hidden[-1]][config.model.node_loss_weight].squeeze()

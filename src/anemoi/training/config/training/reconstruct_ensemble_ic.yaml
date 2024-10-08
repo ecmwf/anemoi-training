@@ -1,7 +1,7 @@
 <<: *{training.default}
 
 lightning_module:
-  _target_: anemoi.training.train.reconstructor.ReconstructionLightningModuleICEnsemble
+  _target_: anemoi.training.lightning_module.reconstruction.ReconstructionLightningModuleICEnsemble
 
 # ensemble_size_per_device: 4
 

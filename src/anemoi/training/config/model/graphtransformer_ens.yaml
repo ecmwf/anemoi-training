@@ -1,9 +1,9 @@
 <<: *{model.graphtransformer}
 model:
-  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiEnsModelEncProcDec
+  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDecEns
 
 noise_injector:
-  _target_: anemoi.models.layers.noise_injection.NoiseInjector
+  _target_: anemoi.models.layers.noise.StandardGaussianNoiseInjector
   _convert_: all
   noise_channels_dim: 4
   noise_mlp_hidden_dim: 32

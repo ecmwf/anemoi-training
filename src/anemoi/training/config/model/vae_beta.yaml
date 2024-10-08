@@ -10,9 +10,7 @@ no_z_samples: 1 # No of Z samples
 
 
 encoder:
- _target_: anemoi.models.layers.coderblock.AnemoiEncoderBlocks
  num_channels: ${model.num_channels}
- num_latent_levels: 3
  freeze_parameters: False
  mapper:
    _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
@@ -31,13 +29,11 @@ encoder:
     mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
     num_heads: 16 # GraphTransformer or Transformer only
     window_size: 256
-    dropout_p: 0.01
+    dropout_p: 0.00
 
 
 decoder:
- _target_: anemoi.models.layers.coderblock.AnemoiDecoderBlocks
  num_channels: ${model.num_channels}
- num_latent_levels: ${model.encoder.num_latent_levels}
  freeze_parameters: False
  mapper:
    _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
@@ -56,7 +52,7 @@ decoder:
     mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
     num_heads: 16 # GraphTransformer or Transformer only
     window_size: 256
-    dropout_p: 0.01
+    dropout_p: 0.00
 
 
 trainable_parameters:
