@@ -56,8 +56,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
         self.register_buffer("node_weights", node_weights, persistent=True)
-        if feature_weights is not None:
-            self.register_buffer("feature_weights", feature_weights, persistent=True)
+        self.register_buffer("feature_weights", feature_weights, persistent=True)
 
     def scale_by_feature_weights(
         self,
@@ -79,7 +78,7 @@ class BaseWeightedLoss(nn.Module, ABC):
             Scaled error tensor
         """
         # Use feature_weights if available
-        if not hasattr(self, "feature_weights"):
+        if self.feature_weights is None:
             return x
 
         if feature_indices is None:
