@@ -6,7 +6,6 @@
 # nor does it submit to any jurisdiction.
 
 import logging
-import os
 from functools import cached_property
 from typing import Callable
 
@@ -54,39 +53,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             self.timeincrement,
             frequency,
             timestep,
-        )
-
-        self.global_rank = int(os.environ.get("SLURM_PROCID", "0"))  # global rank
-        self.model_comm_group_id = (
-            self.global_rank // self.config.hardware.num_gpus_per_model
-        )  # id of the model communication group the rank is participating in
-        self.model_comm_group_rank = (
-            self.global_rank % self.config.hardware.num_gpus_per_model
-        )  # rank within one model communication group
-        total_gpus = self.config.hardware.num_gpus_per_node * self.config.hardware.num_nodes
-        assert (
-            total_gpus
-        ) % self.config.hardware.num_gpus_per_model == 0, (
-            f"GPUs per model {self.config.hardware.num_gpus_per_model} does not divide total GPUs {total_gpus}"
-        )
-        self.model_comm_num_groups = (
-            self.config.hardware.num_gpus_per_node
-            * self.config.hardware.num_nodes
-            // self.config.hardware.num_gpus_per_model
-        )  # number of model communication groups
-
-        # get reader_group_id (inside model_comm_group) and reader_group_rank (inside reader_group)
-        self.reader_group_id = self.model_comm_group_rank // self.config.dataloader.read_frequency
-        self.reader_group_rank = self.model_comm_group_rank % self.config.dataloader.read_frequency
-
-        LOGGER.debug(
-            "Rank %d model communication group number %d, with local model communication group rank %d, "
-            "reader group number %d, with local reader group rank %d",
-            self.global_rank,
-            self.model_comm_group_id,
-            self.model_comm_group_rank,
-            self.reader_group_id,
-            self.reader_group_rank,
         )
 
         # Set the maximum rollout to be expected
@@ -175,10 +141,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             rollout=r,
             multistep=self.config.training.multistep_input,
             timeincrement=self.timeincrement,
-            model_comm_group_rank=self.model_comm_group_rank,
-            model_comm_group_id=self.model_comm_group_id,
-            model_comm_num_groups=self.model_comm_num_groups,
-            reader_group_rank=self.reader_group_rank,
             shuffle=shuffle,
             label=label,
         )

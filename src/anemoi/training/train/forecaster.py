@@ -8,8 +8,6 @@
 #
 
 import logging
-import math
-import os
 from collections import defaultdict
 from collections.abc import Mapping
 
@@ -119,26 +117,14 @@ class GraphForecaster(pl.LightningModule):
 
         self.enable_plot = config.diagnostics.plot.enabled
 
-        self.model_comm_group_id = int(os.environ.get("SLURM_PROCID", "0")) // config.hardware.num_gpus_per_model
-        self.model_comm_group_rank = int(os.environ.get("SLURM_PROCID", "0")) % config.hardware.num_gpus_per_model
-        self.model_comm_num_groups = math.ceil(
-            config.hardware.num_gpus_per_node * config.hardware.num_nodes / config.hardware.num_gpus_per_model,
-        )
+        # lazy init model and reader group info, will be set by the DDPGroupStrategy:
+        self.model_comm_group_id = 0
+        self.model_comm_group_rank = 0
+        self.model_comm_num_groups = 1
 
-        self.reader_group_size = config.dataloader.read_frequency
-        self.reader_group_id = self.model_comm_group_rank // self.reader_group_size
-        self.reader_group_rank = self.model_comm_group_rank % self.reader_group_size
-        # global rank of the root of the current reader group (required for broadcasting):
-        self.reader_group_root = (int(os.environ.get("SLURM_PROCID", "0")) // self.reader_group_size) * self.reader_group_size
-
-        LOGGER.debug(
-            f"GraphForecaster: "
-            f"Rank {os.environ.get('SLURM_PROCID', '0')} model_comm_group_id: {self.model_comm_group_id}"
-            f" model_comm_group_rank: {self.model_comm_group_rank}" 
-            f" reader_group_id: {self.reader_group_id}"
-            f" reader_group_rank: {self.reader_group_rank}"   
-            f" reader_group_root: {self.reader_group_root}",
-        )
+        self.reader_group_id = 0
+        self.reader_group_rank = 0
+        self.reader_group_root = 0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
@@ -199,13 +185,31 @@ class GraphForecaster(pl.LightningModule):
                 metric_ranges_validation[key] = [idx]
         return metric_ranges, metric_ranges_validation, loss_scaling
 
-    def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:
-        LOGGER.debug("set_model_comm_group: %s", model_comm_group)
+    def set_model_comm_group(
+        self,
+        model_comm_group: ProcessGroup,
+        model_comm_group_id: int,
+        model_comm_group_rank: int,
+        model_comm_num_groups: int,
+    ) -> None:
         self.model_comm_group = model_comm_group
+        self.model_comm_group_id = model_comm_group_id
+        self.model_comm_group_rank = model_comm_group_rank
+        self.model_comm_num_groups = model_comm_num_groups
 
-    def set_reader_groups(self, reader_groups: list[ProcessGroup]) -> None:
-        LOGGER.debug("set_reader_groups: %s", reader_groups)
+    def set_reader_groups(
+        self,
+        reader_groups: list[ProcessGroup],
+        reader_group_id: int,
+        reader_group_rank: int,
+        reader_group_size: int,
+        reader_group_root: int,
+    ) -> None:
         self.reader_groups = reader_groups
+        self.reader_group_id = reader_group_id
+        self.reader_group_rank = reader_group_rank
+        self.reader_group_size = reader_group_size
+        self.reader_group_root = reader_group_root
 
     def advance_input(
         self,
@@ -240,21 +244,21 @@ class GraphForecaster(pl.LightningModule):
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         del batch_idx
 
-        # preprocess batch and broadcast from reader_group rank 0 to reader_group 
-        if self.reader_group_rank == 0: 
+        # preprocess batch and broadcast from reader_group rank 0 to reader_group
+        if self.reader_group_rank == 0:
             # for validation not normalized in-place because remappers cannot be applied in-place
             batch = self.model.pre_processors(batch, in_place=not validation_mode)
-        else: 
+        else:
             # init batch tensor with correct shape on non-root ranks
-            shape = (batch.shape[0],) + tuple(batch[0].tolist())
-            batch = torch.zeros(shape, device=self.device)
+            shape = (batch.shape[0], *tuple(batch[0].tolist()))
+            batch = torch.empty(shape, device=self.device)
 
         if self.reader_groups is not None and self.reader_group_size > 1:
-            torch.distributed.broadcast(batch, src=self.reader_group_root, group=self.reader_groups[self.reader_group_id])
-
-            # Synchronize after the broadcast to ensure that model_comm_group and reader_group don't overlap
-            # see https://pytorch.org/docs/stable/distributed.html#torch.distributed.new_group WARNING
-            torch.distributed.barrier(group=self.reader_groups[self.reader_group_id])
+            torch.distributed.broadcast(
+                batch,
+                src=self.reader_group_root,
+                group=self.reader_groups[self.reader_group_id],
+            )
 
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}
