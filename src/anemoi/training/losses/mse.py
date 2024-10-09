@@ -14,13 +14,13 @@ from functools import cached_property
 
 import torch
 
-from anemoi.training.losses.weightedloss import WeightedLoss
+from anemoi.training.losses.weightedloss import BaseWeightedLoss
 
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedMSELoss(WeightedLoss):
-    """Latitude-weighted MSE loss."""
+class WeightedMSELoss(BaseWeightedLoss):
+    """Node-weighted MSE loss."""
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class WeightedMSELoss(WeightedLoss):
         ignore_nans: bool = False,
         **kwargs,
     ) -> None:
-        """Latitude- and feature weighted MSE Loss.
+        """Node- and feature weighted MSE Loss.
 
         Parameters
         ----------

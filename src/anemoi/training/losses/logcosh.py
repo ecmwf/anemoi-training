@@ -14,13 +14,13 @@ from functools import cached_property
 
 import torch
 
-from anemoi.training.losses.weightedloss import WeightedLoss
+from anemoi.training.losses.weightedloss import BaseWeightedLoss
 
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedLogCoshLoss(WeightedLoss):
-    """Latitude-weighted LogCosh loss."""
+class WeightedLogCoshLoss(BaseWeightedLoss):
+    """Node-weighted LogCosh loss."""
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class WeightedLogCoshLoss(WeightedLoss):
         ignore_nans: bool = False,
         **kwargs,
     ) -> None:
-        """Latitude- and feature weighted LogCosh Loss.
+        """Node- and feature weighted LogCosh Loss.
 
         Parameters
         ----------

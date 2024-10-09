@@ -14,13 +14,13 @@ from functools import cached_property
 
 import torch
 
-from anemoi.training.losses.weightedloss import WeightedLoss
+from anemoi.training.losses.weightedloss import BaseWeightedLoss
 
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedMAELoss(WeightedLoss):
-    """Latitude-weighted MAE loss."""
+class WeightedMAELoss(BaseWeightedLoss):
+    """Node-weighted MAE loss."""
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class WeightedMAELoss(WeightedLoss):
         ignore_nans: bool = False,
         **kwargs,
     ) -> None:
-        """Latitude- and feature weighted MAE Loss.
+        """Node- and feature weighted MAE Loss.
 
         Also known as the Weighted L1 loss.
 

@@ -20,8 +20,8 @@ from torch import nn
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedLoss(nn.Module, ABC):
-    """Latitude-weighted general loss."""
+class BaseWeightedLoss(nn.Module, ABC):
+    """Node-weighted general loss."""
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class WeightedLoss(nn.Module, ABC):
         feature_weights: torch.Tensor | None = None,
         ignore_nans: bool = False,
     ) -> None:
-        """Latitude- and feature_weights Loss.
+        """Node- and feature_weighted Loss.
 
         Exposes:
         - self.avg_function: torch.nanmean or torch.mean
