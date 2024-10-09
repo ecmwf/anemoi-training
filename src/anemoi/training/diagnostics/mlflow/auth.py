@@ -120,6 +120,7 @@ class TokenAuth:
             self.log.info("📝 and paste it here (you will not see the output, just press enter after pasting):")
             self.refresh_token = getpass("Refresh Token: ")
 
+            # perform a new refresh token request to check if the seed refresh token is valid
             new_refresh_token = self._token_request().get("refresh_token")
 
         if not new_refresh_token:
