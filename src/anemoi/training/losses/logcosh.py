@@ -74,7 +74,8 @@ class WeightedLogCoshLoss(BaseWeightedLoss):
         """
         out = torch.log(torch.cosh(pred - target))
 
-        out = self.scale_by_feature_weights(out, feature_indices, feature_scale)
+        if feature_scale:
+            out = self.scale_by_feature_weights(out, feature_indices)
         return self.scale_by_node_weights(out, squash)
 
     @cached_property
