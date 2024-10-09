@@ -322,7 +322,8 @@ class GraphForecaster(pl.LightningModule):
     ) -> tuple[dict, list[torch.Tensor]]:
         """Calculate metrics on the validation output.
 
-        Args:
+        Parameters
+        ----------
             y_pred: torch.Tensor
                 Predicted ensemble
             y: torch.Tensor
