@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import logging
-from functools import cached_property
 
 import torch
 
@@ -22,10 +21,12 @@ LOGGER = logging.getLogger(__name__)
 class WeightedMSELoss(BaseWeightedLoss):
     """Node-weighted MSE loss."""
 
+    name = "wmse"
+
     def __init__(
         self,
         node_weights: torch.Tensor,
-        feature_weights: torch.Tensor | None = None,
+        loss_scaling: torch.Tensor | None = None,
         ignore_nans: bool = False,
         **kwargs,
     ) -> None:
@@ -35,13 +36,13 @@ class WeightedMSELoss(BaseWeightedLoss):
         ----------
         node_weights : torch.Tensor of shape (N, )
             Weight of each node in the loss function
-        feature_weights : Optional[torch.Tensor], optional
+        loss_scaling : Optional[torch.Tensor], optional
             precomputed, per-variable weights, by default None
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
 
         """
-        super().__init__(node_weights=node_weights, feature_weights=feature_weights, ignore_nans=ignore_nans, **kwargs)
+        super().__init__(node_weights=node_weights, loss_scaling=loss_scaling, ignore_nans=ignore_nans, **kwargs)
 
     def forward(
         self,
@@ -74,9 +75,5 @@ class WeightedMSELoss(BaseWeightedLoss):
         out = torch.square(pred - target)
 
         if feature_scale:
-            out = self.scale_by_feature_weights(out, feature_indices)
+            out = self.scale_by_loss_scaling(out, feature_indices)
         return self.scale_by_node_weights(out, squash)
-
-    @cached_property
-    def name(self) -> str:
-        return "wmse"

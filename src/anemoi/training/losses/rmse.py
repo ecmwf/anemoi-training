@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import logging
-from functools import cached_property
 
 import torch
 
@@ -22,10 +21,12 @@ LOGGER = logging.getLogger(__name__)
 class WeightedRMSELoss(BaseWeightedLoss):
     """Node-weighted RMSE loss."""
 
+    name = "wrmse"
+
     def __init__(
         self,
         node_weights: torch.Tensor,
-        feature_weights: torch.Tensor | None = None,
+        loss_scaling: torch.Tensor | None = None,
         ignore_nans: bool = False,
         **kwargs,
     ) -> None:
@@ -35,12 +36,12 @@ class WeightedRMSELoss(BaseWeightedLoss):
         ----------
         node_weights : torch.Tensor of shape (N, )
             Weight of each node in the loss function
-        feature_weights : Optional[torch.Tensor], optional
+        loss_scaling : Optional[torch.Tensor], optional
             precomputed, per-variable weights, by default None
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
         """
-        super().__init__(node_weights=node_weights, feature_weights=feature_weights, ignore_nans=ignore_nans, **kwargs)
+        super().__init__(node_weights=node_weights, loss_scaling=loss_scaling, ignore_nans=ignore_nans, **kwargs)
 
     def forward(
         self,
@@ -78,7 +79,3 @@ class WeightedRMSELoss(BaseWeightedLoss):
             feature_scale=feature_scale,
         )
         return torch.sqrt(mse)
-
-    @cached_property
-    def name(self) -> str:
-        return "wrmse"

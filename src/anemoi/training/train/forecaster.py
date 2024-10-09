@@ -88,7 +88,7 @@ class GraphForecaster(pl.LightningModule):
             config,
             data_indices,
         )
-        loss_kwargs = {"node_weights": self.loss_weights, "feature_weights": loss_scaling}
+        loss_kwargs = {"node_weights": self.loss_weights, "loss_scaling": loss_scaling}
 
         self.loss = self.get_loss_function(config.training.loss_functions.loss, **loss_kwargs)
         assert isinstance(self.loss, torch.nn.Module) and not isinstance(
@@ -140,7 +140,8 @@ class GraphForecaster(pl.LightningModule):
     def get_loss_function(
         config: DictConfig,
         **kwargs,
-    ) -> Union[torch.nn.Module, torch.nn.ModuleList]:  # noqa: FA100 # stop ruff
+    ) -> Union[torch.nn.Module, torch.nn.ModuleList]:  # noqa: FA100
+        # Future import breaks other type hints TODO Harrison Cook
         """
         Get loss functions from config.
 
@@ -166,7 +167,7 @@ class GraphForecaster(pl.LightningModule):
         loss_config = OmegaConf.to_container(config, resolve=True)
 
         # Create loss_config including elements from kwargs if they
-        # are specified in the config with include_{key}: True
+        # are specified in the config with `include_{key}: True`
         loss_init_config = {}
         for key in loss_config:  # Go through all keys given in the config
             # If key does not start with include_, add it to the loss_init_config
@@ -180,7 +181,8 @@ class GraphForecaster(pl.LightningModule):
             if key_suffix in kwargs:
                 loss_init_config[key_suffix] = kwargs[key_suffix]
                 continue
-            raise ValueError(f"Key {key_suffix!r} not found in kwargs, {kwargs.keys()!s}")  # noqa: TRY003, EM102
+            error_msg = f"Key {key_suffix!r} not found in kwargs, {kwargs.keys()!s}"
+            raise ValueError(error_msg)
         return instantiate(loss_init_config)
 
     @staticmethod
@@ -344,7 +346,7 @@ class GraphForecaster(pl.LightningModule):
         y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
 
         for metric in self.metrics:
-            metric_name = getattr(metric, "name", metric.__class__.__name__)
+            metric_name = getattr(metric, "name", metric.__class__.__name__.lower())
 
             for mkey, indices in self.metric_ranges_validation.items():
                 # for individual variables do not feature scale
@@ -381,7 +383,7 @@ class GraphForecaster(pl.LightningModule):
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)
         self.log(
-            f"train_{getattr(self.loss, 'name', self.loss.__class__.__name__)}",
+            f"train_{getattr(self.loss, 'name', self.loss.__class__.__name__.lower())}",
             train_loss,
             on_epoch=True,
             on_step=True,
@@ -424,7 +426,7 @@ class GraphForecaster(pl.LightningModule):
         with torch.no_grad():
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
         self.log(
-            f"val_{getattr(self.loss, 'name', self.loss.__class__.__name__)}",
+            f"val_{getattr(self.loss, 'name', self.loss.__class__.__name__.lower())}",
             val_loss,
             on_epoch=True,
             on_step=True,
