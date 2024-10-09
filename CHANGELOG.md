@@ -26,6 +26,8 @@ Keep it human-readable, your future self will thank you!
 - Feature: Add configurable models [#50](https://github.com/ecmwf/anemoi-training/pulls/50)
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
 - Long Rollout Plots
+- Feat: Anemoi Profiler compatible with mlflow and using Pytorch (Kineto) Profiler for memory report
+
 
 ### Fixed
 
