@@ -94,7 +94,7 @@ class GraphForecaster(pl.LightningModule):
         assert isinstance(self.loss, torch.nn.Module) and not isinstance(
             self.loss,
             torch.nn.ModuleList,
-        ), "Loss function must be a torch.nn.Module"
+        ), f"Loss function must be a `torch.nn.Module`, not a {type(self.loss).__name__!r}"
 
         self.metrics = self.get_loss_function(config.training.loss_functions.metrics, **loss_kwargs)
         if not isinstance(self.metrics, torch.nn.ModuleList):
