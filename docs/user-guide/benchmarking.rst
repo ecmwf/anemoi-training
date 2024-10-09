@@ -316,6 +316,10 @@ the profiler scheduler.
 -  active tracing (``active=6`` steps), during this phase profiler
    traces and records data;
 
+**Note** if you use ``limit_batches`` in the dataloader, the number of
+batches selected should be greater than the sum of warmup and steps. If
+not, the profiler will not be able to generate the report.
+
 It's possible to also generate additional products/reports with the
 memory profiler, the memory timeline and the memory traces. Those take
 more time to generate and hence it is possible to choose if we want them
