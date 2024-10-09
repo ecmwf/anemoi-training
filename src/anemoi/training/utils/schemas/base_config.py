@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .data import DataConfig
+from .diagnostics import DiagnosticsConfig
 from .hardware import HardwareConfig
 from .models.base_model import BaseModelConfig
 from .training import TrainingConfig
@@ -21,7 +22,7 @@ from .training import TrainingConfig
 class BaseConfig:
     data: DataConfig
     dataloader: Any
-    diagnostics: Any
+    diagnostics: DiagnosticsConfig
     hardware: HardwareConfig
     graph: Any
     model: BaseModelConfig
