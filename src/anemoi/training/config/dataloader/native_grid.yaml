@@ -3,7 +3,7 @@ prefetch_factor: 2
 # ============
 # read_frequency:
 #   Only ever read_frequency-th GPU of each model commm group reads data
-#   to reduce CPU memory usage. 
+#   to reduce CPU memory usage.
 #   The number of GPUs per model must be divisible by read_frequency.
 #   Default: 1 (all GPUs read data)
 # ============
