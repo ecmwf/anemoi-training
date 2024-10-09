@@ -116,11 +116,11 @@ class TokenAuth:
             new_refresh_token = self._token_request(ignore_exc=True).get("refresh_token")
 
         if not new_refresh_token:
-            self.log.info("📝 Please sign in with your credentials.")
-            username = input("Username: ")
-            password = getpass("Password: ")
+            self.log.info("📝 Please obtain a seed refresh token from %s/seed", self.url)
+            self.log.info("📝 and paste it here (you will not see the output, just press enter after pasting):")
+            self.refresh_token = getpass("Refresh Token: ")
 
-            new_refresh_token = self._token_request(username=username, password=password).get("refresh_token")
+            new_refresh_token = self._token_request().get("refresh_token")
 
         if not new_refresh_token:
             msg = "❌ Failed to log in. Please try again."
@@ -183,16 +183,10 @@ class TokenAuth:
 
     def _token_request(
         self,
-        username: str | None = None,
-        password: str | None = None,
         ignore_exc: bool = False,
     ) -> dict:
-        if username is not None and password is not None:
-            path = "newtoken"
-            payload = {"username": username, "password": password}
-        else:
-            path = "refreshtoken"
-            payload = {"refresh_token": self.refresh_token}
+        path = "refreshtoken"
+        payload = {"refresh_token": self.refresh_token}
 
         try:
             response = self._request(path, payload)
