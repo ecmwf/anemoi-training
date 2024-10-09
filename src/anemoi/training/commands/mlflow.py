@@ -77,7 +77,6 @@ class MlFlow(Command):
             "-a",
             action="store_true",
             help="The destination server requires authentication.",
-            default=argparse.SUPPRESS,
         )
         sync.add_argument(
             "--export-deleted-runs",
