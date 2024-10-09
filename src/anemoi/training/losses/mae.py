@@ -18,10 +18,10 @@ from anemoi.training.losses.weightedloss import BaseWeightedLoss
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedMSELoss(BaseWeightedLoss):
-    """Node-weighted MSE loss."""
+class WeightedMAELoss(BaseWeightedLoss):
+    """Node-weighted MAE loss."""
 
-    name = "wmse"
+    name = "wmae"
 
     def __init__(
         self,
@@ -30,7 +30,9 @@ class WeightedMSELoss(BaseWeightedLoss):
         ignore_nans: bool = False,
         **kwargs,
     ) -> None:
-        """Node- and feature weighted MSE Loss.
+        """Node- and feature weighted MAE Loss.
+
+        Also known as the Weighted L1 loss.
 
         Parameters
         ----------
@@ -52,7 +54,7 @@ class WeightedMSELoss(BaseWeightedLoss):
         feature_indices: torch.Tensor | None = None,
         feature_scale: bool = True,
     ) -> torch.Tensor:
-        """Calculates the lat-weighted MSE loss.
+        """Calculates the lat-weighted MAE loss.
 
         Parameters
         ----------
@@ -70,9 +72,9 @@ class WeightedMSELoss(BaseWeightedLoss):
         Returns
         -------
         torch.Tensor
-            Weighted MSE loss
+            Weighted MAE loss
         """
-        out = torch.square(pred - target)
+        out = torch.abs(pred - target)
 
         if feature_scale:
             out = self.scale_by_loss_scaling(out, feature_indices)

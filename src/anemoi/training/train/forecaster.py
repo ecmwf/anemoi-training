@@ -12,6 +12,7 @@ import math
 import os
 from collections import defaultdict
 from collections.abc import Mapping
+from typing import Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -28,7 +29,6 @@ from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
-from anemoi.training.losses.mse import WeightedMSELoss
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.utils.jsonify import map_config_to_primitives
 
@@ -88,10 +88,19 @@ class GraphForecaster(pl.LightningModule):
             config,
             data_indices,
         )
-        self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
-        self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
+        loss_kwargs = {"node_weights": self.loss_weights, "loss_scaling": loss_scaling}
 
-        if config.training.loss_gradient_scaling:
+        self.loss = self.get_loss_function(config.training.loss_functions.loss, **loss_kwargs)
+        assert isinstance(self.loss, torch.nn.Module) and not isinstance(
+            self.loss,
+            torch.nn.ModuleList,
+        ), f"Loss function must be a `torch.nn.Module`, not a {type(self.loss).__name__!r}"
+
+        self.metrics = self.get_loss_function(config.training.loss_functions.metrics, **loss_kwargs)
+        if not isinstance(self.metrics, torch.nn.ModuleList):
+            self.metrics = torch.nn.ModuleList([self.metrics])
+
+        if config.training.loss_functions.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
         self.multi_step = config.training.multistep_input
@@ -126,6 +135,55 @@ class GraphForecaster(pl.LightningModule):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
+
+    @staticmethod
+    def get_loss_function(
+        config: DictConfig,
+        **kwargs,
+    ) -> Union[torch.nn.Module, torch.nn.ModuleList]:  # noqa: FA100
+        # Future import breaks other type hints TODO Harrison Cook
+        """
+        Get loss functions from config.
+
+        Will include additional kwargs if specified in the config.
+        Can be ModuleList if multiple losses are specified.
+
+        E.g.
+            If `include_node_weights: True` is set in the config, and node_weights in kwargs
+             `node_weights` will be included in the config to instantiate the module with.
+        """
+        config_container = OmegaConf.to_container(config, resolve=False)
+        if isinstance(config_container, list):
+            return torch.nn.ModuleList(
+                [
+                    GraphForecaster.get_loss_function(
+                        OmegaConf.create(loss_config),
+                        **kwargs,
+                    )
+                    for loss_config in config
+                ],
+            )
+
+        loss_config = OmegaConf.to_container(config, resolve=True)
+
+        # Create loss_config including elements from kwargs if they
+        # are specified in the config with `include_{key}: True`
+        loss_init_config = {}
+        for key in loss_config:  # Go through all keys given in the config
+            # If key does not start with include_, add it to the loss_init_config
+            if not key.startswith("include_"):
+                loss_init_config[key] = loss_config[key]
+                continue
+            # If key starts with include_, remove the include_ prefix
+            # and check if the key is in kwargs, if it is add it to the loss_init_config
+            # if it is not raise a ValueError
+            key_suffix = key.removeprefix("include_")
+            if key_suffix in kwargs:
+                loss_init_config[key_suffix] = kwargs[key_suffix]
+                continue
+            error_msg = f"Key {key_suffix!r} not found in kwargs, {kwargs.keys()!s}"
+            raise ValueError(error_msg)
+        return instantiate(loss_init_config)
 
     @staticmethod
     def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
@@ -263,16 +321,60 @@ class GraphForecaster(pl.LightningModule):
         y: torch.Tensor,
         rollout_step: int,
         enable_plot: bool = False,
-    ) -> tuple[dict, list]:
+    ) -> tuple[dict, list[torch.Tensor]]:
+        """Calculate metrics on the validation output.
+
+        Parameters
+        ----------
+            y_pred: torch.Tensor
+                Predicted ensemble
+            y: torch.Tensor
+                Ground truth (target).
+            rollout_step: int
+                Rollout step
+            enable_plot: bool, defaults to False
+                Generate plots
+
+        Returns
+        -------
+            val_metrics, preds:
+                validation metrics and predictions
+        """
         metrics = {}
         y_preds = []
         y_postprocessed = self.model.post_processors(y, in_place=False)
         y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
-        for mkey, indices in self.metric_ranges_validation.items():
-            metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(
-                y_pred_postprocessed[..., indices],
-                y_postprocessed[..., indices],
-            )
+
+        for metric in self.metrics:
+            metric_name = getattr(metric, "name", metric.__class__.__name__.lower())
+
+            for mkey, indices in self.metric_ranges_validation.items():
+                # for individual variables do not feature scale
+                if len(indices) == 1:
+                    metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
+                        y_pred_postprocessed[..., indices],
+                        y_postprocessed[..., indices],
+                        feature_indices=indices,
+                        feature_scale=False,
+                    )
+
+                # when gropupin all variables do feature scaling
+                elif mkey == "all":
+                    metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
+                        y_pred_postprocessed[..., indices],
+                        y_postprocessed[..., indices],
+                        feature_indices=indices,
+                        feature_scale=True,
+                    )
+                # for groups do not feature scale and use normalized values
+                elif len(indices) > 1:
+                    metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
+                        y_pred_postprocessed[..., indices],
+                        y_postprocessed[..., indices],
+                        feature_indices=indices,
+                        feature_scale=False,
+                    )
+                # for group do no feature scaling
 
         if enable_plot:
             y_preds.append(y_pred)
@@ -281,7 +383,7 @@ class GraphForecaster(pl.LightningModule):
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)
         self.log(
-            "train_wmse",
+            f"train_{getattr(self.loss, 'name', self.loss.__class__.__name__.lower())}",
             train_loss,
             on_epoch=True,
             on_step=True,
@@ -324,7 +426,7 @@ class GraphForecaster(pl.LightningModule):
         with torch.no_grad():
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
         self.log(
-            "val_wmse",
+            f"val_{getattr(self.loss, 'name', self.loss.__class__.__name__.lower())}",
             val_loss,
             on_epoch=True,
             on_step=True,
