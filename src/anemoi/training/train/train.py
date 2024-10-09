@@ -62,7 +62,7 @@ class AnemoiTrainer:
         self.config = config
 
         # Default to not warm-starting from a checkpoint
-        self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
+        self.start_from_checkpoint = (bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)) and self.config.training.resume
         self.load_weights_only = config.training.load_weights_only
         self.parent_uuid = None
 
@@ -141,7 +141,8 @@ class AnemoiTrainer:
         }
         if self.load_weights_only:
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-            return GraphForecaster.load_from_checkpoint(self.last_checkpoint, **kwargs)
+            return GraphForecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+
         return GraphForecaster(**kwargs)
 
     @rank_zero_only
@@ -187,12 +188,19 @@ class AnemoiTrainer:
         """Path to the last checkpoint."""
         if not self.start_from_checkpoint:
             return None
-
+        
         checkpoint = Path(
             self.config.hardware.paths.checkpoints.parent,
-            self.config.training.fork_run_id or self.run_id,
-            self.config.hardware.files.warm_start or "last.ckpt",
+            self.config.training.fork_run_id,  # or self.run_id,
+            self.config.hardware.files.warm_start or "transfer.ckpt",
         )
+        # Transfer learning or continue training
+        if not Path(checkpoint).exists():
+            checkpoint = Path(
+                self.config.hardware.paths.checkpoints.parent,
+                self.config.training.fork_run_id,  # or self.run_id,
+                self.config.hardware.files.warm_start or "last.ckpt",
+            )
 
         # Check if the last checkpoint exists
         if Path(checkpoint).exists():
@@ -313,6 +321,9 @@ class AnemoiTrainer:
 
     def train(self) -> None:
         """Training entry point."""
+        
+        print('Setting up trainer..')
+
         trainer = pl.Trainer(
             accelerator=self.accelerator,
             callbacks=self.callbacks,
@@ -328,7 +339,7 @@ class AnemoiTrainer:
             # run a fixed no of batches per epoch (helpful when debugging)
             limit_train_batches=self.config.dataloader.limit_batches.training,
             limit_val_batches=self.config.dataloader.limit_batches.validation,
-            num_sanity_val_steps=4,
+            num_sanity_val_steps=0,
             accumulate_grad_batches=self.config.training.accum_grad_batches,
             gradient_clip_val=self.config.training.gradient_clip.val,
             gradient_clip_algorithm=self.config.training.gradient_clip.algorithm,
@@ -337,6 +348,8 @@ class AnemoiTrainer:
             profiler=self.profiler,
             enable_progress_bar=self.config.diagnostics.enable_progress_bar,
         )
+
+        print('Starting training..')
 
         trainer.fit(
             self.model,

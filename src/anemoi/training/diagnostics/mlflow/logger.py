@@ -70,7 +70,7 @@ def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | N
     if len(sys.argv) > 1:
         # add the arguments to the command tag
         tags["command"] = tags["command"] + " " + " ".join(sys.argv[1:])
-    if config.training.run_id or config.training.fork_run_id:
+    if (config.training.run_id or config.training.fork_run_id) and config.training.resume:
         "Either run_id or fork_run_id must be provided to resume a run."
 
         import mlflow
@@ -85,11 +85,13 @@ def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | N
             run_name = mlflow_client.get_run(parent_run_id).info.run_name
             tags["mlflow.parentRunId"] = parent_run_id
             tags["resumedRun"] = "True"  # tags can't take boolean values
+
         elif config.training.run_id and not config.diagnostics.log.mlflow.on_resume_create_child:
             run_id = config.training.run_id
             run_name = mlflow_client.get_run(run_id).info.run_name
             mlflow_client.update_run(run_id=run_id, status="RUNNING")
             tags["resumedRun"] = "True"
+            
         else:
             parent_run_id = config.training.fork_run_id
             tags["forkedRun"] = "True"

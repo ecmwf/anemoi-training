@@ -997,7 +997,7 @@ class AnemoiCheckpoint(ModelCheckpoint):
 
             torch.save(model, inference_checkpoint_filepath)
 
-            save_metadata(inference_checkpoint_filepath, metadata)
+            # save_metadata(inference_checkpoint_filepath, metadata)
 
             model.config = save_config
             model.metadata = tmp_metadata
@@ -1016,7 +1016,7 @@ class AnemoiCheckpoint(ModelCheckpoint):
             from weakref import proxy
 
             # save metadata for the training checkpoint in the same format as inference
-            save_metadata(lightning_checkpoint_filepath, metadata)
+            # save_metadata(lightning_checkpoint_filepath, metadata)
 
             # notify loggers
             for logger in trainer.loggers:
