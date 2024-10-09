@@ -72,8 +72,8 @@ def _hide_axes_ticks(ax: plt.Axes) -> None:
     ax.tick_params(axis="both", which="both", length=0)
 
 
-def plot_loss(
-    x: np.ndarray,
+def plot_losses(
+    x: np.ndarray | dict[str, np.ndarray],
     colors: np.ndarray,
     xticks: dict[str, int] | None = None,
     legend_patches: list | None = None,
@@ -82,7 +82,7 @@ def plot_loss(
 
     Parameters
     ----------
-    x : np.ndarray
+    x : np.ndarray | dict[str, np.ndarray]
         Data for Plotting of shape (npred,)
     colors : np.ndarray
         Colors for the bars.
@@ -97,19 +97,31 @@ def plot_loss(
         The figure object handle.
 
     """
+    if not isinstance(x, dict):
+        x = {"Loss": x}
+
+    num_losses = len(x)
+
     # create plot
     # more space for legend
-    figsize = (8, 3) if legend_patches else (4, 3)
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
-    # histogram plot
-    ax.bar(np.arange(x.size), x, color=colors, log=1)
+    figsize = (8, 3 * num_losses) if legend_patches else (4, 3 * num_losses)
+    fig, axs = plt.subplots(num_losses, 1, figsize=figsize, sharey=True)
+    if not isinstance(axs, np.ndarray):
+        axs = np.array([axs])
 
-    # add xticks and legend if given
-    if xticks:
-        ax.set_xticks(list(xticks.values()), list(xticks.keys()), rotation=60)
+    for i, (name, data) in enumerate(x.items()):
+        # histogram plot
+        axs[i].bar(np.arange(data.size), data, color=colors, log=1)
+        axs[i].set_ylabel(name)
+
+        # add xticks and legend if given
+        if xticks:
+            axs[i].set_xticks(list(xticks.values()), list(xticks.keys()), rotation=60)
+
     if legend_patches:
         # legend outside and to the right of the plot
         plt.legend(handles=legend_patches, bbox_to_anchor=(1.01, 1), loc="upper left")
+
     plt.tight_layout()
 
     return fig

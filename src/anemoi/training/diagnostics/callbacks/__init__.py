@@ -41,7 +41,7 @@ from pytorch_lightning.utilities import rank_zero_only
 from anemoi.training.diagnostics.plots import init_plot_settings
 from anemoi.training.diagnostics.plots import plot_graph_node_features
 from anemoi.training.diagnostics.plots import plot_histogram
-from anemoi.training.diagnostics.plots import plot_loss
+from anemoi.training.diagnostics.plots import plot_losses
 from anemoi.training.diagnostics.plots import plot_power_spectrum
 from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
 
@@ -463,6 +463,7 @@ class PlotLoss(BasePlotCallback):
         super().__init__(config)
         self.parameter_names = None
         self.parameter_groups = self.config.diagnostics.plot.parameter_groups
+        self.spatial_group_mask = self.config.diagnostics.plot.get("spatial_group_mask", None)
         if self.parameter_groups is None:
             self.parameter_groups = {}
 
@@ -570,16 +571,33 @@ class PlotLoss(BasePlotCallback):
         # reorder parameter_names by position
         self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
 
+        if self.spatial_group_mask is not None:
+            spatial_mask = pl_module.model.graph_data[pl_module.model.model._graph_name_data][self.spatial_group_mask]
+            spatial_mask = spatial_mask.squeeze().to(batch.device)
+        
+        sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group
+
         batch = pl_module.model.pre_processors(batch, in_place=False)
         for rollout_step in range(pl_module.rollout):
             y_hat = outputs[1][rollout_step]
             y_true = batch[
                 :, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.internal_data.output.full
             ]
-            loss = pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()
+            loss = {"Loss": pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()[sort_by_parameter_group]}
 
-            sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group
-            fig = plot_loss(loss[sort_by_parameter_group], colors, xticks, legend_patches)
+            if self.spatial_group_mask is not None:
+                loss[f"Loss ({self.spatial_group_mask}=True)"] = pl_module.loss(
+                    torch.where(spatial_mask.unsqueeze(-1), y_hat, 0),
+                    torch.where(spatial_mask.unsqueeze(-1), y_true, 0),
+                    squash=False
+                ).cpu().numpy()[sort_by_parameter_group]
+                loss[f"Loss ({self.spatial_group_mask}=False)"] = pl_module.loss(
+                    torch.where(~spatial_mask.unsqueeze(-1), y_hat, 0),
+                    torch.where(~spatial_mask.unsqueeze(-1), y_true, 0),
+                    squash=False
+                ).cpu().numpy()[sort_by_parameter_group]
+
+            fig = plot_losses(loss, colors, xticks, legend_patches)
 
             self._output_figure(
                 logger,

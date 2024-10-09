@@ -29,7 +29,8 @@ diagnostics:
     parameters: ???
     parameters_histogram: ???
     parameters_spectrum: [] # WIP: spectrum plots not supported for LAM
-    learned_features: False
+    learned_features: True
+    spatial_group_mask: cutout
 hardware:
   files:
     graph: ???
