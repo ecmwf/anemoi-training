@@ -31,5 +31,5 @@ def health_check(tracking_uri: str) -> None:
 
     error_msg = f"Could not connect to MLflow server at {tracking_uri}. "
     if not token:
-        error_msg += "The server may require authentication, did you forget to turn it on in the config?"
+        error_msg += "The server may require authentication, did you forget to turn it on?"
     raise ConnectionError(error_msg)
