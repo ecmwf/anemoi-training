@@ -12,9 +12,6 @@ import random
 from functools import cached_property
 from typing import Callable
 
-import psutil
-from collections import defaultdict
-
 import numpy as np
 import torch
 from einops import rearrange
@@ -211,7 +208,7 @@ class NativeGridDataset(IterableDataset):
         now. (Until the code is "ensemble native".)
         """
         if self.reader_group_rank != 0: 
-            # yield dummy data only with shape information for non-root ranks
+            # yield dummy data only with shape information for non-root ranks (shape used for broadcast)
             shape = (self.rollout + self.multi_step, self.data.shape[2], self.data.shape[3], self.data.shape[1])
             for _ in self.chunk_index_range: 
                 yield torch.tensor(shape, dtype=torch.long)

@@ -78,7 +78,8 @@ class DDPGroupStrategy(DDPStrategy):
             str(model_comm_group_ranks[model_comm_group_id]),
         )
 
-        # set up reader groups by further splitting model_comm_group_ranks with read_frequency
+        # set up reader groups by further splitting model_comm_group_ranks with read_frequency:
+
         assert self.model_comm_group_size % self.read_frequency == 0, (
             f"Number of GPUs per model ({self.model_comm_group_size}) must be divisible by the read frequency "
             f"({self.read_frequency})."

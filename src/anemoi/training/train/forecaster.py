@@ -128,7 +128,7 @@ class GraphForecaster(pl.LightningModule):
         self.reader_group_size = config.dataloader.read_frequency
         self.reader_group_id = self.model_comm_group_rank // self.reader_group_size
         self.reader_group_rank = self.model_comm_group_rank % self.reader_group_size
-        # root rank (global rank) of the reader group
+        # global rank of the root of the current reader group (required for broadcasting):
         self.reader_group_root = (int(os.environ.get("SLURM_PROCID", "0")) // self.reader_group_size) * self.reader_group_size
 
         LOGGER.debug(
@@ -240,21 +240,16 @@ class GraphForecaster(pl.LightningModule):
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         del batch_idx
 
-        # TODO: change to reader group
-        # preprocess batch and broadcast from gpu0 to model comm group
+        # preprocess batch and broadcast from reader_group rank 0 to reader_group 
         if self.reader_group_rank == 0: 
             # for validation not normalized in-place because remappers cannot be applied in-place
             batch = self.model.pre_processors(batch, in_place=not validation_mode)
         else: 
+            # init batch tensor with correct shape on non-root ranks
             shape = (batch.shape[0],) + tuple(batch[0].tolist())
             batch = torch.zeros(shape, device=self.device)
 
         if self.reader_groups is not None and self.reader_group_size > 1:
-            if self.reader_group_rank == 0:
-                LOGGER.debug(f"Rank {int(os.environ.get('SLURM_PROCID', '0'))} broadcasting batch")
-            else: 
-                LOGGER.debug(f"Rank {int(os.environ.get('SLURM_PROCID', '0'))} waiting for broadcast from rank {self.reader_group_root}")
-
             torch.distributed.broadcast(batch, src=self.reader_group_root, group=self.reader_groups[self.reader_group_id])
 
             # Synchronize after the broadcast to ensure that model_comm_group and reader_group don't overlap

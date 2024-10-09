@@ -75,6 +75,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             // self.config.hardware.num_gpus_per_model
         )  # number of model communication groups
 
+        # get reader_group_id (inside model_comm_group) and reader_group_rank (inside reader_group)
         self.reader_group_id = self.model_comm_group_rank // self.config.dataloader.read_frequency
         self.reader_group_rank = self.model_comm_group_rank % self.config.dataloader.read_frequency
 
