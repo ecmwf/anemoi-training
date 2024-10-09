@@ -30,11 +30,7 @@ class TokenAuth:
 
     config_file = "mlflow-token.json"
 
-    def __init__(
-        self,
-        url: str,
-        enabled: bool = True,
-    ) -> None:
+    def __init__(self, url: str, enabled: bool = True, target_env_var: str = "MLFLOW_TRACKING_TOKEN") -> None:
         """Initialise the token authentication object.
 
         Parameters
@@ -43,9 +39,13 @@ class TokenAuth:
             URL of the authentication server.
         enabled : bool, optional
             Set this to False to turn off authentication, by default True
+        target_env_var : str, optional
+            The environment variable to store the access token in after authenticating,
+            by default `MLFLOW_TRACKING_TOKEN`
 
         """
         self.url = url
+        self.target_env_var = target_env_var
         self._enabled = enabled
 
         config = self.load_config()
@@ -161,7 +161,7 @@ class TokenAuth:
         self.access_expires = time.time() + (response.get("expires_in") * 0.7)  # bit of buffer
         self.refresh_token = response.get("refresh_token")
 
-        os.environ["MLFLOW_TRACKING_TOKEN"] = self.access_token
+        os.environ[self.target_env_var] = self.access_token
 
     @enabled
     def save(self, **kwargs: dict) -> None:
