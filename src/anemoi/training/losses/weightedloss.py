@@ -61,42 +61,39 @@ class BaseWeightedLoss(nn.Module, ABC):
 
     def scale_by_feature_weights(
         self,
-        error: torch.Tensor,
+        x: torch.Tensor,
         feature_indices: torch.Tensor | None = None,
-        feature_scale: bool = True,
     ) -> torch.Tensor:
-        """Scale the error tensor by the feature_weights.
+        """Scale a tensor by the feature_weights.
 
         Parameters
         ----------
-        error : torch.Tensor
-            Error tensor, shape (bs, (optional_ensemble), lat*lon, n_outputs)
+        x : torch.Tensor
+            Tensor to be scaled, shape (bs, (optional_ensemble), lat*lon, n_outputs)
         feature_indices:
             feature indices (relative to full model output) of the features passed in pred and target
-        feature_scale:
-            If True, scale the loss by the feature_weights, otherwise return the error tensor
 
         Returns
         -------
         torch.Tensor
             Scaled error tensor
         """
-        # Use feature_weights if available and feature_scale is True
-        if not feature_scale or not hasattr(self, "feature_weights"):
-            return error
+        # Use feature_weights if available
+        if not hasattr(self, "feature_weights"):
+            return x
 
         if feature_indices is None:
-            return error * self.feature_weights
-        return error * self.feature_weights[..., feature_indices]
+            return x * self.feature_weights
+        return x * self.feature_weights[..., feature_indices]
 
-    def scale_by_node_weights(self, error: torch.Tensor, squash: bool = True) -> torch.Tensor:
+    def scale_by_node_weights(self, x: torch.Tensor, squash: bool = True) -> torch.Tensor:
         """
-        Scale the error tensor by the node_weights.
+        Scale a tensor by the node_weights.
 
         Parameters
         ----------
-        error : torch.Tensor
-            Error tensor, shape (bs, (optional_ensemble), lat*lon, n_outputs)
+        x : torch.Tensor
+            Tensor to be scaled, shape (bs, (optional_ensemble), lat*lon, n_outputs)
         squash : bool, optional
             Average last dimension, by default True
 
@@ -107,17 +104,17 @@ class BaseWeightedLoss(nn.Module, ABC):
         """
         # Squash by last dimension
         if squash:
-            error = self.avg_function(error, dim=-1)
+            x = self.avg_function(x, dim=-1)
             # Weight by area
-            error *= self.node_weights.expand_as(error)
-            error /= self.sum_function(self.node_weights.expand_as(error))
-            return self.sum_function(error)
+            x *= self.node_weights.expand_as(x)
+            x /= self.sum_function(self.node_weights.expand_as(x))
+            return self.sum_function(x)
 
         # Weight by area, due to weighting construction is analagous to a mean
-        error *= self.node_weights[..., None].expand_as(error)
+        x *= self.node_weights[..., None].expand_as(x)
         # keep last dimension (variables) when summing weights
-        error /= self.sum_function(self.node_weights[..., None].expand_as(error), dim=(0, 1, 2))
-        return self.sum_function(error, dim=(0, 1, 2))
+        x /= self.sum_function(self.node_weights[..., None].expand_as(x), dim=(0, 1, 2))
+        return self.sum_function(x, dim=(0, 1, 2))
 
     @abstractmethod
     def forward(
@@ -150,7 +147,8 @@ class BaseWeightedLoss(nn.Module, ABC):
         """
         out = pred - target
 
-        out = self.scale_by_feature_weights(out, feature_indices, feature_scale)
+        if feature_scale:
+            out = self.scale_by_feature_weights(out, feature_indices)
         return self.scale_by_node_weights(out, squash)
 
     @cached_property
