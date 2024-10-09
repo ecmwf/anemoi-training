@@ -82,6 +82,18 @@ class GraphForecaster(pl.LightningModule):
         self.latlons_data = graph_data[config.graph.data].x
         self.loss_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
 
+        # Set mask of data nodes to be output
+        if out_mask_name := config.model.get("output_mask", None) is not None:
+            assert (
+                out_mask_name in graph_data[config.graph.data],
+                f"The attribute \'{out_mask_name}\' in output_mask does not exist in the graph. "
+                f"Options are: {', '.join(graph_data[config.graph.data].keys())}"
+            )
+            self.output_mask = graph_data[config.graph.data][out_mask_name].squeeze().bool()
+            self.loss_weights[~self.output_mask] = 0.0
+        else:
+            self.output_mask = torch.ones(self.latlons_data.shape[0], dtype=torch.bool, device=self.device)
+
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
         self.metric_ranges, self.metric_ranges_validation, loss_scaling = self.metrics_loss_scaling(
@@ -201,6 +213,12 @@ class GraphForecaster(pl.LightningModule):
             ...,
             self.data_indices.internal_model.output.prognostic,
         ]
+
+        # Fill in the boundary values (only for Limited Area Models)
+        if not self.output_mask.all():
+            _x = x[:, -1, :, :, self.data_indices.model.input.prognostic]
+            _x[..., ~self.output_mask, :] = batch[:, -1, :, ~self.output_mask][..., self.data_indices.data.output.full]
+            x[:, -1, :, :, self.data_indices.model.input.prognostic] = _x
 
         # get new "constants" needed for time-varying fields
         x[:, -1, :, :, self.data_indices.internal_model.input.forcing] = batch[

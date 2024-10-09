@@ -689,6 +689,10 @@ class PlotSample(BasePlotCallback):
             in_place=False,
         ).numpy()
 
+        if pl_module.output_mask is not None:
+            output_tensor[..., ~pl_module.output_mask, :] = np.nan
+            data[1:, :, ~pl_module.output_mask, :] = np.nan
+
         for rollout_step in range(pl_module.rollout):
             fig = plot_predicted_multilevel_flat_sample(
                 plot_parameters_dict,
@@ -781,6 +785,10 @@ class PlotAdditionalMetrics(BasePlotCallback):
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
         ).numpy()
+
+        if pl_module.output_mask is not None:
+            output_tensor[..., ~pl_module.output_mask, :] = np.nan
+            data[1:, :, ~pl_module.output_mask, :] = np.nan
 
         for rollout_step in range(pl_module.rollout):
             if self.config.diagnostics.plot.parameters_histogram is not None:
