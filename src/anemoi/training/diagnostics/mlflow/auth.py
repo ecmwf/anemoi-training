@@ -98,7 +98,7 @@ class TokenAuth:
         Parameters
         ----------
         force_credentials : bool, optional
-            Force a username/password prompt even if a refreh token is available, by default False.
+            Force a credential login even if a refreh token is available, by default False.
         kwargs : dict
             Additional keyword arguments.
 
@@ -135,7 +135,7 @@ class TokenAuth:
     def authenticate(self, **kwargs: dict) -> None:
         """Check the access token and refresh it if necessary.
 
-        The access token is stored in memory and in the environment variable `MLFLOW_TRACKING_TOKEN`.
+        The access token is stored in memory and in an environment variable.
         If the access token is still valid, this function does nothing.
 
         This function should be called before every MLflow API request.
