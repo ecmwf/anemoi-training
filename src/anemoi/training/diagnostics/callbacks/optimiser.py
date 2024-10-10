@@ -10,13 +10,26 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from pytorch_lightning.callbacks import LearningRateMonitor as pl_LearningRateMonitor
 from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging as pl_StochasticWeightAveraging
 
-if TYPE_CHECKING:
-    from omegaconf import OmegaConf
-
-
 LOGGER = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from omegaconf import DictConfig
+
+
+class LearningRateMonitor(pl_LearningRateMonitor):
+    """Provide LearningRateMonitor from pytorch_lightning as a callback."""
+
+    def __init__(
+        self,
+        config: DictConfig,
+        logging_interval: str = "step",
+        log_momentum: bool = False,
+    ) -> None:
+        super().__init__(logging_interval=logging_interval, log_momentum=log_momentum)
+        self.config = config
 
 
 class StochasticWeightAveraging(pl_StochasticWeightAveraging):
@@ -24,7 +37,7 @@ class StochasticWeightAveraging(pl_StochasticWeightAveraging):
 
     def __init__(
         self,
-        config: OmegaConf,
+        config: DictConfig,
         swa_lrs: int | None = None,
         swa_epoch_start: int | None = None,
         annealing_epoch: int | None = None,
@@ -32,8 +45,7 @@ class StochasticWeightAveraging(pl_StochasticWeightAveraging):
         device: str | None = None,
         **kwargs,
     ) -> None:
-        """
-        Stochastic Weight Averaging Callback.
+        """Stochastic Weight Averaging Callback.
 
         Parameters
         ----------
