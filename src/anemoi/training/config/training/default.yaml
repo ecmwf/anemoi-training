@@ -72,6 +72,8 @@ loss_scaling:
     2d: 0.5
     tp: 0.025
     cp: 0.0025
+  spatial:
+
 
 metrics:
 - z_500

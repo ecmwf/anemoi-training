@@ -447,7 +447,6 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
         self.plot(trainer, model, tag="node_trainable_params", exp_log_tag="node_trainable_params")
 
 
-
 class PlotLoss(BasePlotCallback):
     """Plots the unsqueezed loss over rollouts."""
 
@@ -574,7 +573,7 @@ class PlotLoss(BasePlotCallback):
         if self.spatial_group_mask is not None:
             spatial_mask = pl_module.model.graph_data[pl_module.model.model._graph_name_data][self.spatial_group_mask]
             spatial_mask = spatial_mask.squeeze().to(batch.device)
-        
+
         sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group
 
         batch = pl_module.model.pre_processors(batch, in_place=False)
@@ -586,16 +585,24 @@ class PlotLoss(BasePlotCallback):
             loss = {"Loss": pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()[sort_by_parameter_group]}
 
             if self.spatial_group_mask is not None:
-                loss[f"Loss ({self.spatial_group_mask}=True)"] = pl_module.loss(
-                    torch.where(spatial_mask.unsqueeze(-1), y_hat, 0),
-                    torch.where(spatial_mask.unsqueeze(-1), y_true, 0),
-                    squash=False
-                ).cpu().numpy()[sort_by_parameter_group]
-                loss[f"Loss ({self.spatial_group_mask}=False)"] = pl_module.loss(
-                    torch.where(~spatial_mask.unsqueeze(-1), y_hat, 0),
-                    torch.where(~spatial_mask.unsqueeze(-1), y_true, 0),
-                    squash=False
-                ).cpu().numpy()[sort_by_parameter_group]
+                loss[f"Loss ({self.spatial_group_mask}=True)"] = (
+                    pl_module.loss(
+                        torch.where(spatial_mask.unsqueeze(-1), y_hat, 0),
+                        torch.where(spatial_mask.unsqueeze(-1), y_true, 0),
+                        squash=False,
+                    )
+                    .cpu()
+                    .numpy()[sort_by_parameter_group]
+                )
+                loss[f"Loss ({self.spatial_group_mask}=False)"] = (
+                    pl_module.loss(
+                        torch.where(~spatial_mask.unsqueeze(-1), y_hat, 0),
+                        torch.where(~spatial_mask.unsqueeze(-1), y_true, 0),
+                        squash=False,
+                    )
+                    .cpu()
+                    .numpy()[sort_by_parameter_group]
+                )
 
             fig = plot_losses(loss, colors, xticks, legend_patches)
 

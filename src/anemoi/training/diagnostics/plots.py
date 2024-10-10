@@ -7,13 +7,13 @@
 
 from __future__ import annotations
 
-import torch
 import logging
 from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
+import torch
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import ListedColormap
 from matplotlib.colors import TwoSlopeNorm
@@ -654,15 +654,15 @@ def sincos_to_latlon(sincos_coords: torch.Tensor) -> torch.Tensor:
     return torch.atan2(sin_y, cos_y)
 
 
-def plot_graph_node_features(model, nodes_name: list[str], force_global_view: bool = True) -> Figure:
+def plot_graph_node_features(model: torch.nn.Module, nodes_name: list[str]) -> Figure:
     """Plot trainable graph node features.
 
     Parameters
     ----------
-    model:
+    model: torch.nn.Module
         Model object
-    force_global_view : bool, optional
-        Show the entire globe, by default True.
+    nodes_name: list[str]
+        List of nodes to plot
 
     Returns
     -------
@@ -670,7 +670,7 @@ def plot_graph_node_features(model, nodes_name: list[str], force_global_view: bo
         Figure object handle
     """
     nrows = len(nodes_name)
-    ncols = min([getattr(model, f"trainable_{m}").trainable.shape[1] for m in nodes_name])
+    ncols = min(getattr(model, f"trainable_{m}").trainable.shape[1] for m in nodes_name)
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 

@@ -48,3 +48,7 @@ dataloader:
     validation: 100
 training:
   max_epochs: 5
+  loss_scaling:
+    spatial: # Scale area_weights spatially by the mask
+      graph_node_attribute: cutout
+      percentage: 0.5 # Percentage of the total loss weights
