@@ -91,7 +91,9 @@ class TokenAuth:
         """Acquire a new refresh token and save it to disk.
 
         If an existing valid refresh token is already on disk it will be used.
-        If not, or the token has expired, the user will be prompted for credentials.
+        If not, or the token has expired, the user will be asked to obtain one from the API.
+
+        Refresh token expiry time is set in the `REFRESH_EXPIRE_DAYS` constant (default 29 days).
 
         This function should be called once, interactively, right before starting a training run.
 
@@ -134,7 +136,9 @@ class TokenAuth:
 
     @enabled
     def authenticate(self, **kwargs: dict) -> None:
-        """Check the access token and refresh it if necessary.
+        """Check the access token and refresh it if necessary. A new refresh token will also be acquired upon refresh.
+
+        This requires a valid refresh token to be available, obtained from the `login` method.
 
         The access token is stored in memory and in an environment variable.
         If the access token is still valid, this function does nothing.
