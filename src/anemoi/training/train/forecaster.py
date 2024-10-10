@@ -86,8 +86,8 @@ class GraphForecaster(pl.LightningModule):
         if out_mask_name := config.model.get("output_mask", None) is not None:
             assert (
                 out_mask_name in graph_data[config.graph.data],
-                f"The attribute \'{out_mask_name}\' in output_mask does not exist in the graph. "
-                f"Options are: {', '.join(graph_data[config.graph.data].keys())}"
+                f"The attribute '{out_mask_name}' in output_mask does not exist in the graph. "
+                f"Options are: {', '.join(graph_data[config.graph.data].keys())}",
             )
             self.output_mask = graph_data[config.graph.data][out_mask_name].squeeze().bool()
             self.loss_weights[~self.output_mask] = 0.0
