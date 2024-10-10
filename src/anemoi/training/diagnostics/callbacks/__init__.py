@@ -139,6 +139,13 @@ class BasePlotCallback(Callback, ABC):
         if self._executor is not None:
             self._executor.shutdown(wait=True)
 
+    def apply_output_mask(self, pl_module: pl.LightningModule, data: torch.Tensor) -> torch.Tensor:
+        if hasattr(pl_module, "output_mask") and pl_module.output_mask is not None:
+            # Fill with NaNs values where the mask is False
+            data[:, :, ~pl_module.output_mask, :] = np.nan
+
+        return data
+
     @abstractmethod
     @rank_zero_only
     def _plot(
@@ -689,6 +696,9 @@ class PlotSample(BasePlotCallback):
             in_place=False,
         ).numpy()
 
+        data = self.apply_output_mask(pl_module, data)
+        output_tensor = self.apply_output_mask(pl_module, output_tensor)
+
         for rollout_step in range(pl_module.rollout):
             fig = plot_predicted_multilevel_flat_sample(
                 plot_parameters_dict,
@@ -781,6 +791,9 @@ class PlotAdditionalMetrics(BasePlotCallback):
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
         ).numpy()
+
+        data = self.apply_output_mask(pl_module, data)
+        output_tensor = self.apply_output_mask(pl_module, output_tensor)
 
         for rollout_step in range(pl_module.rollout):
             if self.config.diagnostics.plot.parameters_histogram is not None:
