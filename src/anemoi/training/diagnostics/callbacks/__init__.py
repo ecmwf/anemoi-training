@@ -140,7 +140,7 @@ class BasePlotCallback(Callback, ABC):
             self._executor.shutdown(wait=True)
 
     def apply_output_mask(self, pl_module: pl.LightningModule, data: torch.Tensor) -> torch.Tensor:
-        if hasattr(pl_module, 'output_mask') and pl_module.output_mask is not None:
+        if hasattr(pl_module, "output_mask") and pl_module.output_mask is not None:
             # Fill with NaNs values where the mask is False
             data[:, :, ~pl_module.output_mask, :] = np.nan
 
