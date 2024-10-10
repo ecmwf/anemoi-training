@@ -1,4 +1,7 @@
 ---
+defaults:
+  - plot: detailed
+  - callbacks: pretraining
 
 callbacks:
   # Add callbacks here
@@ -67,7 +70,6 @@ profiler: False
 
 enable_checkpointing: True
 checkpoint:
-  enabled: True
   every_n_minutes:
     save_frequency: 30 # Approximate, as this is checked at the end of training steps
     num_models_saved: 3 # If set to k, saves the 'last' k model weights in the training.
