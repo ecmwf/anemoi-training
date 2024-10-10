@@ -52,7 +52,7 @@ max_steps: 150000
 
 lr:
   rate: 0.625e-4 #local_lr
-  iterations: ${training.max_steps}
+  iterations: ${training.max_steps} # NOTE: When max_epochs < max_steps, scheduler will run for max_steps
   min: 3e-7 #Not scaled by #GPU
 
 # Changes in per-gpu batch_size should come with a rescaling of the local_lr
