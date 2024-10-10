@@ -84,8 +84,7 @@ class GraphForecaster(pl.LightningModule):
 
         # Set mask of data nodes to be output
         if out_mask_name := config.model.get("output_mask", None) is not None:
-            assert (
-                out_mask_name in graph_data[config.graph.data],
+            assert out_mask_name in graph_data[config.graph.data], (
                 f"The attribute '{out_mask_name}' in output_mask does not exist in the graph. "
                 f"Options are: {', '.join(graph_data[config.graph.data].keys())}",
             )
