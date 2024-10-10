@@ -95,6 +95,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
                 self.config.dataloader.validation.start - 1,
             )
             self.config.dataloader.training.end = self.config.dataloader.validation.start - 1
+        
 
     def _check_resolution(self, resolution: str) -> None:
         assert (
@@ -162,6 +163,13 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         label: str = "generic",
     ) -> NativeGridDataset:
         r = max(rollout, self.rollout)
+
+         # Compute effective batch size 
+        effective_bs = self.config.dataloader.batch_size[label] *\
+            self.config.hardware.num_gpus_per_node *\
+            self.config.hardware.num_nodes //\
+            self.config.hardware.num_gpus_per_model
+        
         data = NativeGridDataset(
             data_reader=data_reader,
             rollout=r,
@@ -172,7 +180,9 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             model_comm_num_groups=self.model_comm_num_groups,
             shuffle=shuffle,
             label=label,
+            effective_bs=effective_bs
         )
+
         self._check_resolution(data.resolution)
         return data
 
