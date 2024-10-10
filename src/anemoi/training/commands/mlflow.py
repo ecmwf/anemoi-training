@@ -104,7 +104,7 @@ class MlFlow(Command):
             return
 
         if args.subcommand == "sync":
-            from anemoi.training.diagnostics.mlflow import health_check
+            from anemoi.training.diagnostics.mlflow.utils import health_check
             from anemoi.training.utils.mlflow_sync import MlFlowSync
 
             if args.authentication:
