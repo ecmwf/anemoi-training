@@ -74,6 +74,8 @@ class WeightedLogCoshLoss(BaseWeightedLoss):
 
         """
         out = torch.log(torch.cosh(pred - target))
+        # Beyond 710 logcosh goes to inf
+        out = torch.clamp(out, max=710)
 
         if feature_scale:
             out = self.scale_by_loss_scaling(out, feature_indices)
