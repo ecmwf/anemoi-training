@@ -30,6 +30,7 @@ from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.training.losses.utils import grad_scaler
+from anemoi.training.losses.weightedloss import BaseWeightedLoss
 from anemoi.training.utils.jsonify import map_config_to_primitives
 
 LOGGER = logging.getLogger(__name__)
@@ -348,33 +349,30 @@ class GraphForecaster(pl.LightningModule):
         for metric in self.metrics:
             metric_name = getattr(metric, "name", metric.__class__.__name__.lower())
 
-            for mkey, indices in self.metric_ranges_validation.items():
-                # for individual variables do not feature scale
-                if len(indices) == 1:
-                    metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
-                        y_pred_postprocessed[..., indices],
-                        y_postprocessed[..., indices],
-                        feature_indices=indices,
-                        feature_scale=False,
-                    )
+            if not isinstance(metric, BaseWeightedLoss):
+                # If not a weighted loss, we cannot feature scale, so call normally
+                metrics[f"{metric_name}/{rollout_step + 1}"] = metric(
+                    y_pred_postprocessed,
+                    y_postprocessed,
+                )
+                continue
 
-                # when gropupin all variables do feature scaling
-                elif mkey == "all":
+            for mkey, indices in self.metric_ranges_validation.items():
+                if mkey == "all":
                     metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
                         y_pred_postprocessed[..., indices],
                         y_postprocessed[..., indices],
                         feature_indices=indices,
                         feature_scale=True,
                     )
-                # for groups do not feature scale and use normalized values
-                elif len(indices) > 1:
+                else:
+                    # for individual variables or groups do not feature scale
                     metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
                         y_pred_postprocessed[..., indices],
                         y_postprocessed[..., indices],
                         feature_indices=indices,
                         feature_scale=False,
                     )
-                # for group do no feature scaling
 
         if enable_plot:
             y_preds.append(y_pred)
