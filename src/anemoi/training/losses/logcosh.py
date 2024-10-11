@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 
+import numpy as np
 import torch
 
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
@@ -21,7 +22,7 @@ LOGGER = logging.getLogger(__name__)
 class WeightedLogCoshLoss(BaseWeightedLoss):
     """Node-weighted LogCosh loss."""
 
-    name = "logcosh"
+    name = "wlogcosh"
 
     def __init__(
         self,
@@ -73,9 +74,11 @@ class WeightedLogCoshLoss(BaseWeightedLoss):
             Weighted LogCosh loss
 
         """
-        out = torch.log(torch.cosh(pred - target))
-        # Beyond 710 logcosh goes to inf
-        out = torch.clamp(out, max=710)
+        # Keep logcosh numerically stable
+        x = pred - target
+        s = torch.sign(x) * x
+        p = torch.exp(-2 * s)
+        out = s + torch.log1p(p) - np.log(2)
 
         if feature_scale:
             out = self.scale_by_loss_scaling(out, feature_indices)
