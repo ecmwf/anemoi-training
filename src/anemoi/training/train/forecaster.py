@@ -358,21 +358,12 @@ class GraphForecaster(pl.LightningModule):
                 continue
 
             for mkey, indices in self.metric_ranges_validation.items():
-                if mkey == "all":
-                    metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
-                        y_pred_postprocessed[..., indices],
-                        y_postprocessed[..., indices],
-                        feature_indices=indices,
-                        feature_scale=True,
-                    )
-                else:
-                    # for individual variables or groups do not feature scale
-                    metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
-                        y_pred_postprocessed[..., indices],
-                        y_postprocessed[..., indices],
-                        feature_indices=indices,
-                        feature_scale=False,
-                    )
+                metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
+                    y_pred_postprocessed[..., indices],
+                    y_postprocessed[..., indices],
+                    feature_indices=indices,
+                    feature_scale=mkey == "all",
+                )
 
         if enable_plot:
             y_preds.append(y_pred)
