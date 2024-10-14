@@ -34,33 +34,32 @@ swa:
 zero_optimizer: False
 
 # loss functions
-loss_functions:
 
-  # dynamic rescaling of the loss gradient
-  # see https://arxiv.org/pdf/2306.06079.pdf, section 4.3.2
-  # don't enable this by default until it's been tested and proven beneficial
-  loss_gradient_scaling: False
+# dynamic rescaling of the loss gradient
+# see https://arxiv.org/pdf/2306.06079.pdf, section 4.3.2
+# don't enable this by default until it's been tested and proven beneficial
 
+# loss function for the model
+training_loss:
+  # loss class to initialise, can be anything subclassing torch.nn.Module
+  _target_: anemoi.training.losses.mse.WeightedMSELoss
+  # what to include in the loss class initialisation
+  include_node_weights: True
+  include_loss_scaling: True
+  # other kwargs
+  ignore_nans: False
 
-  # loss function for the model
-  loss:
-    # loss class to initialise, can be anything subclassing torch.nn.Module
-    _target_: anemoi.training.losses.mse.WeightedMSELoss
+loss_gradient_scaling: False
+
+# Validation metrics calculation
+validation_metrics:
+  # loss class to initialise, can be anything subclassing torch.nn.Module
+  - _target_: anemoi.training.losses.mse.WeightedMSELoss
     # what to include in the loss class initialisation
     include_node_weights: True
-    include_loss_scaling: True
+    include_loss_scaling: False
     # other kwargs
-    ignore_nans: False
-
-  # loss functions for metric calculation
-  metrics:
-    # loss class to initialise, can be anything subclassing torch.nn.Module
-    - _target_: anemoi.training.losses.mse.WeightedMSELoss
-      # what to include in the loss class initialisation
-      include_node_weights: True
-      include_loss_scaling: False
-      # other kwargs
-      ignore_nans: True
+    ignore_nans: True
 
 # length of the "rollout" window (see Keisler's paper)
 rollout:
