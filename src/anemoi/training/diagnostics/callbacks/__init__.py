@@ -679,16 +679,16 @@ class PlotSample(BasePlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors(input_tensor)
 
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
 
-        if pl_module.output_mask is not None:
-            output_tensor[..., ~pl_module.output_mask, :] = np.nan
-            data[1:, :, ~pl_module.output_mask, :] = np.nan
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy().squeeze()
 
         for rollout_step in range(pl_module.rollout):
             fig = plot_predicted_multilevel_flat_sample(
@@ -697,8 +697,8 @@ class PlotSample(BasePlotCallback):
                 self.latlons,
                 self.config.diagnostics.plot.accumulation_levels_plot,
                 self.config.diagnostics.plot.cmap_accumulation,
-                data[0, ...].squeeze(),
-                data[rollout_step + 1, ...].squeeze(),
+                data[0, ...],
+                data[rollout_step + 1, ...],
                 output_tensor[rollout_step, ...],
                 precip_and_related_fields=self.precip_and_related_fields,
             )
@@ -784,15 +784,15 @@ class PlotAdditionalMetrics(BasePlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors(input_tensor)
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
 
-        if pl_module.output_mask is not None:
-            output_tensor[..., ~pl_module.output_mask, :] = np.nan
-            data[1:, :, ~pl_module.output_mask, :] = np.nan
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy().squeeze()
 
         for rollout_step in range(pl_module.rollout):
             if len(self.parameters_histogram) > 0:
@@ -805,8 +805,8 @@ class PlotAdditionalMetrics(BasePlotCallback):
 
                 fig = plot_histogram(
                     plot_parameters_dict_histogram,
-                    data[0, ...].squeeze(),
-                    data[rollout_step + 1, ...].squeeze(),
+                    data[0, ...],
+                    data[rollout_step + 1, ...],
                     output_tensor[rollout_step, ...],
                     precip_and_related_fields=self.precip_and_related_fields,
                 )
@@ -830,8 +830,8 @@ class PlotAdditionalMetrics(BasePlotCallback):
                 fig = plot_power_spectrum(
                     plot_parameters_dict_spectrum,
                     self.latlons,
-                    data[0, ...].squeeze(),
-                    data[rollout_step + 1, ...].squeeze(),
+                    data[0, ...],
+                    data[rollout_step + 1, ...],
                     output_tensor[rollout_step, ...],
                 )
 
