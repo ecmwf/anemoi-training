@@ -85,10 +85,10 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        self.metric_ranges, self.metric_ranges_validation, loss_scaling = self.metrics_loss_scaling(
-            config,
-            data_indices,
-        )
+        loss_scaling = self.get_feature_weights(config, data_indices)
+
+        self.val_metric_ranges, _ = self.get_val_metric_ranges(config, data_indices)
+
         loss_kwargs = {"node_weights": self.loss_weights, "loss_scaling": loss_scaling}
 
         self.loss = self.get_loss_function(config.training.training_loss, **loss_kwargs)
@@ -187,47 +187,26 @@ class GraphForecaster(pl.LightningModule):
         return instantiate(loss_init_config)
 
     @staticmethod
-    def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
+    def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> dict:
+
         metric_ranges = defaultdict(list)
         metric_ranges_validation = defaultdict(list)
-        loss_scaling = (
-            np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32)
-            * config.training.loss_scaling.default
-        )
-
-        pressure_level = instantiate(config.training.pressure_level_scaler)
-
-        LOGGER.info(
-            "Pressure level scaling: use scaler %s with slope %.4f and minimum %.2f",
-            type(pressure_level).__name__,
-            pressure_level.slope,
-            pressure_level.minimum,
-        )
 
         for key, idx in data_indices.internal_model.output.name_to_index.items():
-            # Split pressure levels on "_" separator
             split = key.split("_")
             if len(split) > 1 and split[-1].isdigit():
-                # Create grouped metrics for pressure levels (e.g. Q, T, U, V, etc.) for logger
+                # Group metrics for pressure levels (e.g., Q, T, U, V, etc.)
                 metric_ranges[f"pl_{split[0]}"].append(idx)
-                # Create pressure levels in loss scaling vector
-                if split[0] in config.training.loss_scaling.pl:
-                    loss_scaling[idx] = config.training.loss_scaling.pl[split[0]] * pressure_level.scaler(
-                        int(split[-1]),
-                    )
-                else:
-                    LOGGER.debug("Parameter %s was not scaled.", key)
             else:
                 metric_ranges[f"sfc_{key}"].append(idx)
-                # Create surface variables in loss scaling vector
-                if key in config.training.loss_scaling.sfc:
-                    loss_scaling[idx] = config.training.loss_scaling.sfc[key]
-                else:
-                    LOGGER.debug("Parameter %s was not scaled.", key)
-            # Create specific metrics from hydra to log in logger
+
+            # Specific metrics from hydra to log in logger
             if key in config.training.metrics:
                 metric_ranges[key] = [idx]
-        loss_scaling = torch.from_numpy(loss_scaling)
+
+        # Add the full list of output indices
+        metric_ranges["all"] = data_indices.internal_model.output.full.tolist()
+
         # metric for validation, after postprocessing
         for key, idx in data_indices.model.output.name_to_index.items():
             # Split pressure levels on "_" separator
@@ -240,7 +219,42 @@ class GraphForecaster(pl.LightningModule):
             # Create specific metrics from hydra to log in logger
             if key in config.training.metrics:
                 metric_ranges_validation[key] = [idx]
-        return metric_ranges, metric_ranges_validation, loss_scaling
+
+        return metric_ranges, metric_ranges_validation
+
+    @staticmethod
+    def get_feature_weights(config: DictConfig, data_indices: IndexCollection,) -> torch.Tensor:
+        loss_scaling = (
+            np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32)
+            * config.training.loss_scaling.default
+        )
+        pressure_level = instantiate(config.training.pressure_level_scaler)
+
+        LOGGER.info(
+            "Pressure level scaling: use scaler %s with slope %.4f and minimum %.2f",
+            type(pressure_level).__name__,
+            pressure_level.slope,
+            pressure_level.minimum,
+        )
+
+        for key, idx in data_indices.internal_model.output.name_to_index.items():
+            split = key.split("_")
+            if len(split) > 1 and split[-1].isdigit():
+                # Apply pressure level scaling
+                if split[0] in config.training.loss_scaling.pl:
+                    loss_scaling[idx] = config.training.loss_scaling.pl[split[0]] * pressure_level.scaler(
+                        int(split[-1]),
+                    )
+                else:
+                    LOGGER.debug("Parameter %s was not scaled.", key)
+            else:
+                # Apply surface variable scaling
+                if key in config.training.loss_scaling.sfc:
+                    loss_scaling[idx] = config.training.loss_scaling.sfc[key]
+                else:
+                    LOGGER.debug("Parameter %s was not scaled.", key)
+
+        return torch.from_numpy(loss_scaling)
 
     def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:
         LOGGER.debug("set_model_comm_group: %s", model_comm_group)
