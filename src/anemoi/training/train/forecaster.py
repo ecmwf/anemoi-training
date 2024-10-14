@@ -223,7 +223,10 @@ class GraphForecaster(pl.LightningModule):
         return metric_ranges, metric_ranges_validation
 
     @staticmethod
-    def get_feature_weights(config: DictConfig, data_indices: IndexCollection,) -> torch.Tensor:
+    def get_feature_weights(
+        config: DictConfig,
+        data_indices: IndexCollection,
+    ) -> torch.Tensor:
         loss_scaling = (
             np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32)
             * config.training.loss_scaling.default
