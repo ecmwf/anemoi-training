@@ -44,13 +44,13 @@ class AnemoiMlflowClient(MlflowClient):
         """
         self.anemoi_auth = TokenAuth(tracking_uri, enabled=authentication)
         if check_health:
-            self.anemoi_auth.authenticate()
+            super().__getattribute__("anemoi_auth").authenticate()
             health_check(tracking_uri)
         super().__init__(tracking_uri, *args, **kwargs)
 
     def __getattribute__(self, name: str) -> Any:
         """Intercept attribute access and inject authentication."""
         attr = super().__getattribute__(name)
-        if callable(attr):
+        if callable(attr) and name != "anemoi_auth":
             super().__getattribute__("anemoi_auth").authenticate()
         return attr
