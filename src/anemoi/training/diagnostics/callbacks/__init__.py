@@ -689,15 +689,16 @@ class PlotSample(BasePlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors(input_tensor)
 
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
 
-        data = self.apply_output_mask(pl_module, data)
-        output_tensor = self.apply_output_mask(pl_module, output_tensor)
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy()
 
         for rollout_step in range(pl_module.rollout):
             fig = plot_predicted_multilevel_flat_sample(
@@ -786,14 +787,15 @@ class PlotAdditionalMetrics(BasePlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors(input_tensor)
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
 
-        data = self.apply_output_mask(pl_module, data)
-        output_tensor = self.apply_output_mask(pl_module, output_tensor)
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy()
 
         for rollout_step in range(pl_module.rollout):
             if self.config.diagnostics.plot.parameters_histogram is not None:
