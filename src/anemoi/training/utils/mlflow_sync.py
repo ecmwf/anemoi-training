@@ -27,6 +27,7 @@ def export_log_output_file_path() -> tempfile._TemporaryFileWrapper:
     Path(tmpdir).mkdir(parents=True, exist_ok=True)
     temp = tempfile.NamedTemporaryFile(dir=tmpdir, prefix=f"{user}_")  # noqa: SIM115
     os.environ["MLFLOW_EXPORT_IMPORT_LOG_OUTPUT_FILE"] = temp.name
+    os.environ["MLFLOW_EXPORT_IMPORT_TMP_DIRECTORY"] = tmpdir
     return temp
 
 
@@ -39,6 +40,9 @@ from mlflow.tracking.context.default_context import _get_user  # noqa: E402
 from mlflow.utils.mlflow_tags import MLFLOW_USER  # noqa: E402
 from mlflow.utils.validation import MAX_METRICS_PER_BATCH  # noqa: E402
 from mlflow.utils.validation import MAX_PARAMS_TAGS_PER_BATCH  # noqa: E402
+import urllib.request
+from urllib.error import URLError, HTTPError
+from urllib.parse import urlparse
 
 try:
     import mlflow_export_import.common.utils as mlflow_utils
@@ -164,6 +168,31 @@ class MlFlowSync:
         if not experiment:
             return dest_mlflow_client.create_experiment(self.experiment_name)
         return experiment.experiment_id
+    
+    def _get_artifacts_path(self,server2server,run):
+
+        if server2server:
+            # Download each artifact
+            temp_dir = os.getenv("MLFLOW_EXPORT_IMPORT_TMP_DIRECTORY")
+            artifact_path = Path(temp_dir,run.info.run_id)
+            if not os.path.exists(artifact_path):
+                os.makedirs(artifact_path)
+        else:
+            artifact_path=  Path(self.source_tracking_uri, run.info.experiment_id, run.info.run_id, "artifacts")
+
+        return artifact_path
+
+    def _download_artifacts(self,src_mlflow_client,run_id,artifact_path):
+        
+        mlflow.set_tracking_uri(self.source_tracking_uri) #OTHERWISE IT WILL NOT WORK
+        artifacts = src_mlflow_client.list_artifacts(run_id)
+
+        for artifact in artifacts:    
+            # Download artifact file from the server
+            mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path=artifact.path, dst_path=artifact_path)
+            
+        return artifact_path
+
 
     def _update_params_tags_offline_runs(
         self,
@@ -217,6 +246,7 @@ class MlFlowSync:
 
         return params, tags
 
+
     def sync(
         self,
     ) -> None:
@@ -260,8 +290,12 @@ class MlFlowSync:
         # that when we online sync the offline runs those will have different run_ids. To keep
         # track of online and offline governance in that case we update run_ids info
 
-        if self._check_source_tracking_uri():
+        server2server = self._check_source_tracking_uri()
+        artifact_path = self._get_artifacts_path(server2server,run)
+
+        if server2server:
             tags["server2server"] = "True"
+            self._download_artifacts(src_mlflow_client,run.info.run_id,artifact_path)
         else:
             params, tags = self._update_params_tags_offline_runs(params, tags, dst_run_id, run.info.run_id)
 
@@ -281,10 +315,11 @@ class MlFlowSync:
             )
             _import_inputs(http_client, src_run_dct, dst_run_id)
 
-            path = Path(self.source_tracking_uri, run.info.experiment_id, self.run_id, "artifacts")
-            if path.exists():
+            if artifact_path.exists():
                 mlflow.set_tracking_uri(self.dest_tracking_uri)
-                dest_mlflow_client.log_artifacts(dst_run_id, path)
+                dest_mlflow_client.log_artifacts(dst_run_id, artifact_path)
+            else:
+                raise FileNotFoundError(f"Artifact path {artifact_path} does not exist")
             dest_mlflow_client.set_terminated(dst_run_id, RunStatus.to_string(RunStatus.FINISHED))
 
         except BaseException:
