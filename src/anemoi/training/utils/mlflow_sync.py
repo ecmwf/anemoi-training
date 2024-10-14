@@ -11,6 +11,7 @@ import tempfile
 from itertools import starmap
 from pathlib import Path
 from urllib.parse import urlparse
+import shutil
 
 import mlflow.entities
 
@@ -32,6 +33,12 @@ def export_log_output_file_path() -> tempfile._TemporaryFileWrapper:
     os.environ["MLFLOW_EXPORT_IMPORT_TMP_DIRECTORY"] = tmpdir
     return temp
 
+def close_and_clean_temp(server2server:str,artifact_path:Path) -> None:
+    temp.close()
+    os.environ.pop("MLFLOW_EXPORT_IMPORT_LOG_OUTPUT_FILE")
+    os.environ.pop("MLFLOW_EXPORT_IMPORT_TMP_DIRECTORY")
+    if server2server:
+        shutil.rmtree(artifact_path)
 
 temp = export_log_output_file_path()
 
@@ -189,7 +196,7 @@ class MlFlowSync:
 
         mlflow.set_tracking_uri(self.source_tracking_uri)  # OTHERWISE IT WILL NOT WORK
         artifacts = client.list_artifacts(run_id)
-
+        LOGGER.info("Downloading artifacts %s for run %s to %s", len(artifacts),run_id,artifact_path)
         for artifact in artifacts:
             # Download artifact file from the server
             mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path=artifact.path, dst_path=artifact_path)
@@ -268,6 +275,7 @@ class MlFlowSync:
             )
 
             return
+
         msg = {
             "run_id": run.info.run_id,
             "lifecycle_stage": run.info.lifecycle_stage,
@@ -306,6 +314,8 @@ class MlFlowSync:
         }
 
         try:
+            LOGGER.info("Starting to export run data")
+
             import_run_data(
                 dest_mlflow_client,
                 src_run_dct,
@@ -331,4 +341,4 @@ class MlFlowSync:
 
         LOGGER.info("Imported run %s into experiment %s", dst_run_id, self.experiment_name)
 
-        temp.close()
+        close_and_clean_temp(server2server,artifact_path)
