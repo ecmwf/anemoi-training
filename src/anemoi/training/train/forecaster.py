@@ -11,7 +11,9 @@ import logging
 import math
 import os
 from collections import defaultdict
+from collections.abc import Generator
 from collections.abc import Mapping
+from typing import Optional
 
 import numpy as np
 import pytorch_lightning as pl
@@ -212,17 +214,36 @@ class GraphForecaster(pl.LightningModule):
         ]
         return x
 
-    def _step(
+    def rollout_step(
         self,
         batch: torch.Tensor,
-        batch_idx: int,
+        rollout: Optional[int] = None,  # noqa: FA100
         validation_mode: bool = False,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
-        del batch_idx
-        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
+    ) -> Generator[tuple[torch.Tensor, dict, list], None, None]:
+        """
+        Rollout step for the forecaster.
+
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Batch to use for rollout
+        rollout : int | None, optional
+            Number of times to rollout for, by default None
+        validation_mode : bool, optional
+            Whether in validation mode, by default False
+
+        Yields
+        ------
+        Generator[tuple[torch.Tensor, dict, list], None, None]
+            Loss value, metrics, and predictions (per step)
+
+        Returns
+        -------
+        None
+            None
+        """
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch = self.model.pre_processors(batch, in_place=not validation_mode)
-        metrics = {}
 
         # start rollout of preprocessed batch
         x = batch[
@@ -231,18 +252,24 @@ class GraphForecaster(pl.LightningModule):
             ...,
             self.data_indices.internal_data.input.full,
         ]  # (bs, multi_step, latlon, nvar)
+        msg = (
+            "Batch length not sufficient for requested multi_step length!"
+            f", {batch.shape[1]} !>= {rollout + self.multi_step}"
+        )
+        assert batch.shape[1] >= rollout + self.multi_step, msg
 
-        y_preds = []
-        for rollout_step in range(self.rollout):
+        for rollout_step in range(rollout or self.rollout):
             # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
             y_pred = self(x)
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss += checkpoint(self.loss, y_pred, y, use_reentrant=False)
+            loss = checkpoint(self.loss, y_pred, y, use_reentrant=False)
 
             x = self.advance_input(x, y_pred, batch, rollout_step)
 
+            metrics_next = {}
+            y_preds_next = []
             if validation_mode:
                 metrics_next, y_preds_next = self.calculate_val_metrics(
                     y_pred,
@@ -250,10 +277,28 @@ class GraphForecaster(pl.LightningModule):
                     rollout_step,
                     enable_plot=self.enable_plot,
                 )
-                metrics.update(metrics_next)
-                y_preds.extend(y_preds_next)
+            yield loss, metrics_next, y_preds_next
 
-        # scale loss
+    def _step(
+        self,
+        batch: torch.Tensor,
+        batch_idx: int,
+        validation_mode: bool = False,
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        del batch_idx
+        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
+        metrics = {}
+        y_preds = []
+
+        for loss_next, metrics_next, y_preds_next in self.rollout_step(
+            batch,
+            rollout=self.rollout,
+            validation_mode=validation_mode,
+        ):
+            loss += loss_next
+            metrics.update(metrics_next)
+            y_preds.extend(y_preds_next)
+
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
 
