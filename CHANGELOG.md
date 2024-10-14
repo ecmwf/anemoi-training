@@ -27,7 +27,7 @@ Keep it human-readable, your future self will thank you!
 - Feature: Authentication support for mlflow sync - [#51](https://github.com/ecmwf/anemoi-training/pull/51)
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
 - Long Rollout Plots
-- Mlflow-sync to inlcude new tag for server to server syncing [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
+- Mlflow-sync to include new tag for server to server syncing [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
 
 ### Fixed
 
