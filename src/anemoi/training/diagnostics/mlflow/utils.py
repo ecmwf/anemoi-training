@@ -38,7 +38,7 @@ def health_check(tracking_uri: str) -> None:
 
 
 def expand_iterables(params: dict[str, Any]) -> dict[str, Any]:
-    """Expand any iterable values in the dictionary to a dictionary of the form {key[i]: value_i}.
+    """Expand any iterable values in the dictionary to a dictionary of the form {key_i: value_i}.
 
     Parameters
     ----------
@@ -53,17 +53,16 @@ def expand_iterables(params: dict[str, Any]) -> dict[str, Any]:
     Examples
     --------
         >>> expand_iterables({'a': ['a', 'b', 'c']})
-        {'a[0]': 'a', 'a[1]': 'b', 'a[2]': 'c'}
+        {'a_0': 'a', 'a_1': 'b', 'a_2': 'c'}
         >>> expand_iterables({'a': {'b': ['a', 'b', 'c']}})
-        {'a': {'b[0]': 'a', 'b[1]': 'b', 'b[2]': 'c'}}
+        {'a': {'b_0': 'a', 'b_1': 'b', 'b_2': 'c'}}
     """
     expanded_params = {}
     for key, value in params.items():
-        if isinstance(value, Iterable) and not isinstance(value, str):
-            expanded_params[key] = {
-                f"{key}[{i}]": expand_iterables(v) if isinstance(v, dict) else v for i, v in enumerate(value)
-            }
-            expanded_params[key] = value
+        if isinstance(value, (list, tuple)):
+            for i, v in enumerate(value):
+                expanded_params[f"{key}_{i}"] = expand_iterables(v) if isinstance(v, dict) else v
+            expanded_params[f"{key}_all"] = value
             expanded_params[f"{key}_length"] = len(value)
         else:
             expanded_params[key] = expand_iterables(value) if isinstance(value, dict) else value
