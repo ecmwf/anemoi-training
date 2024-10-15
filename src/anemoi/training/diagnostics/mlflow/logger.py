@@ -27,6 +27,7 @@ from pytorch_lightning.loggers.mlflow import _flatten_dict
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 from anemoi.training.diagnostics.mlflow.auth import TokenAuth
+from anemoi.training.diagnostics.mlflow.utils import expand_iterables
 from anemoi.training.diagnostics.mlflow.utils import health_check
 from anemoi.training.utils.jsonify import map_config_to_primitives
 
@@ -436,6 +437,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
             if config := params.get("config"):
                 params["config"] = map_config_to_primitives(config)
 
+            params = expand_iterables(params)
             params = _flatten_dict(params, delimiter=".")  # Flatten dict with '.' to not break API queries
             params = self._clean_params(params)
 
