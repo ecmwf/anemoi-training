@@ -67,7 +67,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         Parameters
         ----------
         x : torch.Tensor
-            Tensor to be scaled, shape (bs, (optional_ensemble), lat*lon, n_outputs)
+            Tensor to be scaled, shape (bs, ensemble, lat*lon, n_outputs)
         feature_indices:
             feature indices (relative to full model output) of the features passed in pred and target
 
@@ -91,7 +91,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         Parameters
         ----------
         x : torch.Tensor
-            Tensor to be scaled, shape (bs, (optional_ensemble), lat*lon, n_outputs)
+            Tensor to be scaled, shape (bs, ensemble, lat*lon, n_outputs)
         squash : bool, optional
             Average last dimension, by default True
 
@@ -128,9 +128,9 @@ class BaseWeightedLoss(nn.Module, ABC):
         Parameters
         ----------
         pred : torch.Tensor
-            Prediction tensor, shape (bs, (optional_ensemble), lat*lon, n_outputs)
+            Prediction tensor, shape (bs, ensemble, lat*lon, n_outputs)
         target : torch.Tensor
-            Target tensor, shape (bs, (optional_ensemble), lat*lon, n_outputs)
+            Target tensor, shape (bs, ensemble, lat*lon, n_outputs)
         squash : bool, optional
             Average last dimension, by default True
         feature_indices:
