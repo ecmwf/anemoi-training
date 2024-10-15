@@ -20,13 +20,13 @@ if TYPE_CHECKING:
 class BaseMask:
     """Base class for masking model output."""
 
-    def apply(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def apply(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:  # noqa: ARG002
         return x
 
-    def apply_inverse(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def apply_inverse(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:  # noqa: ARG002
         return x
 
-    def rollout_boundary(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def rollout_boundary(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:  # noqa: ARG002
         return x
 
 
