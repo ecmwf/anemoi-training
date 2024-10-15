@@ -7,9 +7,13 @@
 
 import logging
 import os
+import shutil
 import tempfile
 from itertools import starmap
 from pathlib import Path
+from urllib.parse import urlparse
+
+import mlflow.entities
 
 
 def export_log_output_file_path() -> tempfile._TemporaryFileWrapper:
@@ -26,10 +30,20 @@ def export_log_output_file_path() -> tempfile._TemporaryFileWrapper:
     Path(tmpdir).mkdir(parents=True, exist_ok=True)
     temp = tempfile.NamedTemporaryFile(dir=tmpdir, prefix=f"{user}_")  # noqa: SIM115
     os.environ["MLFLOW_EXPORT_IMPORT_LOG_OUTPUT_FILE"] = temp.name
+    os.environ["MLFLOW_EXPORT_IMPORT_TMP_DIRECTORY"] = tmpdir
     return temp
 
 
+def close_and_clean_temp(server2server: str, artifact_path: Path) -> None:
+    temp.close()
+    os.environ.pop("MLFLOW_EXPORT_IMPORT_LOG_OUTPUT_FILE")
+    os.environ.pop("MLFLOW_EXPORT_IMPORT_TMP_DIRECTORY")
+    if server2server:
+        shutil.rmtree(artifact_path)
+
+
 temp = export_log_output_file_path()
+
 
 import mlflow  # noqa: E402
 from mlflow.entities import RunStatus  # noqa: E402
@@ -144,13 +158,102 @@ class MlFlowSync:
         run_logged = False
         if status == "FINISHED":
             mlflow.set_tracking_uri(self.dest_tracking_uri)
-            synced_runs = mlflow.search_runs(
-                experiment_ids=mlflow.get_experiment_by_name(self.experiment_name).experiment_id,
-                filter_string=f"params.metadata.offline_run_id = '{self.run_id}'",
-            )
-            if not synced_runs.empty:  # single run (no child) already logged
-                run_logged = True
+            experiment = mlflow.get_experiment_by_name(self.experiment_name)
+            if experiment:
+                synced_runs = mlflow.search_runs(
+                    experiment_ids=experiment.experiment_id,
+                    filter_string=f"params.metadata.offline_run_id = '{self.run_id}'",
+                )
+                if not synced_runs.empty:  # single run (no child) already logged
+                    run_logged = True
         return run_logged
+
+    def _check_source_tracking_uri(self) -> bool:
+        parsed_url = urlparse(self.source_tracking_uri)
+        return all([parsed_url.scheme, parsed_url.netloc])  # True if source_tracking_uri is a remote server
+
+    def _get_dst_experiment_id(self, dest_mlflow_client: str) -> str:
+        experiment = dest_mlflow_client.get_experiment_by_name(self.experiment_name)
+        if not experiment:
+            return dest_mlflow_client.create_experiment(self.experiment_name)
+        return experiment.experiment_id
+
+    def _get_artifacts_path(self, server2server: str, run: mlflow.entities.Run) -> Path:
+        if server2server:
+            # Download each artifact
+            temp_dir = os.getenv("MLFLOW_EXPORT_IMPORT_TMP_DIRECTORY")
+            artifact_path = Path(temp_dir, run.info.run_id)
+            artifact_path.mkdir(parents=True, exist_ok=True)
+        else:
+            artifact_path = Path(self.source_tracking_uri, run.info.experiment_id, run.info.run_id, "artifacts")
+
+        return artifact_path
+
+    def _download_artifacts(
+        self,
+        client: mlflow.tracking.client.MlflowClient,
+        run_id: mlflow.entities.Run,
+        artifact_path: Path,
+    ) -> None:
+
+        mlflow.set_tracking_uri(self.source_tracking_uri)  # OTHERWISE IT WILL NOT WORK
+        artifacts = client.list_artifacts(run_id)
+        LOGGER.info("Downloading artifacts %s for run %s to %s", len(artifacts), run_id, artifact_path)
+        for artifact in artifacts:
+            # Download artifact file from the server
+            mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path=artifact.path, dst_path=artifact_path)
+
+    def _update_params_tags_offline_runs(
+        self,
+        params: dict,
+        tags: dict,
+        dst_run_id: str,
+        src_run_id: str,
+    ) -> (dict, dict):
+        tags["offlineRun"] = "True"
+        if (params["config.training.fork_run_id"] == "None") and (params["metadata.run_id"] == src_run_id):
+            params = self.update_run_id(params, "run_id", new_run_id=dst_run_id, offline_run_id=src_run_id)
+
+        elif "forkedRun" in tags:
+            try:
+                tags = self.update_parent_run_info(
+                    tags=tags,
+                    tag_key="forkedRunId",
+                    tag_dest="offline.forkedRunId",
+                    dst_run_id=dst_run_id,
+                )
+                params = self.update_run_id(
+                    params,
+                    "fork_run_id",
+                    new_run_id=tags["forkedRunId"],
+                    offline_run_id=tags["offline.forkedRunId"],
+                )
+                params = self.update_run_id(params, "run_id", new_run_id=dst_run_id, offline_run_id=src_run_id)
+
+            except AttributeError:
+                LOGGER.warning("No forked run parent found")
+
+        elif "resumedRun" in tags:
+            try:
+                tags = self.update_parent_run_info(
+                    tags=tags,
+                    tag_key="mlflow.parentRunId",
+                    tag_dest="mlflow.offline.parentRunId",
+                    dst_run_id=dst_run_id,
+                )
+                params = self.update_run_id(
+                    params,
+                    "run_id",
+                    new_run_id=tags["mlflow.parentRunId"],
+                    offline_run_id=tags["mlflow.offline.parentRunId"],
+                )
+
+                params["config.training.offline_run_id_folder"] = src_run_id
+
+            except AttributeError:
+                LOGGER.warning("No parent run found")
+
+        return params, tags
 
     def sync(
         self,
@@ -174,6 +277,7 @@ class MlFlowSync:
             )
 
             return
+
         msg = {
             "run_id": run.info.run_id,
             "lifecycle_stage": run.info.lifecycle_stage,
@@ -184,69 +288,36 @@ class MlFlowSync:
         run_info = mlflow_utils.strip_underscores(run.info)
         src_user_id = run_info["user_id"]
 
-        exp = dest_mlflow_client.get_experiment_by_name(self.experiment_name)
-        dst_run = dest_mlflow_client.create_run(exp.experiment_id)
+        exp_id = self._get_dst_experiment_id(dest_mlflow_client=dest_mlflow_client)
+        dst_run = dest_mlflow_client.create_run(exp_id)
         dst_run_id = dst_run.info.run_id
 
         tags = dict(sorted(run.data.tags.items()))
 
         params = run.data.params
         # So far there is no easy way to force mlflow to use a specific run_id, that means
-        # that when we online sync the offline runs those will have run run_ids. To keep
+        # that when we online sync the offline runs those will have different run_ids. To keep
         # track of online and offline governance in that case we update run_ids info
 
-        if (params["config.training.fork_run_id"] == "None") and (params["metadata.run_id"] == run.info.run_id):
-            params = self.update_run_id(params, "run_id", new_run_id=dst_run_id, offline_run_id=run.info.run_id)
+        server2server = self._check_source_tracking_uri()
+        artifact_path = self._get_artifacts_path(server2server, run)
 
-        elif "forkedRun" in tags:
-            try:
-                tags = self.update_parent_run_info(
-                    tags=tags,
-                    tag_key="forkedRunId",
-                    tag_dest="offline.forkedRunId",
-                    dst_run_id=dst_run_id,
-                )
-                params = self.update_run_id(
-                    params,
-                    "fork_run_id",
-                    new_run_id=tags["forkedRunId"],
-                    offline_run_id=tags["offline.forkedRunId"],
-                )
-                params = self.update_run_id(params, "run_id", new_run_id=dst_run_id, offline_run_id=run.info.run_id)
-
-            except AttributeError:
-                LOGGER.warning("No forked run parent found")
-
-        elif "resumedRun" in tags:
-            try:
-                tags = self.update_parent_run_info(
-                    tags=tags,
-                    tag_key="mlflow.parentRunId",
-                    tag_dest="mlflow.offline.parentRunId",
-                    dst_run_id=dst_run_id,
-                )
-                params = self.update_run_id(
-                    params,
-                    "run_id",
-                    new_run_id=tags["mlflow.parentRunId"],
-                    offline_run_id=tags["mlflow.offline.parentRunId"],
-                )
-
-                params["config.training.offline_run_id_folder"] = run.info.run_id
-
-            except AttributeError:
-                LOGGER.warning("No parent run found")
-
-        tags["offlineRun"] = "True"
+        if server2server:
+            tags["server2server"] = "True"
+            self._download_artifacts(src_mlflow_client, run.info.run_id, artifact_path)
+        else:
+            params, tags = self._update_params_tags_offline_runs(params, tags, dst_run_id, run.info.run_id)
 
         src_run_dct = {
-            "params": run.data.params,
+            "params": params,
             "metrics": _get_metrics_with_steps(src_mlflow_client, run),
             "tags": tags,
             "inputs": _inputs_to_dict(run.inputs),
         }
 
         try:
+            LOGGER.info("Starting to export run data")
+
             import_run_data(
                 dest_mlflow_client,
                 src_run_dct,
@@ -255,19 +326,21 @@ class MlFlowSync:
             )
             _import_inputs(http_client, src_run_dct, dst_run_id)
 
-            path = Path(self.source_tracking_uri, run.info.experiment_id, self.run_id, "artifacts")
-            if path.exists():
-                mlflow.set_tracking_uri(self.dest_tracking_uri)
-                dest_mlflow_client.log_artifacts(dst_run_id, path)
+            mlflow.set_tracking_uri(self.dest_tracking_uri)
+            dest_mlflow_client.log_artifacts(dst_run_id, artifact_path)
             dest_mlflow_client.set_terminated(dst_run_id, RunStatus.to_string(RunStatus.FINISHED))
 
-        except Exception as e:
+        except BaseException:
             dest_mlflow_client.set_terminated(dst_run_id, RunStatus.to_string(RunStatus.FAILED))
             import traceback
 
             traceback.print_exc()
-            raise Exception(e, "Importing run %s of experiment %s failed", dst_run_id, exp.name) from e  # noqa: TRY002
+            LOGGER.exception(
+                "Importing run %s of experiment %s failed",
+                dst_run_id,
+                self.experiment_name,
+            )
 
         LOGGER.info("Imported run %s into experiment %s", dst_run_id, self.experiment_name)
 
-        temp.close()
+        close_and_clean_temp(server2server, artifact_path)
