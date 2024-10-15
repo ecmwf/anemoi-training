@@ -6,7 +6,6 @@
 # nor does it submit to any jurisdiction.
 
 import os
-from collections.abc import Iterable
 from typing import Any
 
 import requests
