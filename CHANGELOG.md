@@ -15,6 +15,7 @@ Keep it human-readable, your future self will thank you!
 - Add anemoi-transform link to documentation
 - Codeowners file (#56)
 - Changelog merge strategy (#56)
+- Add synchronisation workflow
 
 #### Miscellaneous
 
