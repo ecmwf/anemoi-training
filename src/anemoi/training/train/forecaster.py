@@ -13,6 +13,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from functools import cached_property
 from typing import List
+from copy import copy
 
 import numpy as np
 import pytorch_lightning as pl
@@ -20,6 +21,8 @@ import torch
 from anemoi.utils.data_structures import NestedTrainingSample
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.interface import AnemoiModelInterface
+from anemoi.graphs.nodes import TensorNodes
+from anemoi.graphs.edges import CutOffEdges, KNNEdges
 from anemoi.utils.config import DotDict
 from hydra.utils import instantiate
 from omegaconf import DictConfig
@@ -304,6 +307,19 @@ class GraphForecaster(pl.LightningModule):
         del training_sample
         #sample.to('gpu')
         sample.to('cpu')
+
+        # TODO: concatenate states into a single dict
+        sample = sample.as_torch()[0]
+
+        # Create dynamic graph
+        graph = copy(self.graph_data)
+        edge_attrs_cfg = {}
+        for obs_name, obs_tensor in sample.items():
+            graph = TensorNodes(obs_tensor, idx_lat, idx_lon, name=obs_name).update_graph(graph)
+            graph = CutOffEdges(obs_name, "hidden", cutoff_factor=0.7).update_graph(graph, edge_attrs_cfg)
+            graph = KNNEdges("hidden", obs_name, k=5).update_graph(graph, edge_attrs_cfg)
+
+        print(f"🆗 Graph created with nodes: {graph.node_types}.")
 
         print("Entering _step")
         print(f"🆗 Training sample = {sample}:")
