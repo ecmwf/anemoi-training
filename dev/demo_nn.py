@@ -1,5 +1,4 @@
 #!/bin/env python3
-from collections import OrderedDict
 from anemoi.datasets import open_dataset
 from anemoi.utils.data_structures import NestedTrainingSample, TorchNestedAnemoiTensor
 import torch
@@ -28,8 +27,8 @@ class DummyEncoderModel(nn.Module):
 
         self.mixer = nn.Linear(64, 64)
 
-    def forward(self, x: OrderedDict) -> OrderedDict:
-        y = OrderedDict()
+    def forward(self, x: dict) -> dict:
+        y = {}
 
         assert set(x.keys()) == set(self.encoders.keys()), f"Keys do not match: {set(x.keys())} != {set(self.encoders.keys())}"
 

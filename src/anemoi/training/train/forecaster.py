@@ -30,12 +30,47 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
+from torch import nn
 
 from anemoi.training.losses.mse import WeightedMSELoss
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.utils.jsonify import map_config_to_primitives
 
 LOGGER = logging.getLogger(__name__)
+
+
+class DummyEncoderModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.encoders = nn.ModuleDict()
+        self.encoders["era5"] = nn.Linear(101, 64)
+        self.encoders["metar"] = nn.Linear(14, 64)
+        self.encoders["noaa-atms"] = nn.Linear(32, 64)
+
+        self.mixer = nn.Linear(64, 64)
+
+    def forward(self, x):
+        y = {}
+
+        assert set(x.keys()) == set(self.encoders.keys()), f"Keys do not match: {set(x.keys())} != {set(self.encoders.keys())}"
+
+        for key in self.encoders.keys():
+            encoder, xt = self.encoders[key], x[key]
+            assert isinstance(xt, torch.Tensor), f"Expected tensor, got {type(xt)}"
+            yt = encoder(xt)
+
+            assert yt.shape[0] == 1, yt.shape
+            yt = yt[0, :,:]
+
+            y[key] = yt
+
+        # return y
+        y_as_list = [y[key] for key in self.encoders.keys()]
+        from anemoi.utils.data_structures import str_
+        print(str_(y_as_list))
+        cat = torch.cat(y_as_list)
+        return self.mixer(cat)
 
 
 def get_class(class_name: str):
@@ -93,6 +128,9 @@ class GraphForecaster(pl.LightningModule):
             graph_data=graph_data,
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
+        self.dummy_model = DummyEncoderModel()
+        self.dummy_model.train()
+        
 
         self.data_indices = data_indices
 
@@ -276,41 +314,43 @@ class GraphForecaster(pl.LightningModule):
         sample = self.model.pre_processors(sample, in_place=not validation_mode)
         metrics = {}
         print(f"🆗 Normalisation done . exit here for now")
-        exit()
 
         # start rollout of preprocessed batch
-        x: List[Tensor] = [b[0] for b in batch]
-        x = batch[
-            :,
-            0 : self.multi_step,
-            ...,
-            self.data_indices.internal_data.input.full,
-        ]  # (bs, multi_step, latlon, nvar)
+        x = sample[0]
+        y_ref = sample[1]
+        y = self.dummy_model(x)
 
-        y_preds = []
-        for rollout_step in range(self.rollout):
-            # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-            y_pred = self(x)
-
-            y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
-            # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss += checkpoint(self.loss, y_pred, y, use_reentrant=False)
-
-            x = self.advance_field_input(x, y_pred, batch, rollout_step)
-
-            if validation_mode:
-                metrics_next, y_preds_next = self.calculate_val_metrics(
-                    y_pred,
-                    y,
-                    rollout_step,
-                    enable_plot=self.enable_plot,
-                )
-                metrics.update(metrics_next)
-                y_preds.extend(y_preds_next)
-
-        # scale loss
-        loss *= 1.0 / self.rollout
+        y_preds = [y]
+        print(f"🆗 _step done . exit here for now")
+        exit()
         return loss, metrics, y_preds
+
+        # x = batch[ :, 0 : self.multi_step, ..., self.data_indices.internal_data.input.full]  # (bs, multi_step, latlon, nvar)
+
+        # y_preds = []
+        # for rollout_step in range(self.rollout):
+        #     # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
+        #     y_pred = self(x)
+
+        #     y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
+        #     # y includes the auxiliary variables, so we must leave those out when computing the loss
+        #     loss += checkpoint(self.loss, y_pred, y, use_reentrant=False)
+
+        #     x = self.advance_field_input(x, y_pred, batch, rollout_step)
+
+        #     if validation_mode:
+        #         metrics_next, y_preds_next = self.calculate_val_metrics(
+        #             y_pred,
+        #             y,
+        #             rollout_step,
+        #             enable_plot=self.enable_plot,
+        #         )
+        #         metrics.update(metrics_next)
+        #         y_preds.extend(y_preds_next)
+
+        # # scale loss
+        # loss *= 1.0 / self.rollout
+        # return loss, metrics, y_preds
 
     def calculate_val_metrics(
         self,
