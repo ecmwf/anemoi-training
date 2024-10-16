@@ -9,8 +9,11 @@ Please add your functional changes to the appropriate section in the PR.
 Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.1.0...HEAD)
+- Make pin_memory of the Dataloader configurable (#64)
 
 ### Added
+
+- Add anemoi-transform link to documentation
 - Codeowners file (#56)
 - Changelog merge strategy (#56)
 
@@ -26,8 +29,10 @@ Keep it human-readable, your future self will thank you!
 - Feature: Add configurable models [#50](https://github.com/ecmwf/anemoi-training/pulls/50)
 - Feature: Authentication support for mlflow sync - [#51](https://github.com/ecmwf/anemoi-training/pull/51)
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
+- Feature: `AnemoiMlflowClient`, an mlflow client with authentication support [#86](https://github.com/ecmwf/anemoi-training/pull/86)
 - Long Rollout Plots
 - Rollout training for Limited Area Models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
+- Feature: New `Boolean1DMask` class. Enables rollout training for limited area models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
 
 ### Fixed
 
@@ -35,12 +40,14 @@ Keep it human-readable, your future self will thank you!
 - Bugfixes for CI (#56)
 - Fix `mlflow` subcommand on python 3.9 [#62](https://github.com/ecmwf/anemoi-training/pull/62)
 - Show correct subcommand in MLFlow - Addresses [#39](https://github.com/ecmwf/anemoi-training/issues/39) in [#61](https://github.com/ecmwf/anemoi-training/pull/61)
-- Updated PlotSample callback to show only output region. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
+- Fix interactive multi-GPU training [#82](https://github.com/ecmwf/anemoi-training/pull/82)
+- Allow 500 characters in mlflow logging [#88](https://github.com/ecmwf/anemoi-training/pull/88)
 
 ### Changed
 
 - Updated configuration examples in documentation and corrected links - [#46](https://github.com/ecmwf/anemoi-training/pull/46)
 - Remove credential prompt from mlflow login, replace with seed refresh token via web - [#78](https://github.com/ecmwf/anemoi-training/pull/78)
+- Update CODEOWNERS
 
 ## [0.1.0 - Anemoi training - First release](https://github.com/ecmwf/anemoi-training/releases/tag/0.1.0) - 2024-08-16
 
