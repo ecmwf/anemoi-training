@@ -439,17 +439,19 @@ class AnemoiMLflowLogger(MLFlowLogger):
             if config := params.get("config"):
                 params["config"] = map_config_to_primitives(config)
 
-            params = expand_iterables(params)
-            params = _flatten_dict(params, delimiter=".")  # Flatten dict with '.' to not break API queries
-            params = self._clean_params(params)
-
             import mlflow
             from mlflow.entities import Param
 
-            # Truncate parameter values.
             truncation_length = 250
+
             if Version(mlflow.VERSION) >= Version("1.28.0"):
                 truncation_length = 500
+
+            params = expand_iterables(params, size_threshold=truncation_length)
+            params = _flatten_dict(params, delimiter=".")  # Flatten dict with '.' to not break API queries
+            params = self._clean_params(params)
+
+            # Truncate parameter values.
             params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in params.items()]
 
             for idx in range(0, len(params_list), 100):
