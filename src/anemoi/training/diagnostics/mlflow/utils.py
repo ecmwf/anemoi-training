@@ -43,8 +43,11 @@ def expand_iterables(
     *,
     size_threshold: int | None = None,
     recursive: bool = True,
+    delimiter: str = ".",
 ) -> dict[str, Any]:
-    """Expand any iterable values in the dictionary to a dictionary of the form {key_i: value_i}.
+    """Expand any iterable values to the form {key.i: value_i}.
+
+    If expanded will also add {key.all: [value_0, value_1, ...], key.length: len([value_0, value_1, ...])}.
 
     If `size_threshold` is not None, expand the iterable only if the length of str(value) is
     greater than `size_threshold`.
@@ -59,6 +62,9 @@ def expand_iterables(
     recursive : bool, optional
         Expand nested dictionaries.
         Default is True.
+    delimiter: str, optional
+        Delimiter to use for keys.
+        Default is ".".
 
     Returns
     -------
@@ -68,20 +74,41 @@ def expand_iterables(
     Examples
     --------
         >>> expand_iterables({'a': ['a', 'b', 'c']})
-        {'a_0': 'a', 'a_1': 'b', 'a_2': 'c'}
+        {'a.0': 'a', 'a.1': 'b', 'a.2': 'c', 'a.all': ['a', 'b', 'c'], 'a.length': 3}
         >>> expand_iterables({'a': {'b': ['a', 'b', 'c']}})
-        {'a': {'b_0': 'a', 'b_1': 'b', 'b_2': 'c'}}
+        {'a': {'b.0': 'a', 'b.1': 'b', 'b.2': 'c', 'b.all': ['a', 'b', 'c'], 'b.length': 3}}
+        >>> expand_iterables({'a': ['a', 'b', 'c']}, size_threshold=100)
+        {'a': ['a', 'b', 'c']}
+        >>> expand_iterables({'a': [[0,1,2], 'b', 'c']})
+        {'a.0': {0: 0, 1: 1, 2: 2}, 'a.1': 'b', 'a.2': 'c', 'a.all': [[0, 1, 2], 'b', 'c'], 'a.length': 3}
     """
+
+    def should_be_expanded(x: Any) -> bool:
+        return size_threshold is None or len(str(x)) > size_threshold
+
     nested_func = functools.partial(expand_iterables, size_threshold=size_threshold, recursive=recursive)
 
-    expanded_params = {}
-    for key, value in params.items():
-        if isinstance(value, (list, tuple)) and (size_threshold is None or len(str(value)) > size_threshold):
-            for i, v in enumerate(value):
-                expanded_params[f"{key}_{i}"] = nested_func(v) if isinstance(v, dict) and recursive else v
+    def expand(val: dict | list) -> dict[str, Any]:
+        if not recursive:
+            return val
+        if isinstance(val, dict):
+            return nested_func(val)
+        if isinstance(val, list):
+            return nested_func(dict(enumerate(val)))
+        return val
 
-            expanded_params[f"{key}_all"] = value
-            expanded_params[f"{key}_length"] = len(value)
+    expanded_params = {}
+
+    for key, value in params.items():
+        if isinstance(value, (list, tuple)):
+            if should_be_expanded(value):
+                for i, v in enumerate(value):
+                    expanded_params[f"{key}{delimiter}{i}"] = expand(v)
+
+                expanded_params[f"{key}{delimiter}all"] = value
+                expanded_params[f"{key}{delimiter}length"] = len(value)
+            else:
+                expanded_params[key] = value
         else:
-            expanded_params[key] = nested_func(value) if isinstance(value, dict) and recursive else value
+            expanded_params[key] = expand(value)
     return expanded_params

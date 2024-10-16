@@ -447,7 +447,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
             if Version(mlflow.VERSION) >= Version("1.28.0"):
                 truncation_length = 500
 
-            params = expand_iterables(params, size_threshold=truncation_length)
+            params = expand_iterables(params, size_threshold=truncation_length, delimiter=".")
             params = _flatten_dict(params, delimiter=".")  # Flatten dict with '.' to not break API queries
             params = self._clean_params(params)
 
