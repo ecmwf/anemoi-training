@@ -10,14 +10,17 @@ on:
 
 jobs:
   quality:
+    if: ${{ !contains(github.repository, 'private') }}
     uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-precommit-run.yml@v2
     with:
       skip-hooks: "no-commit-to-branch"
 
   checks:
+    if: ${{ !contains(github.repository, 'private') }}
     uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-pytest-pyproject.yml@v2
 
   deploy:
+    if: ${{ !contains(github.repository, 'private') }}
     needs: [checks, quality]
     uses: ecmwf-actions/reusable-workflows/.github/workflows/cd-pypi.yml@v2
     secrets: inherit
