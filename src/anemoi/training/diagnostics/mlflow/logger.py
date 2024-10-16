@@ -393,18 +393,15 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 self._metrics["cpu_utilization_percentage"].append(cpu_percent)
                 
                 system_memory = psutil.virtual_memory()
-                self._metrics["system_memory_usage_megabytes"].append(system_memory.used / 1e6)
-                self._metrics["system_memory_usage_percentage"].append(
-                        system_memory.used / system_memory.total * 100
-                        )
-                # Additional logging
-                # See https://psutil.readthedocs.io/en/latest/#psutil.virtual_memory for info on what psutil.virtual_memory() is measuring
-                # See https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=34e431b0ae398fc54ea69ff85ec700722c9da773,
-                #   for an explanation in the difference between "used" and "total - available" memory 
+                # Change the formula for measuring CPU memory usage
+                # By default Mlflow uses psutil.virtual_memory().used
                 # Tests have shown that "used" underreports memory usage by as much as a factor of 2, as well as not reporting
                 #   increased memory usage from using a higher prefetch factor on PyTorch dataloaders
-                self._metrics["system_memory_total_minus_available_megabytes"].append((system_memory.total - system_memory.available) / 1e6)
-                self._metrics["system_memory_total_minus_available_percentage"].append(system_memory.percent)
+                # See https://psutil.readthedocs.io/en/latest/#psutil.virtual_memory for info on what psutil.virtual_memory() measures
+                # See https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=34e431b0ae398fc54ea69ff85ec700722c9da773,
+                #   for an explanation in the difference between "used" and "total - available" memory 
+                self._metrics["system_memory_usage_megabytes"].append((system_memory.total - system_memory.available) / 1e6)
+                self._metrics["system_memory_usage_percentage"].append(system_memory.percent)
                 
                 # QOL: report the total system memory in raw numbers
                 self._metrics["system_memory_total_megabytes"].append(system_memory.total / 1e6)
