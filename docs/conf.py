@@ -60,6 +60,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinxarg.ext",
+    "sphinx.ext.autosectionlabel",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -99,6 +100,10 @@ intersphinx_mapping = {
     "anemoi-registry": (
         "https://anemoi-registry.readthedocs.io/en/latest/",
         ("../../anemoi-registry/docs/_build/html/objects.inv", None),
+    ),
+    "anemoi-transform": (
+        "https://anemoi-transform.readthedocs.io/en/latest/",
+        ("../../anemoi-transform/docs/_build/html/objects.inv", None),
     ),
 }
 
