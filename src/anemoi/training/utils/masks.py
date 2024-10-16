@@ -8,6 +8,7 @@
 #
 from __future__ import annotations
 
+from abc import abstractmethod
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -20,14 +21,13 @@ if TYPE_CHECKING:
 class BaseMask:
     """Base class for masking model output."""
 
-    def apply(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:  # noqa: ARG002
-        return x
+    @abstractmethod
+    def apply(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        pass
 
-    def apply_inverse(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:  # noqa: ARG002
-        return x
-
-    def rollout_boundary(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:  # noqa: ARG002
-        return x
+    @abstractmethod
+    def rollout_boundary(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        pass
 
 
 class Boolean1DMask(BaseMask):
@@ -50,10 +50,6 @@ class Boolean1DMask(BaseMask):
         if isinstance(fill_value, torch.Tensor):
             return x.masked_scatter(mask, fill_value)
         return x.masked_fill(mask, fill_value)
-
-    def apply_inverse(self, x: torch.Tensor, dim: int, fill_value: float | torch.Tensor = np.nan) -> torch.Tensor:
-        mask = self.broadcast_like(x, dim)
-        return Boolean1DMask._fill_masked_tensor(x, mask, fill_value)
 
     def apply(self, x: torch.Tensor, dim: int, fill_value: float | torch.Tensor = np.nan) -> torch.Tensor:
         """Apply the mask to the input tensor.
@@ -108,3 +104,9 @@ class Boolean1DMask(BaseMask):
 
 class NoOutputMask(BaseMask):
     """No output mask."""
+
+    def apply(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:  # noqa: ARG002
+        return x
+
+    def rollout_boundary(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:  # noqa: ARG002
+        return x
