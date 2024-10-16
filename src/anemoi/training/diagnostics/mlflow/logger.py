@@ -400,10 +400,57 @@ class AnemoiMLflowLogger(MLFlowLogger):
     def log_system_metrics(self) -> None:
         """Log system metrics (CPU, GPU, etc)."""
         import mlflow
+        import psutil
         from mlflow.system_metrics.system_metrics_monitor import SystemMetricsMonitor
+        from mlflow.system_metrics.metrics.base_metrics_monitor import BaseMetricsMonitor
+        from mlflow.system_metrics.metrics.disk_monitor import DiskMonitor
+        from mlflow.system_metrics.metrics.gpu_monitor import GPUMonitor
+        from mlflow.system_metrics.metrics.network_monitor import NetworkMonitor
+
+        class CustomCPUMonitor(BaseMetricsMonitor):
+            """ class for monitoring CPU stats. Extends default CPUMonitor, to also measure total memory and a different formula for calculating used memory """
+            def collect_metrics(self):
+                # Get CPU metrics.
+                cpu_percent = psutil.cpu_percent()
+                self._metrics["cpu_utilization_percentage"].append(cpu_percent)
+                
+                system_memory = psutil.virtual_memory()
+                self._metrics["system_memory_usage_megabytes"].append(system_memory.used / 1e6)
+                self._metrics["system_memory_usage_percentage"].append(
+                        system_memory.used / system_memory.total * 100
+                        )
+                # Additional logging
+                # See https://psutil.readthedocs.io/en/latest/#psutil.virtual_memory for info on what psutil.virtual_memory() is measuring
+                # See https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=34e431b0ae398fc54ea69ff85ec700722c9da773,
+                #   for an explanation in the difference between "used" and "total - available" memory 
+                # Tests have shown that "used" underreports memory usage by as much as a factor of 2, as well as not reporting
+                #   increased memory usage from using a higher prefetch factor on PyTorch dataloaders
+                self._metrics["system_memory_total_minus_available_megabytes"].append((system_memory.total - system_memory.available) / 1e6)
+                self._metrics["system_memory_total_minus_available_percentage"].append(system_memory.percent)
+                
+                # QOL: report the total system memory in raw numbers
+                self._metrics["system_memory_total_megabytes"].append(system_memory.total / 1e6)
+                
+            def aggregate_metrics(self):
+                return {k: round(sum(v) / len(v), 1) for k, v in self._metrics.items()}
+            
+        class CustomSystemMetricsMonitor(SystemMetricsMonitor):
+            def __init__(self, run_id, resume_logging=False):
+                super().__init__(run_id, resume_logging=resume_logging)
+               
+                # Replace the CPUMonitor with custom implementation
+                self.monitors = [CustomCPUMonitor(), DiskMonitor(), NetworkMonitor()]
+                try:
+                   gpu_monitor = GPUMonitor()
+                   self.monitors.append(gpu_monitor)
+                except Exception as e:
+                    _logger.warning(
+                            f"Skip logging GPU metrics because creating `GPUMonitor` failed with error: {e}."
+                    )
+
 
         mlflow.enable_system_metrics_logging()
-        system_monitor = SystemMetricsMonitor(
+        system_monitor = CustomSystemMetricsMonitor(
             self.run_id,
             resume_logging=self.run_id is not None,
         )
