@@ -124,22 +124,22 @@ class MlFlowSync:
         LOGGER.setLevel(self.log_level)
 
     @staticmethod
-    def update_run_id(params: dict, key: str, new_run_id: str, offline_run_id: str) -> dict:
+    def update_run_id(params: dict, key: str, new_run_id: str, src_run_id: str, run_type: str) -> dict:
         params[f"config.training.{key}"] = new_run_id
-        params[f"config.training.offline_{key}"] = offline_run_id
+        params[f"config.training.{run_type}_{key}"] = src_run_id
 
         if key == "run_id":
-            params[f"metadata.offline_{key}"] = offline_run_id
+            params[f"metadata.{run_type}_{key}"] = src_run_id
             params[f"metadata.{key}"] = new_run_id
         return params
 
-    def update_parent_run_info(self, tags: dict, tag_key: str, tag_dest: str, dst_run_id: str) -> dict:
+    def update_parent_run_info(self, tags: dict, tag_key: str, tag_dest: str, dst_run_id: str, run_type: str) -> dict:
         mlflow.set_tracking_uri(self.dest_tracking_uri)
 
         # Check if there is already a parent run in the destination tracking uri
         runs = mlflow.search_runs(
             experiment_ids=mlflow.get_experiment_by_name(self.experiment_name).experiment_id,
-            filter_string=f"params.metadata.offline_run_id = '{tags[tag_key]}'",
+            filter_string=f"params.metadata.{run_type}_run_id = '{tags[tag_key]}'",
         )
 
         if not runs.empty:
@@ -153,16 +153,17 @@ class MlFlowSync:
         tags[tag_key] = new_parent_run_id  # update new online parent run_id
         return tags
 
-    def check_run_is_logged(self, status: str = "FINISHED") -> bool:
+    def check_run_is_logged(self, status: str = "FINISHED", server2server: bool = False) -> bool:
         """Blocks sync if top-level parent run or single runs are unavailable."""
         run_logged = False
         if status == "FINISHED":
             mlflow.set_tracking_uri(self.dest_tracking_uri)
             experiment = mlflow.get_experiment_by_name(self.experiment_name)
+            run_type = "server2server" if server2server else "offline"
             if experiment:
                 synced_runs = mlflow.search_runs(
                     experiment_ids=experiment.experiment_id,
-                    filter_string=f"params.metadata.offline_run_id = '{self.run_id}'",
+                    filter_string=f"params.metadata.{run_type}_run_id = '{self.run_id}'",
                 )
                 if not synced_runs.empty:  # single run (no child) already logged
                     run_logged = True
@@ -203,32 +204,47 @@ class MlFlowSync:
             # Download artifact file from the server
             mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path=artifact.path, dst_path=artifact_path)
 
-    def _update_params_tags_offline_runs(
+    def _update_params_tags_runs(
         self,
         params: dict,
         tags: dict,
         dst_run_id: str,
         src_run_id: str,
+        run_type: str = "offline",
     ) -> (dict, dict):
-        tags["offlineRun"] = "True"
+
         if (params["config.training.fork_run_id"] == "None") and (params["metadata.run_id"] == src_run_id):
-            params = self.update_run_id(params, "run_id", new_run_id=dst_run_id, offline_run_id=src_run_id)
+            params = self.update_run_id(
+                params,
+                "run_id",
+                new_run_id=dst_run_id,
+                src_run_id=src_run_id,
+                run_type=run_type,
+            )
 
         elif "forkedRun" in tags:
             try:
                 tags = self.update_parent_run_info(
                     tags=tags,
                     tag_key="forkedRunId",
-                    tag_dest="offline.forkedRunId",
+                    tag_dest=f"{run_type}.forkedRunId",
                     dst_run_id=dst_run_id,
+                    run_type=run_type,
                 )
                 params = self.update_run_id(
                     params,
                     "fork_run_id",
                     new_run_id=tags["forkedRunId"],
-                    offline_run_id=tags["offline.forkedRunId"],
+                    src_run_id=tags[f"{run_type}.forkedRunId"],
+                    run_type=run_type,
                 )
-                params = self.update_run_id(params, "run_id", new_run_id=dst_run_id, offline_run_id=src_run_id)
+                params = self.update_run_id(
+                    params,
+                    "run_id",
+                    new_run_id=dst_run_id,
+                    src_run_id=src_run_id,
+                    run_type=run_type,
+                )
 
             except AttributeError:
                 LOGGER.warning("No forked run parent found")
@@ -238,17 +254,21 @@ class MlFlowSync:
                 tags = self.update_parent_run_info(
                     tags=tags,
                     tag_key="mlflow.parentRunId",
-                    tag_dest="mlflow.offline.parentRunId",
+                    tag_dest=f"mlflow.{run_type}.parentRunId",
                     dst_run_id=dst_run_id,
+                    run_type=run_type,
                 )
                 params = self.update_run_id(
                     params,
                     "run_id",
                     new_run_id=tags["mlflow.parentRunId"],
-                    offline_run_id=tags["mlflow.offline.parentRunId"],
+                    src_run_id=tags[f"mlflow.{run_type}.parentRunId"],
+                    run_type=run_type,
                 )
 
-                params["config.training.offline_run_id_folder"] = src_run_id
+                # in the offline case that's the local folder name for the resumed run
+                # in the server2server case that's the source server run_id of the resumed run
+                params[f"config.training.{run_type}_self_run_id"] = src_run_id
 
             except AttributeError:
                 LOGGER.warning("No parent run found")
@@ -264,6 +284,7 @@ class MlFlowSync:
         http_client = create_http_client(dest_mlflow_client)
         # GET SOURCE RUN ##
         run = src_mlflow_client.get_run(self.run_id)
+        server2server = self._check_source_tracking_uri()
         run_logged = self.check_run_is_logged(status=run.info.status)
         if run_logged:
             LOGGER.info("Run already imported %s into experiment %s", self.run_id, self.experiment_name)
@@ -299,14 +320,22 @@ class MlFlowSync:
         # that when we online sync the offline runs those will have different run_ids. To keep
         # track of online and offline governance in that case we update run_ids info
 
-        server2server = self._check_source_tracking_uri()
         artifact_path = self._get_artifacts_path(server2server, run)
 
         if server2server:
             tags["server2server"] = "True"
             self._download_artifacts(src_mlflow_client, run.info.run_id, artifact_path)
+            params, tags = self._update_params_tags_runs(
+                params,
+                tags,
+                dst_run_id,
+                run.info.run_id,
+                run_type="server2server",
+            )
+
         else:
-            params, tags = self._update_params_tags_offline_runs(params, tags, dst_run_id, run.info.run_id)
+            tags["offlineRun"] = "True"
+            params, tags = self._update_params_tags_runs(params, tags, dst_run_id, run.info.run_id, run_type="offline")
 
         src_run_dct = {
             "params": params,
