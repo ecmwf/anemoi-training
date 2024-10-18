@@ -12,6 +12,7 @@ Keep it human-readable, your future self will thank you!
 
 ### Added
 ### Fixed
+- Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
 ### Changed
 
 ## [0.2.0 - Feature release](https://github.com/ecmwf/anemoi-training/compare/0.1.0...0.2.0) - 2024-10-16
@@ -51,7 +52,6 @@ Keep it human-readable, your future self will thank you!
 ### Changed
 
 - Updated configuration examples in documentation and corrected links - [#46](https://github.com/ecmwf/anemoi-training/pull/46)
-- Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
 - Remove credential prompt from mlflow login, replace with seed refresh token via web - [#78](https://github.com/ecmwf/anemoi-training/pull/78)
 - Update CODEOWNERS
 
