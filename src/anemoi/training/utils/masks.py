@@ -23,11 +23,13 @@ class BaseMask:
 
     @abstractmethod
     def apply(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
-        raise NotImplementedError("Method `apply` must be implemented in subclass.")
+        error_message = "Method `apply` must be implemented in subclass."
+        raise NotImplementedError(error_message)
 
     @abstractmethod
     def rollout_boundary(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
-        raise NotImplementedError("Method `rollout_boundary` must be implemented in subclass.")
+        error_message = "Method `rollout_boundary` must be implemented in subclass."
+        raise NotImplementedError(error_message)
 
 
 class Boolean1DMask(BaseMask):
