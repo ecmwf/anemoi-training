@@ -164,6 +164,7 @@ class AnemoiTrainer:
 
         # Generate a random UUID
         import uuid
+
         return str(uuid.uuid4())
 
     @cached_property
@@ -180,7 +181,6 @@ class AnemoiTrainer:
     def tensorboard_logger(self) -> pl.loggers.TensorBoardLogger:
         """TensorBoard logger."""
         return get_tensorboard_logger(self.config)
-    
 
     @cached_property
     def last_checkpoint(self) -> str | None:
@@ -189,7 +189,7 @@ class AnemoiTrainer:
             return None
 
         fork_run_server2server = self._get_env_var("FORK_RUN_SERVER2SERVER")
-        fork_id = fork_run_server2server if fork_run_server2server!="None" else self.config.training.fork_run_id
+        fork_id = fork_run_server2server if fork_run_server2server != "None" else self.config.training.fork_run_id
         checkpoint = Path(
             self.config.hardware.paths.checkpoints.parent,
             fork_id or self.lineage_run,
@@ -200,10 +200,10 @@ class AnemoiTrainer:
         if Path(checkpoint).exists():
             LOGGER.info("Resuming training from last checkpoint: %s", checkpoint)
             return checkpoint
-        else:
-            import sys
-            LOGGER.warning("Could not find last checkpoint: %s", checkpoint)
-            sys.exit(1)
+        import sys
+
+        LOGGER.warning("Could not find last checkpoint: %s", checkpoint)
+        sys.exit(1)
 
     @cached_property
     def callbacks(self) -> list[pl.callbacks.Callback]:
@@ -294,13 +294,13 @@ class AnemoiTrainer:
         LOGGER.debug("Effective learning rate: %.3e", total_number_of_model_instances * self.config.training.lr.rate)
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
-    def _get_env_var(self,env_var:str) -> str:
+    def _get_env_var(self, env_var: str) -> str:
         if self.config.diagnostics.log.mlflow.enabled:
-            return self.mlflow_logger.get_var(env_var) #env variables are just exported if the mlflow logger is first initialized
-        else:
-            # prevent code from breaking if mlflow is not enabled
-            return 'None' 
-
+            return self.mlflow_logger.get_var(
+                env_var,
+            )  # env variables are just exported if the mlflow logger is first initialized
+        # prevent code from breaking if mlflow is not enabled
+        return "None"
 
     def _update_paths(self) -> None:
         """Update the paths in the configuration."""
@@ -320,7 +320,7 @@ class AnemoiTrainer:
             )
             # Only rank non zero in the forked run will go here
             self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.lineage_run)
-        
+
         LOGGER.info("Checkpoints path: %s", self.config.hardware.paths.checkpoints)
         LOGGER.info("Plots path: %s", self.config.hardware.paths.plots)
 
