@@ -16,11 +16,15 @@ from abc import abstractmethod
 import torch
 from torch import nn
 
+from anemoi.training.losses.utils import ScaleTensor
+
 LOGGER = logging.getLogger(__name__)
 
 
 class BaseWeightedLoss(nn.Module, ABC):
     """Node-weighted general loss."""
+
+    scalar: ScaleTensor
 
     def __init__(
         self,
@@ -51,13 +55,17 @@ class BaseWeightedLoss(nn.Module, ABC):
         """
         super().__init__()
 
+        self.scalar = ScaleTensor()
+
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
         self.register_buffer("node_weights", node_weights, persistent=True)
-        self.register_buffer("variable_scaling", variable_scaling, persistent=True)
 
-    def scale_by_variable_scaling(
+        if variable_scaling is not None:
+            self.scalar.add_scalar(-1, variable_scaling, "variable_scaling")
+
+    def scale(
         self,
         x: torch.Tensor,
         feature_indices: torch.Tensor | None = None,
@@ -77,16 +85,17 @@ class BaseWeightedLoss(nn.Module, ABC):
             Scaled error tensor
         """
         # Use feature_weights if available
-        if self.variable_scaling is None:
+        if len(self.scalar) == 0:
             return x
 
+        scalar = self.scalar.get_scalar(x.shape)
+
         if feature_indices is None:
-            return x * self.variable_scaling
-        return x * self.variable_scaling[..., feature_indices]
+            return x * scalar
+        return x * scalar[..., feature_indices]
 
     def scale_by_node_weights(self, x: torch.Tensor, squash: bool = True) -> torch.Tensor:
-        """
-        Scale a tensor by the node_weights.
+        """Scale a tensor by the node_weights.
 
         Parameters
         ----------
