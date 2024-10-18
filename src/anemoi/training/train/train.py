@@ -164,7 +164,6 @@ class AnemoiTrainer:
 
         # Generate a random UUID
         import uuid
-
         return str(uuid.uuid4())
 
     @cached_property
@@ -181,17 +180,16 @@ class AnemoiTrainer:
     def tensorboard_logger(self) -> pl.loggers.TensorBoardLogger:
         """TensorBoard logger."""
         return get_tensorboard_logger(self.config)
+    
 
     @cached_property
     def last_checkpoint(self) -> str | None:
         """Path to the last checkpoint."""
         if not self.start_from_checkpoint:
             return None
-        
-        fork_run_server2server = os.getenv("FORK_RUN_SERVER2SERVER")
-        fork_id = fork_run_server2server if fork_run_server2server is not None else self.config.training.fork_run_id
 
-        print(fork_id,self.run_id,self.lineage_run)
+        fork_run_server2server = self._get_env_var("FORK_RUN_SERVER2SERVER")
+        fork_id = fork_run_server2server if fork_run_server2server!="None" else self.config.training.fork_run_id
         checkpoint = Path(
             self.config.hardware.paths.checkpoints.parent,
             fork_id or self.lineage_run,
@@ -202,10 +200,10 @@ class AnemoiTrainer:
         if Path(checkpoint).exists():
             LOGGER.info("Resuming training from last checkpoint: %s", checkpoint)
             return checkpoint
-
-        LOGGER.warning("Could not find last checkpoint: %s", checkpoint)
-        stop
-        return None
+        else:
+            import sys
+            LOGGER.warning("Could not find last checkpoint: %s", checkpoint)
+            sys.exit(1)
 
     @cached_property
     def callbacks(self) -> list[pl.callbacks.Callback]:
@@ -296,28 +294,33 @@ class AnemoiTrainer:
         LOGGER.debug("Effective learning rate: %.3e", total_number_of_model_instances * self.config.training.lr.rate)
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
+    def _get_env_var(self,env_var:str) -> str:
+        if self.config.diagnostics.log.mlflow.enabled:
+            return self.mlflow_logger.get_var(env_var) #env variables are just exported if the mlflow logger is first initialized
+        else:
+            # prevent code from breaking if mlflow is not enabled
+            return 'None' 
+
+
     def _update_paths(self) -> None:
         """Update the paths in the configuration."""
-        print(self.mlflow_logger) # !TODO CHECK ISSUE WITH LINEAGLE SERVER2SERVER
-#
-        parent_run_server2server = os.getenv("PARENT_RUN_SERVER2SERVER")
+        parent_run_server2server = self._get_env_var("PARENT_RUN_SERVER2SERVER")
         LOGGER.info("Parent run server2server: %s", parent_run_server2server)
         self.lineage_run = None
-        print(self.config.training.fork_run_id,self.run_id)
         if self.run_id:  # when using mlflow only rank0 will have a run_id except when resuming runs
             # Multi-gpu new runs or forked runs - only rank 0
             # Multi-gpu resumed runs - all ranks
-            self.lineage_run = parent_run_server2server if parent_run_server2server != 'None' else self.run_id
-            print(self.lineage_run,self.run_id)
+            self.lineage_run = parent_run_server2server if parent_run_server2server != "None" else self.run_id
             self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.lineage_run)
             self.config.hardware.paths.plots = Path(self.config.hardware.paths.plots, self.lineage_run)
-        elif self.config.training.fork_run_id: 
+        elif self.config.training.fork_run_id:
             # WHEN USING MANY NODES/GPUS
             self.lineage_run = (
-                parent_run_server2server if parent_run_server2server != 'None' else self.config.training.fork_run_id
+                parent_run_server2server if parent_run_server2server != "None" else self.config.training.fork_run_id
             )
             # Only rank non zero in the forked run will go here
             self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.lineage_run)
+        
         LOGGER.info("Checkpoints path: %s", self.config.hardware.paths.checkpoints)
         LOGGER.info("Plots path: %s", self.config.hardware.paths.plots)
 

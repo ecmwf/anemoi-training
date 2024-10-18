@@ -29,28 +29,32 @@ from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from anemoi.training.diagnostics.mlflow.auth import TokenAuth
 from anemoi.training.diagnostics.mlflow.utils import health_check
 from anemoi.training.utils.jsonify import map_config_to_primitives
-import mlflow
 
 if TYPE_CHECKING:
     from argparse import Namespace
 
+    import mlflow
     from omegaconf import OmegaConf
 
 LOGGER = logging.getLogger(__name__)
 
 
-
-def _check_server2server_lineage(run: mlflow.entities.Run,fork=False) -> bool:
-    server2server = run.data.tags.get('server2server', 'False') == 'True'
-    LOGGER.info(f"Server2Server: {server2server}")
+def _check_server2server_lineage(run: mlflow.entities.Run, fork: bool = False) -> bool:
+    server2server = run.data.tags.get("server2server", "False") == "True"
+    LOGGER.info("Server2Server: %s", server2server)
     if server2server:
-        parent_run_across_servers = run.data.params.get('metadata.offline_run_id', run.data.params.get('metadata.server2server_run_id'))
+        parent_run_across_servers = run.data.params.get(
+            "metadata.offline_run_id",
+            run.data.params.get("metadata.server2server_run_id"),
+        )
         if fork:
-            # if we want to fork a resume run we need to set the parent_run_across_servers but just to restore the checkpoint
+            # if we want to fork a resume run we need to set the parent_run_across_servers
+            # but just to restore the checkpoint
             os.environ["FORK_RUN_SERVER2SERVER"] = parent_run_across_servers
         else:
             os.environ["PARENT_RUN_SERVER2SERVER"] = parent_run_across_servers
-            
+
+
 def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | None, str, dict[str, Any]]:
     run_id = None
     tags = {"projectName": config.diagnostics.log.mlflow.project_name}
@@ -62,9 +66,9 @@ def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | N
         # add the arguments to the command tag
         tags["command"] = tags["command"] + " " + " ".join(sys.argv[1:])
 
+    os.environ["PARENT_RUN_SERVER2SERVER"] = "None"  # default None # can't set them to bool None
+    os.environ["FORK_RUN_SERVER2SERVER"] = "None"  # default None # can't set them to bool None
 
-    os.environ["PARENT_RUN_SERVER2SERVER"] = "None" # default None # can't set them to bool None
-    
     if config.training.run_id or config.training.fork_run_id:
         "Either run_id or fork_run_id must be provided to resume a run."
 
@@ -78,24 +82,23 @@ def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | N
         if config.training.run_id and config.diagnostics.log.mlflow.on_resume_create_child:
             parent_run_id = config.training.run_id  # parent_run_id
             parent_run = mlflow_client.get_run(parent_run_id)
-            run_name=parent_run.info.run_name
+            run_name = parent_run.info.run_name
             _check_server2server_lineage(parent_run)
             tags["mlflow.parentRunId"] = parent_run_id
             tags["resumedRun"] = "True"  # tags can't take boolean values
         elif config.training.run_id and not config.diagnostics.log.mlflow.on_resume_create_child:
             run_id = config.training.run_id
             run = mlflow_client.get_run(run_id)
-            run_name=run.info.run_name
+            run_name = run.info.run_name
             _check_server2server_lineage(run)
             mlflow_client.update_run(run_id=run_id, status="RUNNING")
             tags["resumedRun"] = "True"
         else:
-            print('config training fork run id', config.training.fork_run_id)
             parent_run_id = config.training.fork_run_id
             tags["forkedRun"] = "True"
             tags["forkedRunId"] = parent_run_id
             run = mlflow_client.get_run(parent_run_id)
-            _check_server2server_lineage(run,fork=True)
+            _check_server2server_lineage(run, fork=True)
 
     if config.diagnostics.log.mlflow.run_name:
         run_name = config.diagnostics.log.mlflow.run_name
@@ -413,6 +416,9 @@ class AnemoiMLflowLogger(MLFlowLogger):
         self.run_id_to_system_metrics_monitor = {}
         self.run_id_to_system_metrics_monitor[self.run_id] = system_monitor
         system_monitor.start()
+
+    def get_var(self, env_var: str) -> str | None:
+        return os.getenv(env_var)
 
     @rank_zero_only
     def log_terminal_output(self, artifact_save_dir: str | Path = "") -> None:
