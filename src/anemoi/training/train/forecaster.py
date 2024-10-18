@@ -85,11 +85,11 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        loss_scaling = self.get_feature_weights(config, data_indices)
+        variable_scaling = self.get_feature_weights(config, data_indices)
 
         self.val_metric_ranges, _ = self.get_val_metric_ranges(config, data_indices)
 
-        loss_kwargs = {"node_weights": self.loss_weights, "loss_scaling": loss_scaling}
+        loss_kwargs = {"node_weights": self.loss_weights, "variable_scaling": variable_scaling}
 
         self.loss = self.get_loss_function(config.training.training_loss, **loss_kwargs)
         assert isinstance(self.loss, torch.nn.Module) and not isinstance(

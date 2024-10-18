@@ -45,7 +45,7 @@ training_loss:
   _target_: anemoi.training.losses.mse.WeightedMSELoss
   # what to include in the loss class initialisation
   include_node_weights: True
-  include_loss_scaling: True
+  include_variable_scaling: True
   # other kwargs
   ignore_nans: False
 
@@ -57,7 +57,7 @@ validation_metrics:
   - _target_: anemoi.training.losses.mse.WeightedMSELoss
     # what to include in the loss class initialisation
     include_node_weights: True
-    include_loss_scaling: False
+    include_variable_scaling: False
     # other kwargs
     ignore_nans: True
 

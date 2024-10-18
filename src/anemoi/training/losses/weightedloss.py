@@ -25,7 +25,7 @@ class BaseWeightedLoss(nn.Module, ABC):
     def __init__(
         self,
         node_weights: torch.Tensor,
-        loss_scaling: torch.Tensor | None = None,
+        variable_scaling: torch.Tensor | None = None,
         ignore_nans: bool = False,
     ) -> None:
         """Node- and feature_weighted Loss.
@@ -37,13 +37,13 @@ class BaseWeightedLoss(nn.Module, ABC):
 
         Registers:
         - self.node_weights: torch.Tensor of shape (N, )
-        - self.loss_scaling: torch.Tensor if given
+        - self.variable_scaling: torch.Tensor if given
 
         Parameters
         ----------
         node_weights : torch.Tensor of shape (N, )
             Weight of each node in the loss function
-        loss_scaling : Optional[torch.Tensor], optional
+        variable_scaling : Optional[torch.Tensor], optional
             precomputed, per-variable weights, by default None
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
@@ -55,14 +55,14 @@ class BaseWeightedLoss(nn.Module, ABC):
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
         self.register_buffer("node_weights", node_weights, persistent=True)
-        self.register_buffer("loss_scaling", loss_scaling, persistent=True)
+        self.register_buffer("variable_scaling", variable_scaling, persistent=True)
 
-    def scale_by_loss_scaling(
+    def scale_by_variable_scaling(
         self,
         x: torch.Tensor,
         feature_indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """Scale a tensor by the loss_scaling.
+        """Scale a tensor by the variable_scaling.
 
         Parameters
         ----------
@@ -77,12 +77,12 @@ class BaseWeightedLoss(nn.Module, ABC):
             Scaled error tensor
         """
         # Use feature_weights if available
-        if self.loss_scaling is None:
+        if self.variable_scaling is None:
             return x
 
         if feature_indices is None:
-            return x * self.loss_scaling
-        return x * self.loss_scaling[..., feature_indices]
+            return x * self.variable_scaling
+        return x * self.variable_scaling[..., feature_indices]
 
     def scale_by_node_weights(self, x: torch.Tensor, squash: bool = True) -> torch.Tensor:
         """
@@ -147,7 +147,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         out = pred - target
 
         if feature_scale:
-            out = self.scale_by_loss_scaling(out, feature_indices)
+            out = self.scale_by_variable_scaling(out, feature_indices)
         return self.scale_by_node_weights(out, squash)
 
     @property
