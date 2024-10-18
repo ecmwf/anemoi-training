@@ -68,6 +68,10 @@ class AnemoiTrainer:
 
         self.config.training.run_id = self.run_id
         LOGGER.info("Run id: %s", self.config.training.run_id)
+
+        LOGGER.info("Initializing Loggers")
+        self.loggers
+
         # Update paths to contain the run ID
         self._update_paths()
 
@@ -147,7 +151,7 @@ class AnemoiTrainer:
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:
         run_id = self.mlflow_logger.run_id
-        # for resumed runs or offline runs logging this can be uesful
+        # for resumed runs or offline runs logging this can be useful
         LOGGER.info("Mlflow Run id: %s", run_id)
         return run_id
 
@@ -188,19 +192,19 @@ class AnemoiTrainer:
         if not self.start_from_checkpoint:
             return None
 
+        fork_run_server2server = os.getenv("FORK_RUN_SERVER2SERVER")
+        fork_id = fork_run_server2server or self.config.training.fork_run_id
         checkpoint = Path(
             self.config.hardware.paths.checkpoints.parent,
-            self.config.training.fork_run_id or self.run_id,
+            fork_id or self.lineage_run,
             self.config.hardware.files.warm_start or "last.ckpt",
         )
-
         # Check if the last checkpoint exists
         if Path(checkpoint).exists():
             LOGGER.info("Resuming training from last checkpoint: %s", checkpoint)
             return checkpoint
-
-        LOGGER.warning("Could not find last checkpoint: %s", checkpoint)
-        return None
+        msg = "Could not find last checkpoint: %s", checkpoint
+        raise RuntimeError(msg)
 
     @cached_property
     def callbacks(self) -> list[pl.callbacks.Callback]:
@@ -252,10 +256,13 @@ class AnemoiTrainer:
     def loggers(self) -> list:
         loggers = []
         if self.config.diagnostics.log.wandb.enabled:
+            LOGGER.info("W&B logger enabled")
             loggers.append(self.wandb_logger)
         if self.config.diagnostics.log.tensorboard.enabled:
+            LOGGER.info("TensorBoard logger enabled")
             loggers.append(self.tensorboard_logger)
         if self.config.diagnostics.log.mlflow.enabled:
+            LOGGER.info("MLFlow logger enabled")
             loggers.append(self.mlflow_logger)
         return loggers
 
@@ -293,15 +300,23 @@ class AnemoiTrainer:
 
     def _update_paths(self) -> None:
         """Update the paths in the configuration."""
+        parent_run_server2server = os.getenv("PARENT_RUN_SERVER2SERVER")
+        LOGGER.info("Parent run server2server: %s", parent_run_server2server)
+        self.lineage_run = None
         if self.run_id:  # when using mlflow only rank0 will have a run_id except when resuming runs
             # Multi-gpu new runs or forked runs - only rank 0
             # Multi-gpu resumed runs - all ranks
-            self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.run_id)
-            self.config.hardware.paths.plots = Path(self.config.hardware.paths.plots, self.run_id)
+            self.lineage_run = parent_run_server2server or self.run_id
+            self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.lineage_run)
+            self.config.hardware.paths.plots = Path(self.config.hardware.paths.plots, self.lineage_run)
         elif self.config.training.fork_run_id:
+            # WHEN USING MANY NODES/GPUS
+            self.lineage_run = parent_run_server2server or self.config.training.fork_run_id
             # Only rank non zero in the forked run will go here
-            parent_run = self.config.training.fork_run_id
-            self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, parent_run)
+            self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.lineage_run)
+
+        LOGGER.info("Checkpoints path: %s", self.config.hardware.paths.checkpoints)
+        LOGGER.info("Plots path: %s", self.config.hardware.paths.plots)
 
     @cached_property
     def strategy(self) -> DDPGroupStrategy:

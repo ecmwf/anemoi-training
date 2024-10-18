@@ -33,9 +33,26 @@ from anemoi.training.utils.jsonify import map_config_to_primitives
 if TYPE_CHECKING:
     from argparse import Namespace
 
+    import mlflow
     from omegaconf import OmegaConf
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _check_server2server_lineage(run: mlflow.entities.Run, fork: bool = False) -> bool:
+    server2server = run.data.tags.get("server2server", "False") == "True"
+    LOGGER.info("Server2Server: %s", server2server)
+    if server2server:
+        parent_run_across_servers = run.data.params.get(
+            "metadata.offline_run_id",
+            run.data.params.get("metadata.server2server_run_id"),
+        )
+        if fork:
+            # if we want to fork a resume run we need to set the parent_run_across_servers
+            # but just to restore the checkpoint
+            os.environ["FORK_RUN_SERVER2SERVER"] = parent_run_across_servers
+        else:
+            os.environ["PARENT_RUN_SERVER2SERVER"] = parent_run_across_servers
 
 
 def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | None, str, dict[str, Any]]:
@@ -48,6 +65,7 @@ def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | N
     if len(sys.argv) > 1:
         # add the arguments to the command tag
         tags["command"] = tags["command"] + " " + " ".join(sys.argv[1:])
+
     if config.training.run_id or config.training.fork_run_id:
         "Either run_id or fork_run_id must be provided to resume a run."
 
@@ -60,18 +78,24 @@ def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | N
 
         if config.training.run_id and config.diagnostics.log.mlflow.on_resume_create_child:
             parent_run_id = config.training.run_id  # parent_run_id
-            run_name = mlflow_client.get_run(parent_run_id).info.run_name
+            parent_run = mlflow_client.get_run(parent_run_id)
+            run_name = parent_run.info.run_name
+            _check_server2server_lineage(parent_run)
             tags["mlflow.parentRunId"] = parent_run_id
             tags["resumedRun"] = "True"  # tags can't take boolean values
         elif config.training.run_id and not config.diagnostics.log.mlflow.on_resume_create_child:
             run_id = config.training.run_id
-            run_name = mlflow_client.get_run(run_id).info.run_name
+            run = mlflow_client.get_run(run_id)
+            run_name = run.info.run_name
+            _check_server2server_lineage(run)
             mlflow_client.update_run(run_id=run_id, status="RUNNING")
             tags["resumedRun"] = "True"
         else:
             parent_run_id = config.training.fork_run_id
             tags["forkedRun"] = "True"
             tags["forkedRunId"] = parent_run_id
+            run = mlflow_client.get_run(parent_run_id)
+            _check_server2server_lineage(run, fork=True)
 
     if config.diagnostics.log.mlflow.run_name:
         run_name = config.diagnostics.log.mlflow.run_name
@@ -79,6 +103,7 @@ def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | N
         import uuid
 
         run_name = f"{uuid.uuid4()!s}"
+
     return run_id, run_name, tags
 
 
