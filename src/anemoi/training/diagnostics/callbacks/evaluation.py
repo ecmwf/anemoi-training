@@ -32,6 +32,10 @@ class RolloutEval(Callback):
         ----------
         config : dict
             Dictionary with configuration settings
+        rollout : int
+            Rollout length for evaluation
+        frequency : int
+            Frequency of evaluation, per batch
 
         """
         super().__init__()
@@ -52,6 +56,11 @@ class RolloutEval(Callback):
     ) -> None:
         loss = torch.zeros(1, dtype=batch.dtype, device=pl_module.device, requires_grad=False)
         metrics = {}
+
+        assert batch.shape[1] >= self.rollout + pl_module.multi_step, (
+            "Batch length not sufficient for requested validation rollout length! "
+            f"Set `dataloader.validation_rollout` to at least {self.rollout + pl_module.multi_step}"
+        )
 
         with torch.no_grad():
             for loss_next, metrics_next, _ in pl_module.rollout_step(batch, rollout=self.rollout, validation_mode=True):

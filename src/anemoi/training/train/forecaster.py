@@ -223,6 +223,8 @@ class GraphForecaster(pl.LightningModule):
         """
         Rollout step for the forecaster.
 
+        Will run pre_processors on batch, but not post_processors on predictions.
+
         Parameters
         ----------
         batch : torch.Tensor
@@ -230,7 +232,8 @@ class GraphForecaster(pl.LightningModule):
         rollout : int | None, optional
             Number of times to rollout for, by default None
         validation_mode : bool, optional
-            Whether in validation mode, by default False
+            Whether in validation mode, and to calculate validation metrics, by default False
+            If False, metrics will be empty
 
         Yields
         ------
@@ -269,15 +272,13 @@ class GraphForecaster(pl.LightningModule):
             x = self.advance_input(x, y_pred, batch, rollout_step)
 
             metrics_next = {}
-            y_preds_next = []
             if validation_mode:
-                metrics_next, y_preds_next = self.calculate_val_metrics(
+                metrics_next = self.calculate_val_metrics(
                     y_pred,
                     y,
                     rollout_step,
-                    enable_plot=self.enable_plot,
                 )
-            yield loss, metrics_next, y_preds_next
+            yield loss, metrics_next, y_pred
 
     def _step(
         self,
@@ -307,10 +308,8 @@ class GraphForecaster(pl.LightningModule):
         y_pred: torch.Tensor,
         y: torch.Tensor,
         rollout_step: int,
-        enable_plot: bool = False,
     ) -> tuple[dict, list]:
         metrics = {}
-        y_preds = []
         y_postprocessed = self.model.post_processors(y, in_place=False)
         y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
         for mkey, indices in self.metric_ranges_validation.items():
@@ -318,10 +317,7 @@ class GraphForecaster(pl.LightningModule):
                 y_pred_postprocessed[..., indices],
                 y_postprocessed[..., indices],
             )
-
-        if enable_plot:
-            y_preds.append(y_pred)
-        return metrics, y_preds
+        return metrics
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)

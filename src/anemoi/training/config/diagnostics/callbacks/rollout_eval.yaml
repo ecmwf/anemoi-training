@@ -1,4 +1,4 @@
 # Add callbacks here
 - _target_: anemoi.training.diagnostics.callbacks.evaluation.RolloutEval
-  rollout: ${diagnostics.eval.rollout}
-  frequency: ${diagnostics.eval.frequency}
+  rollout: ${dataloader.validation_rollout}
+  frequency: 20
