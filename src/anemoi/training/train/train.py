@@ -204,6 +204,7 @@ class AnemoiTrainer:
 
         LOGGER.warning("Could not find last checkpoint: %s", checkpoint)
         sys.exit(1)
+        return None
 
     @cached_property
     def callbacks(self) -> list[pl.callbacks.Callback]:
