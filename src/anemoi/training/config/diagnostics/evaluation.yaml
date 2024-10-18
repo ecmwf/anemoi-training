@@ -3,11 +3,6 @@ defaults:
   - plot: detailed
   - callbacks: pretraining
 
-eval:
-  enabled: False
-  # use this to evaluate the model over longer rollouts, every so many validation batches
-  rollout: 12
-  frequency: 20
 
 debug:
   # this will detect and trace back NaNs / Infs etc. but will slow down training

@@ -318,17 +318,10 @@ class LongRolloutPlots(BasePlotCallback):
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
 
-        batch = pl_module.model.pre_processors(batch, in_place=False)
-        # prepare input tensor for rollout from preprocessed batch
-        x = batch[
-            :,
-            0 : pl_module.multi_step,
-            ...,
-            pl_module.data_indices.internal_data.input.full,
-        ]  # (bs, multi_step, latlon, nvar)
-        assert (
-            batch.shape[1] >= max(self.rollout) + pl_module.multi_step
-        ), "Batch length not sufficient for requested rollout length!"
+        assert batch.shape[1] >= self.rollout + pl_module.multi_step, (
+            "Batch length not sufficient for requested validation rollout length! "
+            f"Set `dataloader.validation_rollout` to at least {self.rollout + pl_module.multi_step}"
+        )
 
         # prepare input tensor for plotting
         input_tensor_0 = batch[
@@ -341,10 +334,7 @@ class LongRolloutPlots(BasePlotCallback):
 
         # start rollout
         with torch.no_grad():
-            for rollout_step in range(max(self.rollout)):
-                y_pred = pl_module(x)  # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-
-                x = pl_module.advance_input(x, y_pred, batch, rollout_step)
+            for rollout_step, (_, _, y_pred) in enumerate(pl_module.rollout_step(batch, rollout=max(self.rollout))):
 
                 if (rollout_step + 1) in self.rollout:
                     # prepare true output tensor for plotting

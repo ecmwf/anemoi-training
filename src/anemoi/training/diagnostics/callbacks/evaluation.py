@@ -32,6 +32,10 @@ class RolloutEval(Callback):
         ----------
         config : dict
             Dictionary with configuration settings
+        rollout : int
+            Rollout length for evaluation
+        frequency : int
+            Frequency of evaluation, per batch
 
         """
         super().__init__()
@@ -53,33 +57,14 @@ class RolloutEval(Callback):
         loss = torch.zeros(1, dtype=batch.dtype, device=pl_module.device, requires_grad=False)
         metrics = {}
 
-        # start rollout
-        batch = pl_module.model.pre_processors(batch, in_place=False)
-        x = batch[
-            :,
-            0 : pl_module.multi_step,
-            ...,
-            pl_module.data_indices.internal_data.input.full,
-        ]  # (bs, multi_step, latlon, nvar)
-        assert (
-            batch.shape[1] >= self.rollout + pl_module.multi_step
-        ), "Batch length not sufficient for requested rollout length!"
+        assert batch.shape[1] >= self.rollout + pl_module.multi_step, (
+            "Batch length not sufficient for requested validation rollout length! "
+            f"Set `dataloader.validation_rollout` to at least {self.rollout + pl_module.multi_step}"
+        )
 
         with torch.no_grad():
-            for rollout_step in range(self.rollout):
-                y_pred = pl_module(x)  # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-                y = batch[
-                    :,
-                    pl_module.multi_step + rollout_step,
-                    ...,
-                    pl_module.data_indices.internal_data.output.full,
-                ]  # target, shape = (bs, latlon, nvar)
-                # y includes the auxiliary variables, so we must leave those out when computing the loss
-                loss += pl_module.loss(y_pred, y)
-
-                x = pl_module.advance_input(x, y_pred, batch, rollout_step)
-
-                metrics_next, _ = pl_module.calculate_val_metrics(y_pred, y, rollout_step)
+            for loss_next, metrics_next, _ in pl_module.rollout_step(batch, rollout=self.rollout, validation_mode=True):
+                loss += loss_next
                 metrics.update(metrics_next)
 
             # scale loss
@@ -88,7 +73,7 @@ class RolloutEval(Callback):
 
     def _log(self, pl_module: pl.LightningModule, loss: torch.Tensor, metrics: dict, bs: int) -> None:
         pl_module.log(
-            f"val_r{self.rollout}_wmse",
+            f"val_r{self.rollout}_{getattr(pl_module.loss, 'name', pl_module.loss.__class__.__name__.lower())}",
             loss,
             on_epoch=True,
             on_step=True,
