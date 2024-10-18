@@ -68,9 +68,11 @@ class AnemoiTrainer:
 
         self.config.training.run_id = self.run_id
         LOGGER.info("Run id: %s", self.config.training.run_id)
-        # Update paths to contain the run ID
 
-        self.loggers  # initialize loggers
+        LOGGER.info("Initializing Loggers")
+        self.loggers
+
+        # Update paths to contain the run ID
         self._update_paths()
 
         self._log_information()
@@ -254,10 +256,13 @@ class AnemoiTrainer:
     def loggers(self) -> list:
         loggers = []
         if self.config.diagnostics.log.wandb.enabled:
+            LOGGER.info("W&B logger enabled")
             loggers.append(self.wandb_logger)
         if self.config.diagnostics.log.tensorboard.enabled:
+            LOGGER.info("TensorBoard logger enabled")
             loggers.append(self.tensorboard_logger)
         if self.config.diagnostics.log.mlflow.enabled:
+            LOGGER.info("MLFlow logger enabled")
             loggers.append(self.mlflow_logger)
         return loggers
 
