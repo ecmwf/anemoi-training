@@ -66,9 +66,6 @@ def get_mlflow_run_params(config: OmegaConf, tracking_uri: str) -> tuple[str | N
         # add the arguments to the command tag
         tags["command"] = tags["command"] + " " + " ".join(sys.argv[1:])
 
-    os.environ["PARENT_RUN_SERVER2SERVER"] = "None"  # default None # can't set them to bool None
-    os.environ["FORK_RUN_SERVER2SERVER"] = "None"  # default None # can't set them to bool None
-
     if config.training.run_id or config.training.fork_run_id:
         "Either run_id or fork_run_id must be provided to resume a run."
 
@@ -416,9 +413,6 @@ class AnemoiMLflowLogger(MLFlowLogger):
         self.run_id_to_system_metrics_monitor = {}
         self.run_id_to_system_metrics_monitor[self.run_id] = system_monitor
         system_monitor.start()
-
-    def get_var(self, env_var: str) -> str | None:
-        return os.getenv(env_var)
 
     @rank_zero_only
     def log_terminal_output(self, artifact_save_dir: str | Path = "") -> None:

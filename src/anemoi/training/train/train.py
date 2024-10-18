@@ -69,6 +69,8 @@ class AnemoiTrainer:
         self.config.training.run_id = self.run_id
         LOGGER.info("Run id: %s", self.config.training.run_id)
         # Update paths to contain the run ID
+
+        self.loggers  # initialize loggers
         self._update_paths()
 
         self._log_information()
@@ -188,8 +190,8 @@ class AnemoiTrainer:
         if not self.start_from_checkpoint:
             return None
 
-        fork_run_server2server = self._get_env_var("FORK_RUN_SERVER2SERVER")
-        fork_id = fork_run_server2server if fork_run_server2server != "None" else self.config.training.fork_run_id
+        fork_run_server2server = os.getenv("FORK_RUN_SERVER2SERVER")
+        fork_id = fork_run_server2server or self.config.training.fork_run_id
         checkpoint = Path(
             self.config.hardware.paths.checkpoints.parent,
             fork_id or self.lineage_run,
@@ -291,30 +293,20 @@ class AnemoiTrainer:
         LOGGER.debug("Effective learning rate: %.3e", total_number_of_model_instances * self.config.training.lr.rate)
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
-    def _get_env_var(self, env_var: str) -> str:
-        if self.config.diagnostics.log.mlflow.enabled:
-            return self.mlflow_logger.get_var(
-                env_var,
-            )  # env variables are just exported if the mlflow logger is first initialized
-        # prevent code from breaking if mlflow is not enabled
-        return "None"
-
     def _update_paths(self) -> None:
         """Update the paths in the configuration."""
-        parent_run_server2server = self._get_env_var("PARENT_RUN_SERVER2SERVER")
+        parent_run_server2server = os.getenv("PARENT_RUN_SERVER2SERVER")
         LOGGER.info("Parent run server2server: %s", parent_run_server2server)
         self.lineage_run = None
         if self.run_id:  # when using mlflow only rank0 will have a run_id except when resuming runs
             # Multi-gpu new runs or forked runs - only rank 0
             # Multi-gpu resumed runs - all ranks
-            self.lineage_run = parent_run_server2server if parent_run_server2server != "None" else self.run_id
+            self.lineage_run = parent_run_server2server or self.run_id
             self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.lineage_run)
             self.config.hardware.paths.plots = Path(self.config.hardware.paths.plots, self.lineage_run)
         elif self.config.training.fork_run_id:
             # WHEN USING MANY NODES/GPUS
-            self.lineage_run = (
-                parent_run_server2server if parent_run_server2server != "None" else self.config.training.fork_run_id
-            )
+            self.lineage_run = parent_run_server2server or self.config.training.fork_run_id
             # Only rank non zero in the forked run will go here
             self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.lineage_run)
 
