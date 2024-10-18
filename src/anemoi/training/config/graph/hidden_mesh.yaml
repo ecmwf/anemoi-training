@@ -1,0 +1,28 @@
+
+---
+overwrite: True
+
+hidden: "hidden"
+
+nodes:
+  # Hidden nodes
+  hidden:
+    node_builder:
+      _target_: anemoi.graphs.nodes.TriNodes
+      resolution: 4  # number of refinements
+
+edges:
+  # Processor configuration
+  - source_name: hidden
+    target_name: hidden
+    edge_builder:
+      _target_: anemoi.graphs.edges.MultiScaleEdges
+      x_hops: 1
+    attributes:
+      edge_length:
+        _target_: anemoi.graphs.edges.attributes.EdgeLength
+        norm: unit-std
+      edge_dirs:
+        _target_: anemoi.graphs.edges.attributes.EdgeDirection
+        norm: unit-std
+
