@@ -11,8 +11,14 @@ Keep it human-readable, your future self will thank you!
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.0...HEAD)
 
 ### Added
+- Mlflow-sync to include new tag for server to server syncing [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
+- Mlflow-sync to include functionality to resume and fork server2server runs [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
+
 ### Fixed
+- Mlflow-sync to handle creation of new experiments in the remote server [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
+
 ### Changed
+
 
 ## [0.2.0 - Feature release](https://github.com/ecmwf/anemoi-training/compare/0.1.0...0.2.0) - 2024-10-16
 
@@ -38,8 +44,6 @@ Keep it human-readable, your future self will thank you!
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
 - Feature: `AnemoiMlflowClient`, an mlflow client with authentication support [#86](https://github.com/ecmwf/anemoi-training/pull/86)
 - Long Rollout Plots
-- Mlflow-sync to include new tag for server to server syncing [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
-- Mlflow-sync to include functionality to resume and fork server2server runs [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
 
 ### Fixed
 
@@ -47,7 +51,6 @@ Keep it human-readable, your future self will thank you!
 - Bugfixes for CI (#56)
 - Fix `mlflow` subcommand on python 3.9 [#62](https://github.com/ecmwf/anemoi-training/pull/62)
 - Show correct subcommand in MLFlow - Addresses [#39](https://github.com/ecmwf/anemoi-training/issues/39) in [#61](https://github.com/ecmwf/anemoi-training/pull/61)
-- Mlflow-sync to handle creation of new experiments in the remote server [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
 - Fix interactive multi-GPU training [#82](https://github.com/ecmwf/anemoi-training/pull/82)
 - Allow 500 characters in mlflow logging [#88](https://github.com/ecmwf/anemoi-training/pull/88)
 
