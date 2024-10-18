@@ -369,7 +369,9 @@ class MlFlowSync:
                 dst_run_id,
                 self.experiment_name,
             )
+        
+        finally:
+            close_and_clean_temp(server2server, artifact_path)
 
         LOGGER.info("Imported run %s into experiment %s", dst_run_id, self.experiment_name)
 
-        close_and_clean_temp(server2server, artifact_path)
