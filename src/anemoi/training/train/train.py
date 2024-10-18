@@ -195,16 +195,13 @@ class AnemoiTrainer:
             fork_id or self.lineage_run,
             self.config.hardware.files.warm_start or "last.ckpt",
         )
-
         # Check if the last checkpoint exists
         if Path(checkpoint).exists():
             LOGGER.info("Resuming training from last checkpoint: %s", checkpoint)
             return checkpoint
-        import sys
-
-        LOGGER.warning("Could not find last checkpoint: %s", checkpoint)
-        sys.exit(1)
-        return None
+        else:
+            raise RuntimeError("Could not find last checkpoint: %s", checkpoint)
+        
 
     @cached_property
     def callbacks(self) -> list[pl.callbacks.Callback]:
