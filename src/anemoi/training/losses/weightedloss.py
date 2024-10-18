@@ -94,6 +94,7 @@ class BaseWeightedLoss(nn.Module, ABC):
             Tensor to be scaled, shape (bs, ensemble, lat*lon, n_outputs)
         squash : bool, optional
             Average last dimension, by default True
+            If False, the loss returned of shape (n_outputs)
 
         Returns
         -------
