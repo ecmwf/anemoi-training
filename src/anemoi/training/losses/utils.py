@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-def grad_scaler(
+def grad_scalar(
     module: nn.Module,
     grad_in: tuple[torch.Tensor, ...],
     grad_out: tuple[torch.Tensor, ...],
@@ -32,7 +32,7 @@ def grad_scaler(
 
     Uses the formula in https://arxiv.org/pdf/2306.06079.pdf, section 4.3.2
 
-    Use <module>.register_full_backward_hook(grad_scaler, prepend=False) to register this hook.
+    Use <module>.register_full_backward_hook(grad_scalar, prepend=False) to register this hook.
 
     Parameters
     ----------
@@ -89,8 +89,11 @@ class ScaleTensor:
     >>> tensor = torch.randn(3, 4, 5)
     >>> scalars = ScaleTensor((0, torch.randn(3)), (1, torch.randn(4)))
     >>> scaled_tensor = scalars.scale(tensor)
-    >>> scalars.get_scalar(tensor.shape).shape
+    >>> scalars.get_scalar(tensor.ndim).shape
     torch.Size([3, 4, 1])
+    >>> scalars.add_scalar(-1, torch.randn(5))
+    >>> scalars.get_scalar(tensor.ndim).shape
+    torch.Size([3, 4, 5])
     """
 
     tensors: dict[str, TENSOR_SPEC]
@@ -146,7 +149,7 @@ class ScaleTensor:
 
         return Shape(get_dim_shape)
 
-    def validate_scaler(self, dimension: int | tuple[int], scalar: torch.Tensor) -> None:
+    def validate_scalar(self, dimension: int | tuple[int], scalar: torch.Tensor) -> None:
         """Check if the scalar is compatible with the given dimension.
 
         Parameters
@@ -170,7 +173,7 @@ class ScaleTensor:
 
             if self.shape[dim] != scalar.shape[scalar_dim]:
                 error_msg = (
-                    f"Scaler shape {scalar.shape} at dimension {scalar_dim}"
+                    f"Scalar shape {scalar.shape} at dimension {scalar_dim}"
                     f"does not match shape of scalar at dimension {dim}. Expected {self.shape[dim]}",
                 )
                 raise ValueError(error_msg)
@@ -200,7 +203,7 @@ class ScaleTensor:
                 dimension = tuple(dimension + i for i in range(len(scalar.shape)))
 
         try:
-            self.validate_scaler(dimension, scalar)
+            self.validate_scalar(dimension, scalar)
         except ValueError as e:
             error_msg = f"Validating tensor {name!r} raised an invalidation."
             raise ValueError(error_msg) from e

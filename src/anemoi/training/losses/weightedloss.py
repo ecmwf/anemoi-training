@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import functools
 import logging
 from abc import ABC
 from abc import abstractmethod
@@ -65,6 +66,10 @@ class BaseWeightedLoss(nn.Module, ABC):
         if variable_scaling is not None:
             self.scalar.add_scalar(-1, variable_scaling, "variable_scaling")
 
+    @functools.wraps(ScaleTensor.add_scalar, assigned=("__doc__", "__annotations__"))
+    def add_scalar(self, dimension: int | tuple[int], scalar: torch.Tensor, *, name: str | None = None) -> None:
+        self.scalar.add_scalar(dimension=dimension, scalar=scalar, name=name)
+
     def scale(
         self,
         x: torch.Tensor,
@@ -90,7 +95,7 @@ class BaseWeightedLoss(nn.Module, ABC):
 
         scalar = self.scalar.get_scalar(x.shape)
 
-        if feature_indices is None:
+        if feature_indices is None or "variable_scaling" not in self.scalar:
             return x * scalar
         return x * scalar[..., feature_indices]
 
