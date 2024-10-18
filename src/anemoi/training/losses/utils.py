@@ -10,12 +10,15 @@
 from __future__ import annotations
 
 import logging
-import operator
 import uuid
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
+from typing import Callable
 
 import torch
 from torch import nn
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,9 +63,9 @@ TENSOR_SPEC = tuple[int | tuple[int], torch.Tensor]
 
 
 class Shape:
-    """Shape resolving object"""
+    """Shape resolving object."""
 
-    def __init__(self, func):
+    def __init__(self, func: Callable[[int], int]):
         self.func = func
 
     def __getitem__(self, dimension: int) -> int:
@@ -143,23 +146,6 @@ class ScaleTensor:
 
         return Shape(get_dim_shape)
 
-    def subset(self, scalars: str | Sequence[str]) -> ScaleTensor:
-        """Get subset of the scalars.
-
-        Parameters
-        ----------
-        scalars : str | Sequence[str]
-            Name/s of the scalars to get
-
-        Returns
-        -------
-        ScaleTensor
-            Subset of self
-        """
-        if isinstance(scalars, str):
-            scalars = [scalars]
-        return ScaleTensor(**{name: self.tensors[name] for name in scalars})
-
     def validate_scaler(self, dimension: int | tuple[int], scalar: torch.Tensor) -> None:
         """Check if the scalar is compatible with the given dimension.
 
@@ -183,9 +169,11 @@ class ScaleTensor:
                 continue
 
             if self.shape[dim] != scalar.shape[scalar_dim]:
-                raise ValueError(
-                    f"Scaler shape {scalar.shape} at dimension {scalar_dim} does not match shape of scalar at dimension {dim}. Expected {self.shape[dim]}",
+                error_msg = (
+                    f"Scaler shape {scalar.shape} at dimension {scalar_dim}"
+                    f"does not match shape of scalar at dimension {dim}. Expected {self.shape[dim]}",
                 )
+                raise ValueError(error_msg)
 
     def add_scalar(
         self,
@@ -193,7 +181,6 @@ class ScaleTensor:
         scalar: torch.Tensor,
         *,
         name: str | None = None,
-        join_operation: str = "multiply",
     ) -> None:
         """Add new scalar to be applied along `dimension`.
 
@@ -212,18 +199,95 @@ class ScaleTensor:
             else:
                 dimension = tuple(dimension + i for i in range(len(scalar.shape)))
 
-        self.validate_scaler(dimension, scalar)
+        try:
+            self.validate_scaler(dimension, scalar)
+        except ValueError as e:
+            error_msg = f"Validating tensor {name!r} raised an invalidation."
+            raise ValueError(error_msg) from e
+
         if name is None:
             name = str(uuid.uuid4())
 
-        if dimension in self.tensors:
+        if name in self.tensors:
             self.tensors[name] = (
                 dimension,
-                getattr(operator, join_operation)(self.tensors[dimension], scalar),
+                self.tensors[name] * scalar,
             )
         else:
             self.tensors[name] = (dimension, scalar)
             self._specified_dimensions.append(dimension)
+
+    def subset(self, scalars: str | Sequence[str]) -> ScaleTensor:
+        """Get subset of the scalars, filtering by name.
+
+        See `.subset_by_dim` for subsetting by affected dimensions.
+
+        Parameters
+        ----------
+        scalars : str | Sequence[str]
+            Name/s of the scalars to get
+
+        Returns
+        -------
+        ScaleTensor
+            Subset of self
+        """
+        if isinstance(scalars, str):
+            scalars = [scalars]
+        return ScaleTensor(**{name: self.tensors[name] for name in scalars})
+
+    def subset_by_dim(self, dimensions: int | Sequence[int]) -> ScaleTensor:
+        """Get subset of the scalars, filtering by dimension.
+
+        See `.subset` for subsetting by name.
+
+        Parameters
+        ----------
+        dimensions : int | Sequence[int]
+            Dimensions to get scalars of
+
+        Returns
+        -------
+        ScaleTensor
+            Subset of self
+        """
+        subset_scalars: dict[str, TENSOR_SPEC] = {}
+
+        if isinstance(dimensions, int):
+            dimensions = (dimensions,)
+
+        for name, (dim, scalar) in self.tensors.items():
+            if isinstance(dim, int):
+                dim = (dim,)
+            if len(set(dimensions).intersection(dim)) > 0:
+                subset_scalars[name] = (dim, scalar)
+
+        return ScaleTensor(**subset_scalars)
+
+    def resolve(self, ndim: int) -> ScaleTensor:
+        """Resolve relative indexes in scalars by associating against ndim.
+
+        i.e. if a scalar was given as effecting dimension -1,
+        and `ndim` was provided as 4, the scalar will be fixed
+        to effect dimension 3.
+
+        Parameters
+        ----------
+        ndim : int
+            Number of dimensions to resolve relative indexing against
+
+        Returns
+        -------
+        ScaleTensor
+            ScaleTensor with all relative indexes resolved
+        """
+        resolved_scalars: dict[str, TENSOR_SPEC] = {}
+
+        for name, (dims, scalar) in self.tensors.items():
+            if any(d < 0 for d in dims):
+                dims = [d if d >= 0 else ndim + d for d in dims]
+            resolved_scalars[name] = (dims, scalar)
+        return ScaleTensor(**resolved_scalars)
 
     def scale(self, tensor: torch.Tensor) -> torch.Tensor:
         """Scale a given tensor by the scalars.
@@ -238,15 +302,15 @@ class ScaleTensor:
         torch.Tensor
             Scaled tensor
         """
-        return tensor * self.get_scalar(tensor.shape)
+        return tensor * self.get_scalar(tensor.ndim)
 
-    def get_scalar(self, shape: Sequence[int]) -> torch.Tensor:
+    def get_scalar(self, ndim: int) -> torch.Tensor:
         """Get completely resolved scalar tensor.
 
         Parameters
         ----------
-        shape : Sequence[int]
-            Shape of the tensor to resolve the scalars to
+        ndim : int
+            Number of dimensions of the tensor to resolve the scalars to
             Used to resolve relative indices, and add singleton dimensions
 
         Returns
@@ -261,45 +325,34 @@ class ScaleTensor:
         """
         complete_scalar = torch.ones(1)
 
-        for dims, scalar in self.tensors.values():
-            if any(d < 0 for d in dims):
-                absolute_dims = [d if d >= 0 else len(shape) + d for d in dims]
-                try:
-                    self.validate_scaler(
-                        absolute_dims,
-                        scalar,
-                    )  # Validate tensor in case of resolution of relative indexing
-                    dims = absolute_dims
-                except ValueError as e:
-                    raise ValueError(f"Resolving relative indices of {dims} was invalid.") from e
+        tensors = self.resolve(ndim).tensors
 
-            missing_dims = list(d for d in range(len(shape)) if d not in dims)
+        for dims, scalar in tensors.values():
+            missing_dims = [d for d in range(ndim) if d not in dims]
             reshape = [1] * len(missing_dims)
             reshape.extend(scalar.shape)
 
             reshaped_scalar = scalar.view(reshape)
-            reshaped_scalar = torch.moveaxis(reshaped_scalar, list(range(len(shape))), (*missing_dims, *dims))
+            reshaped_scalar = torch.moveaxis(reshaped_scalar, list(range(ndim)), (*missing_dims, *dims))
 
-            if complete_scalar is None:
-                complete_scalar = reshaped_scalar
-            else:
-                complete_scalar = complete_scalar * reshaped_scalar
+            complete_scalar = complete_scalar if complete_scalar is None else complete_scalar * reshaped_scalar
+
         return complete_scalar
 
     def __repr__(self):
-        return "ScalarTensor:\n" f"With {list(self.tensors.keys())}\nWith dims: {self._specified_dimensions}"
+        return f"ScalarTensor:\n - With {list(self.tensors.keys())}\n - With dims: {self._specified_dimensions}"
 
-    def __contains__(self, dimension: int | tuple[int]) -> bool:
+    def __contains__(self, dimension: int | tuple[int] | str) -> bool:
+        """Check if either scalar by name or dimension by int is being scaled."""
         if isinstance(dimension, tuple):
             return any(x in self._specified_dimensions for x in dimension)
+        if isinstance(dimension, str):
+            return dimension in self.tensors
 
         result = False
         for dim_assign, _ in self.tensors.values():
             result = dimension in dim_assign or result
         return result
-
-    def __getitem__(self, name: str) -> torch.Tensor:
-        return self.tensors[name]
 
     def __len__(self):
         return len(self.tensors)
