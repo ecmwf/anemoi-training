@@ -139,6 +139,13 @@ class BasePlotCallback(Callback, ABC):
         if self._executor is not None:
             self._executor.shutdown(wait=True)
 
+    def apply_output_mask(self, pl_module: pl.LightningModule, data: torch.Tensor) -> torch.Tensor:
+        if hasattr(pl_module, "output_mask") and pl_module.output_mask is not None:
+            # Fill with NaNs values where the mask is False
+            data[:, :, ~pl_module.output_mask, :] = np.nan
+
+        return data
+
     @abstractmethod
     @rank_zero_only
     def _plot(
@@ -679,12 +686,16 @@ class PlotSample(BasePlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors(input_tensor)
 
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
+
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy()
 
         if pl_module.output_mask is not None:
             output_tensor[..., ~pl_module.output_mask, :] = np.nan
@@ -784,11 +795,15 @@ class PlotAdditionalMetrics(BasePlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors(input_tensor)
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
+
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy()
 
         if pl_module.output_mask is not None:
             output_tensor[..., ~pl_module.output_mask, :] = np.nan
