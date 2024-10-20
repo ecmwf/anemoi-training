@@ -378,7 +378,7 @@ class LongRolloutPlots(BasePlotCallback):
 
                     # prepare predicted output tensor for plotting
                     output_tensor = self.post_processors(
-                        y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu()
+                        y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu(),
                     ).numpy()
 
                     fig = plot_predicted_multilevel_flat_sample(
@@ -457,7 +457,7 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
         epoch = trainer.current_epoch
 
         if model.trainable_data is not None:
-            data_coords = np.rad2deg(graph[(self._graph_name_data, "to", self._graph_name_data)].ecoords_rad.numpy())
+            data_coords = np.rad2deg(graph[self._graph_name_data, "to", self._graph_name_data].ecoords_rad.numpy())
 
             self.plot(
                 trainer,
@@ -470,7 +470,7 @@ class GraphTrainableFeaturesPlot(BasePlotCallback):
 
         if model.trainable_hidden is not None:
             hidden_coords = np.rad2deg(
-                graph[(self._graph_name_hidden, "to", self._graph_name_hidden)].hcoords_rad.numpy(),
+                graph[self._graph_name_hidden, "to", self._graph_name_hidden].hcoords_rad.numpy(),
             )
 
             self.plot(
@@ -609,7 +609,7 @@ class PlotLoss(BasePlotCallback):
         for rollout_step in range(pl_module.rollout):
             y_hat = outputs[1][rollout_step]
             y_true = batch[
-                :, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.internal_data.output.full
+                :, pl_module.multi_step + rollout_step, ..., pl_module.data_indices.internal_data.output.full,
             ]
             loss = pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()
 
@@ -971,7 +971,7 @@ class AnemoiCheckpoint(ModelCheckpoint):
 
         return {}
 
-    def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
+    def _remove_checkpoint(self, trainer: pl.Trainer, filepath: str) -> None:
         """Calls the strategy to remove the checkpoint file."""
         super()._remove_checkpoint(trainer, filepath)
         trainer.strategy.remove_checkpoint(self._get_inference_checkpoint_filepath(filepath))
