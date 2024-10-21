@@ -1,0 +1,68 @@
+overwrite: False
+
+data: "stretched_grid"
+hidden: "hidden"
+
+nodes:
+  stretched_grid:
+    node_builder:
+      _target_: anemoi.graphs.nodes.CutOutZarrDatasetNodes
+      lam_dataset: ${hardware.paths.data}/${hardware.files.dataset_lam}
+      forcing_dataset: ${hardware.paths.data}/${hardware.files.dataset}
+      adjust: all
+#      min_distance_km: 0
+    attributes: 
+      area_weight:
+        _target_: anemoi.graphs.nodes.attributes.AreaWeights
+        norm: unit-max
+#        lam_weights_rescale: 1.0
+  hidden:
+    node_builder:
+      _target_: anemoi.graphs.nodes.StretchedTriNodes
+      lam_resolution: 8
+      global_resolution: 5
+      reference_node_name: ${graph.data}
+      mask_attr_name: cutout
+      margin_radius_km: 10
+
+edges:
+- source_name: ${graph.data}
+  target_name: ${graph.hidden}
+  edge_builder:
+    _target_: anemoi.graphs.edges.KNNEdges
+    num_nearest_neighbours: 12
+  attributes: 
+    edge_length:
+      _target_: anemoi.graphs.edges.attributes.EdgeLength
+      norm: unit-max
+      invert: True
+    edge_dirs:
+      _target_: anemoi.graphs.edges.attributes.EdgeDirection
+      norm: unit-std
+- source_name: ${graph.hidden}
+  target_name: ${graph.hidden}
+  edge_builder:
+    _target_: anemoi.graphs.edges.MultiScaleEdges
+    x_hops: 1
+  attributes:
+    edge_length:
+      _target_: anemoi.graphs.edges.attributes.EdgeLength
+      norm: unit-max
+      invert: True
+    edge_dirs:
+      _target_: anemoi.graphs.edges.attributes.EdgeDirection
+      norm: unit-std
+- source_name: ${graph.hidden}
+  target_name: ${graph.data}
+  edge_builder:
+    _target_: anemoi.graphs.edges.KNNEdges
+    num_nearest_neighbours: 3
+  attributes:
+    edge_length:
+      _target_: anemoi.graphs.edges.attributes.EdgeLength
+      norm: unit-max
+      invert: True
+    edge_dirs:
+      _target_: anemoi.graphs.edges.attributes.EdgeDirection
+      norm: unit-std
+

@@ -1,0 +1,96 @@
+defaults:
+ - data: zarr
+ - dataloader: native_grid
+ - diagnostics: eval_rollout
+ - hardware: slurm
+ - graph: stretched_grid
+ - model: graphtransformer
+ - training: default
+ - _self_
+
+
+
+dataloader:
+  num_workers:
+    training: 2
+    validation: 2
+    test: 2
+    predict: 2
+  batch_size:
+    training: 1
+    validation: 1
+    test: 1
+    predict: 1
+
+  dataset:
+    cutout:
+      - dataset: ${hardware.paths.data}/${hardware.files.dataset_lam}
+      - dataset: ${hardware.paths.data}/${hardware.files.dataset}
+    adjust: all
+
+  limit_batches:
+    training: 20
+    validation: 20
+
+  training:
+    start: 2020-02-05
+    end: 2022-05-31 #15
+    #drop: [sdor, slor, cp] #, u_600, v_600, z_600, t_600, q_600, w_600]
+    statistics: ${hardware.paths.data}/ERA5/aifs-od-an-oper-0001-mars-n320-2019-2023-6h-v6.zarr
+#    sort_vars: True
+  validation:
+    start: 2022-06-01
+    end: 2023-05-31
+    #drop: [sdor, slor, cp] #, u_600, v_600, z_600, t_600, q_600, w_600]
+    statistics: ${hardware.paths.data}/ERA5/aifs-od-an-oper-0001-mars-n320-2019-2023-6h-v6.zarr
+#    sort_vars: True
+  test:
+    start: 2022-06-01
+    end: 2023-05-31
+    #drop: [sdor, slor, cp] #, u_600, v_600, z_600, t_600, q_600, w_600]
+    statistics: ${hardware.paths.data}/ERA5/aifs-od-an-oper-0001-mars-n320-2019-2023-6h-v6.zarr
+#    sort_vars: True
+
+hardware: #change these to lumi paths
+  num_gpus_per_node: 8
+  num_nodes: 1
+  num_gpus_per_model: 1
+  paths:
+    data: /pfs/lustrep4/scratch/project_465001383/aifs/dataset/
+#    output_base: /pfs/lustrep4/scratch/project_465000899/aifs/experiments/ #/lustre/storeB/project/nwp/aifs/test_output/
+    output: /pfs/lustrep4/scratch/project_465001383/aifs/experiments/test-anemoi-training/ #do not change this, it will be modified in code to be output_base + run_id.
+    graph: /pfs/lustrep4/scratch/project_465001383/aifs/graphs/ #/lustre/storeB/project/nwp/aifs/test_graphs/
+  files:
+    dataset: ERA5/aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6.zarr #aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6.zarr
+    dataset_lam: MEPS/aifs-meps-10km-2020-2024-6h-v6.zarr
+    graph: test-anemoi-training.pt
+    warm_start: null #specific checkpoint to start from, defaults to last.ckpt
+
+data:
+  resolution: None
+
+model:
+  num_channels: 512
+  trainable_parameters:
+    data: 0
+    hidden: 0
+    data2hidden: 0
+    hidden2data: 0
+    hidden2hidden: 0 # GNN and GraphTransformer Processor only
+
+
+graphs:
+  output_path: ${hardware.paths.graph}${hardware.files.graph}
+  save_graph_plots: False
+
+training:
+  run_id: null #path to store the experiment in with output_base as root, null for random name, =fork_run_id to continue training in the same folder.
+  fork_run_id: null #path to the experiment to fork from with output_base as root
+  load_weights_only: False #loads entire model if False, loads only weights if True
+  max_epochs: 50
+  lr:
+    rate: 5.0e-6
+    iterations: 10000
+    min: 8.0e-6
+
+
