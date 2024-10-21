@@ -102,7 +102,6 @@ dataset:
           # obs data
           - t2m_0
           - u10m_0
-          - t2m_0
           # - rh2m_0
           # - ps_0
       noaa-atms:
