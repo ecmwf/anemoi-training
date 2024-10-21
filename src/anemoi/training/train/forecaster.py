@@ -140,18 +140,25 @@ class GraphForecaster(pl.LightningModule):
     @staticmethod
     def get_loss_function(
         config: DictConfig,
-        **kwargs,
+        **kwargs: Union[torch.Tensor, tuple[Union[int, tuple[int]], torch.Tensor]],  # noqa: FA100
     ) -> Union[torch.nn.Module, torch.nn.ModuleList]:  # noqa: FA100
         # Future import breaks other type hints TODO Harrison Cook
         """
         Get loss functions from config.
 
-        Will include additional kwargs if specified in the config.
+        Will include additional kwargs set from this init if specified in the config.
         Can be ModuleList if multiple losses are specified.
 
+        If a kwarg is to be included from the config, set `include_{key}: True` in the config.
+        If a scalar is to be included from the config, set `add_scalar_{key}: True` in the config.
+
         E.g.
-            If `include_node_weights: True` is set in the config, and node_weights in kwargs
+            If `include_node_weights: True` is set in the config, and `node_weights` in kwargs
              `node_weights` will be included in the config to instantiate the module with.
+            If `add_scalar_nan_scaling: True` is set in the config, and `nan_scaling` in kwargs
+             `nan_scaling` will be added to the scalar of the loss function.
+             Requires the loss function to expose an `add_scalar` method.
+             Additionally, a scalar must be a tuple of (dimension, scalar) to be added to the loss function.
         """
         config_container = OmegaConf.to_container(config, resolve=False)
         if isinstance(config_container, list):
@@ -169,13 +176,26 @@ class GraphForecaster(pl.LightningModule):
 
         # Create loss_config including elements from kwargs if they
         # are specified in the config with `include_{key}: True`
+        # Will add scalars to the loss function if they are specified in the config
+        # with `add_scalar_{key}: True`, requires the loss function to expose an `add_scalar` method
+
         loss_init_config = {}
+        scalars_to_add = {}
+
         for key in loss_config:  # Go through all keys given in the config
-            # If key does not start with include_, add it to the loss_init_config
-            if not key.startswith("include_"):
-                loss_init_config[key] = loss_config[key]
+            # If key does not start with `include_` or `add_scalar_`, add it to the loss_init_config
+            if not key.startswith("include_") or not key.startswith("add_scalar_"):
                 continue
-            # If key starts with include_, remove the include_ prefix
+            # If key starts with `add_scalar_`, remove the `add_scalar_` prefix
+            # and check if the key is in kwargs, if it is add it to the scalars_to_add
+            # if it is not raise a ValueError
+            if key.startswith("add_scalar_"):
+                scalar_key = key.removeprefix("add_scalar_")
+                if scalar_key in kwargs:
+                    scalars_to_add[scalar_key] = loss_config[key]
+                    continue
+
+            # If key starts with `include_`, remove the `include_` prefix
             # and check if the key is in kwargs, if it is add it to the loss_init_config
             # if it is not raise a ValueError
             key_suffix = key.removeprefix("include_")
@@ -184,7 +204,19 @@ class GraphForecaster(pl.LightningModule):
                 continue
             error_msg = f"Key {key_suffix!r} not found in kwargs, {kwargs.keys()!s}"
             raise ValueError(error_msg)
-        return instantiate(loss_init_config)
+
+        # Instantiate the loss function with the loss_init_config
+        loss_function = instantiate(loss_init_config)
+
+        # Add scalars to the loss function
+        if not hasattr(loss_function, "add_scalar"):
+            error_msg = f"Loss function {loss_function.__class__.__name__!r} does not have an `add_scalar` method"
+            raise ValueError(error_msg)
+
+        for key, scalar in scalars_to_add.items():
+            loss_function.add_scalar(*scalar, name=kwargs[key])
+
+        return loss_function
 
     @staticmethod
     def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> dict:
