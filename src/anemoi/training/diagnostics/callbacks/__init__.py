@@ -697,10 +697,6 @@ class PlotSample(BasePlotCallback):
         data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
         data = data.numpy()
 
-        if pl_module.output_mask is not None:
-            output_tensor[..., ~pl_module.output_mask, :] = np.nan
-            data[1:, :, ~pl_module.output_mask, :] = np.nan
-
         for rollout_step in range(pl_module.rollout):
             fig = plot_predicted_multilevel_flat_sample(
                 plot_parameters_dict,
@@ -804,10 +800,6 @@ class PlotAdditionalMetrics(BasePlotCallback):
         output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
         data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
         data = data.numpy()
-
-        if pl_module.output_mask is not None:
-            output_tensor[..., ~pl_module.output_mask, :] = np.nan
-            data[1:, :, ~pl_module.output_mask, :] = np.nan
 
         for rollout_step in range(pl_module.rollout):
             if len(self.parameters_histogram) > 0:
