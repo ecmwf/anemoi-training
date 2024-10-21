@@ -93,7 +93,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         if len(self.scalar) == 0:
             return x
 
-        scalar = self.scalar.get_scalar(x.shape)
+        scalar = self.scalar.get_scalar(x.ndim)
 
         if feature_indices is None or "variable_scaling" not in self.scalar:
             return x * scalar
@@ -161,7 +161,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         out = pred - target
 
         if feature_scale:
-            out = self.scale_by_variable_scaling(out, feature_indices)
+            out = self.scale(out, feature_indices)
         return self.scale_by_node_weights(out, squash)
 
     @property
