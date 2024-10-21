@@ -12,6 +12,7 @@ import math
 import os
 from collections import defaultdict
 from collections.abc import Mapping
+from functools import cached_property
 
 import numpy as np
 import pytorch_lightning as pl
@@ -96,7 +97,10 @@ class GraphForecaster(pl.LightningModule):
             config,
             data_indices,
         )
-        self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
+        self.loss = WeightedMSELoss(
+            node_weights=self.loss_weights,
+            data_variances=loss_scaling,
+        )
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
 
         if config.training.loss_gradient_scaling:
@@ -134,6 +138,20 @@ class GraphForecaster(pl.LightningModule):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
+
+    @cached_property
+    def training_weights_for_imputed_variables(self) -> None:
+        LOGGER.info("EXECUTE cached property training_weights_for_imputed_variables, Should appear only once")
+        loss_weights_mask = torch.ones_like(self.loss.variable_node_mask)
+        # iterate over all pre-processors and check if they have a loss_mask_training attribute
+        for pre_processor in self.model.pre_processors.processors.values():
+            if hasattr(pre_processor, "loss_mask_training"):
+                loss_weights_mask = loss_weights_mask * pre_processor.loss_mask_training
+            # if transform_loss_mask function exists for preprocessor apply it
+            if hasattr(pre_processor, "transform_loss_mask"):
+                loss_weights_mask = pre_processor.transform_loss_mask(loss_weights_mask)
+        self.loss.update_variable_node_mask(loss_weights_mask)
+        return None
 
     @staticmethod
     def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
@@ -232,6 +250,9 @@ class GraphForecaster(pl.LightningModule):
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch = self.model.pre_processors(batch, in_place=not validation_mode)
+
+        self.training_weights_for_imputed_variables
+
         metrics = {}
 
         # start rollout of preprocessed batch
