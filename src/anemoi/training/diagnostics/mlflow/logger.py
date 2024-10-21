@@ -265,7 +265,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         ----------
         experiment_name : str, optional
             Name of experiment, by default "lightning_logs"
-        experiment_name : str, optional
+        project_name : str, optional
             Name of the project, by default "anemoi"
         run_name : str | None, optional
             Name of run, by default None
@@ -326,9 +326,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
             run_name=run_name,
             config_run_id=run_id,
             fork_run_id=fork_run_id,
-            authentication=authentication,
             tracking_uri=tracking_uri,
-            offline=offline,
             on_resume_create_child=on_resume_create_child,
         )
 
@@ -368,9 +366,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         run_name: str,
         config_run_id: str,
         fork_run_id: str,
-        authentication: bool | None,
         tracking_uri: str,
-        offline: bool,
         on_resume_create_child: bool,
     ) -> tuple[str | None, str, dict[str, Any]]:
 
@@ -387,12 +383,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
 
         if config_run_id or fork_run_id:
             "Either run_id or fork_run_id must be provided to resume a run."
-
-            # ! TODO - check with Gert if now this could be removed
             import mlflow
-
-            if authentication and not offline:
-                TokenAuth(tracking_uri).authenticate()
 
             mlflow_client = mlflow.MlflowClient(tracking_uri)
 

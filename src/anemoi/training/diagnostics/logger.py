@@ -70,7 +70,6 @@ def get_mlflow_logger(config: DictConfig) -> None:
     )
     config_params = OmegaConf.to_container(config, resolve=True)
 
-    LOGGER.info("Logging hyperparameters to MLFlow: %s", config_params)
     logger.log_hyperparams(config_params)
 
     if config.diagnostics.log.mlflow.terminal:
