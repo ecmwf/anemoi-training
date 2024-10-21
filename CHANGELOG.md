@@ -17,6 +17,8 @@ Keep it human-readable, your future self will thank you!
 
 ### Fixed
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
+- Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
+    - Enable longer validation rollout than training
 ### Changed
 
 ## [0.2.0 - Feature release](https://github.com/ecmwf/anemoi-training/compare/0.1.0...0.2.0) - 2024-10-16
