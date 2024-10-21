@@ -86,5 +86,5 @@ class WeightedLogCoshLoss(BaseWeightedLoss):
         out = s + torch.log1p(p) - np.log(2)
 
         if feature_scale:
-            out = self.scale_by_variable_scaling(out, feature_indices)
+            out = self.scale(out, feature_indices)
         return self.scale_by_node_weights(out, squash)
