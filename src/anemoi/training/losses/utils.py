@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-def grad_scalar(
+def grad_scaler(
     module: nn.Module,
     grad_in: tuple[torch.Tensor, ...],
     grad_out: tuple[torch.Tensor, ...],
@@ -196,6 +196,9 @@ class ScaleTensor:
         name : str | None, optional
             Name of the scalar, by default None
         """
+        if not isinstance(scalar, torch.Tensor):
+            scalar = torch.tensor([scalar]) if isinstance(scalar, (int, float)) else torch.tensor(scalar)
+
         if isinstance(dimension, int):
             if len(scalar.shape) == 1:
                 dimension = (dimension,)
@@ -205,7 +208,7 @@ class ScaleTensor:
         try:
             self.validate_scalar(dimension, scalar)
         except ValueError as e:
-            error_msg = f"Validating tensor {name!r} raised an invalidation."
+            error_msg = f"Validating tensor {name!r} raised an error."
             raise ValueError(error_msg) from e
 
         if name is None:
@@ -290,6 +293,7 @@ class ScaleTensor:
             if any(d < 0 for d in dims):
                 dims = [d if d >= 0 else ndim + d for d in dims]
             resolved_scalars[name] = (dims, scalar)
+
         return ScaleTensor(**resolved_scalars)
 
     def scale(self, tensor: torch.Tensor) -> torch.Tensor:
@@ -346,9 +350,9 @@ class ScaleTensor:
         return f"ScalarTensor:\n - With {list(self.tensors.keys())}\n - With dims: {self._specified_dimensions}"
 
     def __contains__(self, dimension: int | tuple[int] | str) -> bool:
-        """Check if either scalar by name or dimension by int is being scaled."""
+        """Check if either scalar by name or dimension by int/tuple is being scaled."""
         if isinstance(dimension, tuple):
-            return any(x in self._specified_dimensions for x in dimension)
+            return dimension in self._specified_dimensions
         if isinstance(dimension, str):
             return dimension in self.tensors
 
