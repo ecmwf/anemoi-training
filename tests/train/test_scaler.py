@@ -59,6 +59,11 @@ def test_scale_contains_subset_by_dim_indexing() -> None:
             torch.tensor([10.0, 20.0, 30.0]),
             torch.tensor([15.0, 30.0, 45.0]),
         ),
+        (
+            [[0, torch.Tensor([0.5])], [0, torch.Tensor([3])]],
+            torch.tensor([10.0, 20.0, 30.0]),
+            torch.tensor([15.0, 30.0, 45.0]),
+        ),
     ],
 )
 def test_scale_tensor_one_dim(
