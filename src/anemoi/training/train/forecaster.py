@@ -31,6 +31,8 @@ from torch_geometric.data import HeteroData
 from anemoi.training.losses.mse import WeightedMSELoss
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.utils.jsonify import map_config_to_primitives
+from anemoi.training.utils.masks import Boolean1DMask
+from anemoi.training.utils.masks import NoOutputMask
 
 LOGGER = logging.getLogger(__name__)
 
@@ -97,6 +99,12 @@ class GraphForecaster(pl.LightningModule):
 
         self.latlons_data = graph_data[config.graph.data].x
         self.node_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
+
+        if config.model.get("output_mask", None) is not None:
+            self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
+        else:
+            self.output_mask = NoOutputMask()
+        self.node_weights = self.output_mask.apply(self.node_weights, dim=0, fill_value=0.0)
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
@@ -216,6 +224,8 @@ class GraphForecaster(pl.LightningModule):
             ...,
             self.data_indices.internal_model.output.prognostic,
         ]
+
+        x[:, -1] = self.output_mask.rollout_boundary(x[:, -1], batch[:, -1], self.data_indices)
 
         # get new "constants" needed for time-varying fields
         x[:, -1, :, :, self.data_indices.internal_model.input.forcing] = batch[
