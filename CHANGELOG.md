@@ -17,6 +17,9 @@ Keep it human-readable, your future self will thank you!
 - Feature: New `Boolean1DMask` class. Enables rollout training for limited area models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
 
 ### Fixed
+- Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
+- Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
+    - Enable longer validation rollout than training
 - Mlflow-sync to handle creation of new experiments in the remote server [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
 
 ### Changed
