@@ -14,6 +14,9 @@ Keep it human-readable, your future self will thank you!
 - Mlflow-sync to include new tag for server to server syncing [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
 - Mlflow-sync to include functionality to resume and fork server2server runs [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
 
+- Rollout training for Limited Area Models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
+- Feature: New `Boolean1DMask` class. Enables rollout training for limited area models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
+
 ### Fixed
 - Mlflow-sync to handle creation of new experiments in the remote server [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
 
