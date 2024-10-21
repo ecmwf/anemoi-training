@@ -64,5 +64,4 @@ callbacks:
   - _target_:  anemoi.training.diagnostics.callbacks.plot.LongRolloutPlots
     rollout:
       - ${dataloader.validation_rollout}
-    batch_frequency: 10
     epoch_frequency: 20

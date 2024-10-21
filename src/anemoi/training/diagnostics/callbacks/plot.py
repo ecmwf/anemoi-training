@@ -260,7 +260,6 @@ class LongRolloutPlots(BasePlotCallback):
         self,
         config: OmegaConf,
         rollout: list[int],
-        batch_frequency: int,
         epoch_frequency: int = 1,
         sample_idx: int = 0,
     ) -> None:
@@ -272,8 +271,6 @@ class LongRolloutPlots(BasePlotCallback):
             Config object
         rollout : list[int]
             Rollout steps to plot at
-        batch_frequency : int
-            Batch frequency to plot at
         epoch_frequency : int, optional
             Epoch frequency to plot at, by default 1
         sample_idx : int, optional
@@ -282,7 +279,6 @@ class LongRolloutPlots(BasePlotCallback):
         super().__init__(config)
 
         self.epoch_frequency = epoch_frequency
-        self.batch_frequency = batch_frequency
 
         LOGGER.debug(
             "Setting up callback for plots with long rollout: rollout = %d, frequency = every %d epoch ...",
@@ -389,7 +385,7 @@ class LongRolloutPlots(BasePlotCallback):
         batch: torch.Tensor,
         batch_idx: int,
     ) -> None:
-        if (batch_idx) % self.batch_frequency == 0 and (trainer.current_epoch + 1) % self.epoch_frequency == 0:
+        if (batch_idx) == 0 and (trainer.current_epoch + 1) % self.epoch_frequency == 0:
             precision_mapping = {
                 "16-mixed": torch.float16,
                 "bf16-mixed": torch.bfloat16,
