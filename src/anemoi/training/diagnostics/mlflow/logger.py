@@ -430,7 +430,24 @@ class AnemoiMLflowLogger(MLFlowLogger):
         return params
 
     @rank_zero_only
-    def log_hyperparams(self, params: dict[str, Any] | Namespace) -> None:
+    def log_hyperparams_as_artifact(self, params: dict[str, Any] | Namespace) -> None:
+        """Log hyperparameters as an artifact."""
+        import json
+        import tempfile
+        from json import JSONEncoder
+
+        class StrEncoder(JSONEncoder):
+            def default(self, o: Any) -> str:
+                return str(o)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "config.json"
+            with Path.open(path, "w") as f:
+                json.dump(params, f, cls=StrEncoder)
+            self.experiment.log_artifact(run_id=self.run_id, local_path=path)
+
+    @rank_zero_only
+    def log_hyperparams(self, params: dict[str, Any] | Namespace, *, expand_keys: list[str] | None = None) -> None:
         """Overwrite the log_hyperparams method to flatten config params using '.'."""
         if self._flag_log_hparams:
             params = _convert_params(params)
@@ -447,12 +464,26 @@ class AnemoiMLflowLogger(MLFlowLogger):
             if Version(mlflow.VERSION) >= Version("1.28.0"):
                 truncation_length = 500
 
-            params = expand_iterables(params, size_threshold=truncation_length, delimiter=".")
-            params = _flatten_dict(params, delimiter=".")  # Flatten dict with '.' to not break API queries
-            params = self._clean_params(params)
+            self.log_hyperparams_as_artifact(expand_iterables(params, size_threshold=truncation_length, delimiter="."))
+
+            expanded_params = {}
+            params = dict(params)
+
+            for key in expand_keys or []:
+                if key in params:
+                    expanded_params.update(
+                        expand_iterables(params.pop(key), size_threshold=truncation_length, delimiter="."),
+                    )
+            expanded_params.update(params)
+
+            expanded_params = _flatten_dict(
+                expanded_params,
+                delimiter=".",
+            )  # Flatten dict with '.' to not break API queries
+            expanded_params = self._clean_params(expanded_params)
 
             # Truncate parameter values.
-            params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in params.items()]
+            params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in expanded_params.items()]
 
             for idx in range(0, len(params_list), 100):
                 self.experiment.log_batch(run_id=self.run_id, params=params_list[idx : idx + 100])
