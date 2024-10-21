@@ -363,3 +363,7 @@ class ScaleTensor:
 
     def __len__(self):
         return len(self.tensors)
+
+    def __iter__(self):
+        """Iterate over tensors."""
+        return iter(self.tensors)
