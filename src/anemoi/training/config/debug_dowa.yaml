@@ -1,0 +1,200 @@
+defaults:
+  - hardware: atos_slurm
+  - data: zarr
+  - dataloader: default
+  - model: graphtransformer
+  - training: default
+  - graphs: stretched_grid
+  - diagnostics: eval_rollout
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+  - _self_
+
+training:
+#provide original parent run if resuming (not latest parent run)
+#  run_id: ''
+  max_epochs: 75
+  multistep_input: 2
+  lr:
+    #increase default learning rate by a factor 8, based on previous experiments
+    rate: 5e-4   #8 * 0.625e-4
+    # rate: 0.4e-5
+    # min:  2.4e-6 #8 * 3e-7
+    min: 3e-7
+    iterations: 150000
+data:
+  resolution: 5p2.5km
+  imputer:
+    mean:
+      - q_1000
+      - w_1000
+      - z_1000
+      - t_1000
+      - u_1000
+      - v_1000
+      - q_925
+      - w_925
+      - z_925
+      - t_925
+      - u_925
+      - v_925
+      - q_850
+      - w_850
+      - z_850
+      - t_850
+      - u_850
+      - v_850
+      - z_700
+      - w_700
+      - q_700
+      - u_700
+      - v_700
+      - t_700
+      - sst
+
+dataloader:
+  limit_batches:
+   training: 2000
+   validation: 700
+  training:
+    cutout:
+      - dataset: ${hardware.paths.localdata}/${hardware.files.localdata}
+        start: "2008-02-04"
+        end: "2009-10-30"
+        drop: ["sst"]
+        # missing_dates: ["2009-03-31T18", "2009-01-31T00", "2009-01-31T06", "2009-03-31T00", "2009-01-31T12", "2009-03-31T06", "2009-01-31T18", "2009-03-31T12"]
+        skip_missing_dates: True
+        expected_access: 2
+        reorder: ['q_50', 'q_100', 'q_150', 'q_200', 'q_250', 'q_300', 'q_400', 'q_500', 'q_600', 'q_700', 'q_850', 'q_925', 'q_1000', 'z_50', 'z_100', 'z_150', 'z_200', 'z_250', 'z_300', 'z_400', 'z_500', 'z_600', 'z_700', 'z_850', 'z_925', 'z_1000', 'sp', 'msl', 't_50', 't_100', 't_150', 't_200', 't_250', 't_300', 't_400', 't_500', 't_600', 't_700', 't_850', 't_925', 't_1000', '2t', 'u_50', 'u_100', 'u_150', 'u_200', 'u_250', 'u_300', 'u_400', 'u_500', 'u_600', 'u_700', 'u_850', 'u_925', 'u_1000', '10u', 'v_50', 'v_100', 'v_150', 'v_200', 'v_250', 'v_300', 'v_400', 'v_500', 'v_600', 'v_700', 'v_850', 'v_925', 'v_1000', '10v', 'w_50', 'w_100', 'w_150', 'w_200', 'w_250', 'w_300', 'w_400', 'w_500', 'w_600', 'w_700', 'w_850', 'w_925', 'w_1000', '2d', 'sdor', 'slor', 'cp', 'z', 'cos_latitude', 'cos_longitude', 'sin_latitude', 'sin_longitude', 'cos_julian_day', 'cos_local_time', 'sin_julian_day', 'sin_local_time', 'insolation', 'tcw', 'skt', 'lsm']
+      - dataset: ${hardware.paths.data}/${hardware.files.dataset}
+        start: "2008-02-04"
+        end: "2009-10-30"
+        drop: ["tp"]
+        missing_dates: ["2009-03-31T18", "2009-01-31T06", "2009-01-31T12", "2009-03-31T06", "2009-01-31T18", "2009-03-31T12"]
+        skip_missing_dates: True
+        expected_access: 2
+        reorder: ['q_50', 'q_100', 'q_150', 'q_200', 'q_250', 'q_300', 'q_400', 'q_500', 'q_600', 'q_700', 'q_850', 'q_925', 'q_1000', 'z_50', 'z_100', 'z_150', 'z_200', 'z_250', 'z_300', 'z_400', 'z_500', 'z_600', 'z_700', 'z_850', 'z_925', 'z_1000', 'sp', 'msl', 't_50', 't_100', 't_150', 't_200', 't_250', 't_300', 't_400', 't_500', 't_600', 't_700', 't_850', 't_925', 't_1000', '2t', 'u_50', 'u_100', 'u_150', 'u_200', 'u_250', 'u_300', 'u_400', 'u_500', 'u_600', 'u_700', 'u_850', 'u_925', 'u_1000', '10u', 'v_50', 'v_100', 'v_150', 'v_200', 'v_250', 'v_300', 'v_400', 'v_500', 'v_600', 'v_700', 'v_850', 'v_925', 'v_1000', '10v', 'w_50', 'w_100', 'w_150', 'w_200', 'w_250', 'w_300', 'w_400', 'w_500', 'w_600', 'w_700', 'w_850', 'w_925', 'w_1000', '2d', 'sdor', 'slor', 'cp', 'z', 'cos_latitude', 'cos_longitude', 'sin_latitude', 'sin_longitude', 'cos_julian_day', 'cos_local_time', 'sin_julian_day', 'sin_local_time', 'insolation', 'tcw', 'skt', 'lsm']
+    start: "2008-02-04"
+    end: "2009-10-30"
+    frequency: ${data.frequency}
+    drop:   ["tcw", "t_500", "q_500", "z_500", "u_500", "v_500", "w_500"]
+
+  validation:
+    cutout:
+      - dataset: ${hardware.paths.localdata}/${hardware.files.localdata}
+        start: "2009-12-01"
+        end: "2009-12-15"
+        drop: ["sst"]           
+        reorder: ['q_50', 'q_100', 'q_150', 'q_200', 'q_250', 'q_300', 'q_400', 'q_500', 'q_600', 'q_700', 'q_850', 'q_925', 'q_1000', 'z_50', 'z_100', 'z_150', 'z_200', 'z_250', 'z_300', 'z_400', 'z_500', 'z_600', 'z_700', 'z_850', 'z_925', 'z_1000', 'sp', 'msl', 't_50', 't_100', 't_150', 't_200', 't_250', 't_300', 't_400', 't_500', 't_600', 't_700', 't_850', 't_925', 't_1000', '2t', 'u_50', 'u_100', 'u_150', 'u_200', 'u_250', 'u_300', 'u_400', 'u_500', 'u_600', 'u_700', 'u_850', 'u_925', 'u_1000', '10u', 'v_50', 'v_100', 'v_150', 'v_200', 'v_250', 'v_300', 'v_400', 'v_500', 'v_600', 'v_700', 'v_850', 'v_925', 'v_1000', '10v', 'w_50', 'w_100', 'w_150', 'w_200', 'w_250', 'w_300', 'w_400', 'w_500', 'w_600', 'w_700', 'w_850', 'w_925', 'w_1000', '2d', 'sdor', 'slor', 'cp', 'z', 'cos_latitude', 'cos_longitude', 'sin_latitude', 'sin_longitude', 'cos_julian_day', 'cos_local_time', 'sin_julian_day', 'sin_local_time', 'insolation', 'tcw', 'skt', 'lsm']
+      - dataset: ${hardware.paths.data}/${hardware.files.dataset}
+        start: "2009-12-01"
+        end: "2009-12-15" 
+        reorder: ['q_50', 'q_100', 'q_150', 'q_200', 'q_250', 'q_300', 'q_400', 'q_500', 'q_600', 'q_700', 'q_850', 'q_925', 'q_1000', 'z_50', 'z_100', 'z_150', 'z_200', 'z_250', 'z_300', 'z_400', 'z_500', 'z_600', 'z_700', 'z_850', 'z_925', 'z_1000', 'sp', 'msl', 't_50', 't_100', 't_150', 't_200', 't_250', 't_300', 't_400', 't_500', 't_600', 't_700', 't_850', 't_925', 't_1000', '2t', 'u_50', 'u_100', 'u_150', 'u_200', 'u_250', 'u_300', 'u_400', 'u_500', 'u_600', 'u_700', 'u_850', 'u_925', 'u_1000', '10u', 'v_50', 'v_100', 'v_150', 'v_200', 'v_250', 'v_300', 'v_400', 'v_500', 'v_600', 'v_700', 'v_850', 'v_925', 'v_1000', '10v', 'w_50', 'w_100', 'w_150', 'w_200', 'w_250', 'w_300', 'w_400', 'w_500', 'w_600', 'w_700', 'w_850', 'w_925', 'w_1000', '2d', 'sdor', 'slor', 'cp', 'z', 'cos_latitude', 'cos_longitude', 'sin_latitude', 'sin_longitude', 'cos_julian_day', 'cos_local_time', 'sin_julian_day', 'sin_local_time', 'insolation', 'tcw', 'skt', 'lsm']
+        drop: ["tp"]
+    start: "2009-12-01"
+    end: "2009-12-20"    
+    frequency: ${data.frequency}
+    drop:   ["tcw", "t_500", "q_500", "z_500", "u_500", "v_500", "w_500"]
+
+  test:
+    cutout:
+      - dataset: ${hardware.paths.localdata}/${hardware.files.localdata}
+        start: "2009-12-01"
+        end: "2009-12-15"
+        drop: ["sst"]     
+        reorder: ['q_50', 'q_100', 'q_150', 'q_200', 'q_250', 'q_300', 'q_400', 'q_500', 'q_600', 'q_700', 'q_850', 'q_925', 'q_1000', 'z_50', 'z_100', 'z_150', 'z_200', 'z_250', 'z_300', 'z_400', 'z_500', 'z_600', 'z_700', 'z_850', 'z_925', 'z_1000', 'sp', 'msl', 't_50', 't_100', 't_150', 't_200', 't_250', 't_300', 't_400', 't_500', 't_600', 't_700', 't_850', 't_925', 't_1000', '2t', 'u_50', 'u_100', 'u_150', 'u_200', 'u_250', 'u_300', 'u_400', 'u_500', 'u_600', 'u_700', 'u_850', 'u_925', 'u_1000', '10u', 'v_50', 'v_100', 'v_150', 'v_200', 'v_250', 'v_300', 'v_400', 'v_500', 'v_600', 'v_700', 'v_850', 'v_925', 'v_1000', '10v', 'w_50', 'w_100', 'w_150', 'w_200', 'w_250', 'w_300', 'w_400', 'w_500', 'w_600', 'w_700', 'w_850', 'w_925', 'w_1000', '2d', 'sdor', 'slor', 'cp', 'z', 'cos_latitude', 'cos_longitude', 'sin_latitude', 'sin_longitude', 'cos_julian_day', 'cos_local_time', 'sin_julian_day', 'sin_local_time', 'insolation', 'tcw', 'skt', 'lsm']
+      - dataset: ${hardware.paths.data}/${hardware.files.dataset}
+        start: "2009-12-01"
+        end: "2009-12-15"
+        reorder: ['q_50', 'q_100', 'q_150', 'q_200', 'q_250', 'q_300', 'q_400', 'q_500', 'q_600', 'q_700', 'q_850', 'q_925', 'q_1000', 'z_50', 'z_100', 'z_150', 'z_200', 'z_250', 'z_300', 'z_400', 'z_500', 'z_600', 'z_700', 'z_850', 'z_925', 'z_1000', 'sp', 'msl', 't_50', 't_100', 't_150', 't_200', 't_250', 't_300', 't_400', 't_500', 't_600', 't_700', 't_850', 't_925', 't_1000', '2t', 'u_50', 'u_100', 'u_150', 'u_200', 'u_250', 'u_300', 'u_400', 'u_500', 'u_600', 'u_700', 'u_850', 'u_925', 'u_1000', '10u', 'v_50', 'v_100', 'v_150', 'v_200', 'v_250', 'v_300', 'v_400', 'v_500', 'v_600', 'v_700', 'v_850', 'v_925', 'v_1000', '10v', 'w_50', 'w_100', 'w_150', 'w_200', 'w_250', 'w_300', 'w_400', 'w_500', 'w_600', 'w_700', 'w_850', 'w_925', 'w_1000', '2d', 'sdor', 'slor', 'cp', 'z', 'cos_latitude', 'cos_longitude', 'sin_latitude', 'sin_longitude', 'cos_julian_day', 'cos_local_time', 'sin_julian_day', 'sin_local_time', 'insolation', 'tcw', 'skt', 'lsm']
+        drop: ["tp"]
+    frequency: ${data.frequency}
+    start: "2009-12-01"
+    end: "2009-12-15"
+    drop:   ["tcw", "t_500", "q_500", "z_500", "u_500", "v_500", "w_500"]
+  batch_size:
+    training: 1
+    validation: 1
+    test: 1
+    predict: 1
+
+hardware:
+  paths:
+    data: /home/mlx/ai-ml/datasets/
+    checkpoints: ${oc.env:SCRATCH}/aifs-output/${data.resolution}/checkpoint/
+    localdata: /ec/res4/scratch/nld1247/output
+    # checkpoint: /hpcperm/nld1247/checkpoint_metno
+    # checkpoints: 
+    #   parent: ${oc.env:SCRATCH}/aifs-output/${data.resolution}/checkpoint/
+  files:
+    dataset: aifs-ea-an-oper-0001-mars-o96-1979-2022-6h-v6.zarr
+#    dataset: aifs-ea-an-oper-0001-mars-n320-1979-2022-6h-v6.zarr
+    dataset_lam: dowa_2008-2012.zarr
+    localdata: dowa_2008-2012.zarr
+    warm_start: aifs-by_time-epoch_049-step_098709.ckpt  
+  num_gpus_per_model: 4
+
+diagnostics:
+  log:
+    interval: 100
+    mlflow:
+      enabled: True
+      offline: False
+      experiment_name: 'sophie'
+    wandb:
+      enabled: False
+  plot:
+    enabled: True
+    learned_features: False
+    parameters:
+      # - z_500
+      - t_850
+      - u_850
+      - v_850
+      - 2t
+      - sp
+      - msl
+    parameters_histogram: []
+      # - z_500
+      # - 2t
+    parameters_spectrum: []
+  print_memory_summary: False
+  show_entire_globe: False
+
+graphs:
+  save_graph_plots: False
+  clobber: True
+  data_mesh:
+    - name: meps
+      from: zarr
+      dataset: ${dataloader.training}
+      node_weights_type: area  # options: area, uniform
+      node_weights_norm: unit-max  # options: l1, l2, unit-max, unit-sum, unit-std
+  hidden_mesh:
+    resolution: [5,9]
+    padding: 16 # km of padding in processor mesh around refined limited areas. Some padding needed with knn encoder to avoid grid orphans
+    limited_areas: #list of paths to limited areas to fetch lat/lon from
+     - ${hardware.paths.localdata}/${hardware.files.localdata}
+  encoders:
+    - src_mesh: meps
+      method: knn # options: knn, cutoff
+      nearest_neighbours: 10 # only for knn method
+      add_directional_features: True
+      weight_norm: global-max
+  decoders:
+    - dst_mesh: meps
+      method: knn # options: knn, cutoff
+      nearest_neighbours: 3 # only for knn method
+      add_directional_features: True
+      weight_norm: global-max
+
+model:
+  run_id: 
+  trainable_parameters:
+    data: 0
+    hidden: 0
+    data2hidden: 0
+    hidden2data: 0
+    hidden2hidden: 0
+  num_channels: 256
+

@@ -1,0 +1,145 @@
+defaults:
+ - data: zarr
+ - dataloader: native_grid
+ - diagnostics: eval_rollout
+ - hardware: slurm
+ - graph: stretched_grid
+ - model: graphtransformer
+ - training: default
+ - _self_
+ 
+diagnostics:
+  log:
+    interval: 100
+    mlflow:
+      enabled: True
+      offline: False
+      experiment_name: 'sophie'
+    wandb:
+      enabled: False
+  plot:
+    enabled: True
+    learned_features: False
+    parameters:
+      # - z_500
+      - t_850
+      - u_850
+      - v_850
+      - 2t
+      - sp
+      - msl
+    parameters_histogram: []
+      # - z_500
+      # - 2t
+    parameters_spectrum: []
+  print_memory_summary: False
+  show_entire_globe: False
+
+dataloader:
+  num_workers:
+    training: 2
+    validation: 2
+    test: 2
+    predict: 2
+  batch_size:
+    training: 1
+    validation: 1
+    test: 1
+    predict: 1
+
+  dataset:
+    cutout:
+      - dataset: ${hardware.paths.data}/experimental/${hardware.files.dataset_lam}
+        thinning: 2
+      - dataset: ${hardware.paths.data}/stable/${hardware.files.dataset}
+    adjust: all
+
+  limit_batches:
+    training: 20
+    validation: 20
+
+  training:
+    start: "1984-09-01"
+    end: "2018-12-31"
+    #drop: [sdor, slor, cp] #, u_600, v_600, z_600, t_600, q_600, w_600]
+    statistics: ${hardware.paths.data}/ERA5/aifs-od-an-oper-0001-mars-n320-2019-2023-6h-v6.zarr
+#    sort_vars: True
+  validation:
+    start: "2019-01-01"
+    end: "2019-12-31"
+    #drop: [sdor, slor, cp] #, u_600, v_600, z_600, t_600, q_600, w_600]
+    statistics: ${hardware.paths.data}/ERA5/aifs-od-an-oper-0001-mars-n320-2019-2023-6h-v6.zarr
+#    sort_vars: True
+  test:
+    start: "2020-01-01"
+    end: "2020-12-31"
+    #drop: [sdor, slor, cp] #, u_600, v_600, z_600, t_600, q_600, w_600]
+    statistics: ${hardware.paths.data}/ERA5/aifs-od-an-oper-0001-mars-n320-2019-2023-6h-v6.zarr
+#    sort_vars: True
+
+hardware: #change these to lumi paths
+  # num_gpus_per_node: 
+  num_nodes: 1
+  num_gpus_per_model: 4
+  paths:
+    data: /home/mlx/ai-ml/datasets/
+#    output_base: /pfs/lustrep4/scratch/project_465000899/aifs/experiments/ #/lustre/storeB/project/nwp/aifs/test_output/
+    output: /ec/res4/scratch/nld1247/output/ #do not change this, it will be modified in code to be output_base + run_id.
+    graph: /hpcperm/nld1247/graphs #/lustre/storeB/project/nwp/aifs/test_graphs/
+  files:
+    dataset: ERA5/aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6.zarr #aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6.zarr
+    dataset_lam: cerra-rr-an-oper-0001-mars-5p5km-1984-2008-6h-v1-smhi.zarr
+    # graph: graph.pt
+    warm_start: null #specific checkpoint to start from, defaults to last.ckpt
+
+data:
+  resolution: None
+
+model:
+  num_channels: 512
+  trainable_parameters:
+    data: 0
+    hidden: 0
+    data2hidden: 0
+    hidden2data: 0
+    hidden2hidden: 0 # GNN and GraphTransformer Processor only
+
+
+graphs:
+  save_graph_plots: True
+  clobber: True
+  data_mesh:
+    - name: cerra
+      from: zarr
+      dataset: ${dataloader.training.dataset}
+      node_weights_type: area  # options: area, uniform
+      node_weights_norm: unit-max  # options: l1, l2, unit-max, unit-sum, unit-std
+  hidden_mesh:
+    resolution: [5,8]
+    padding: 16 # km of padding in processor mesh around refined limited areas. Some padding needed with knn encoder to avoid grid orphans
+    limited_areas: #list of paths to limited areas to fetch lat/lon from
+      - ${hardware.paths.data}/experimental/${hardware.files.dataset_lam}
+  encoders:
+    - src_mesh: cerra
+      method: knn # options: knn, cutoff
+      nearest_neighbours: 10 # only for knn method
+      add_directional_features: True
+      weight_norm: global-max
+  decoders:
+    - dst_mesh: cerra
+      method: knn # options: knn, cutoff
+      nearest_neighbours: 3 # only for knn method
+      add_directional_features: True
+      weight_norm: global-max
+
+training:
+  run_id: null #path to store the experiment in with output_base as root, null for random name, =fork_run_id to continue training in the same folder.
+  fork_run_id: null #path to the experiment to fork from with output_base as root
+  load_weights_only: False #loads entire model if False, loads only weights if True
+  max_epochs: 50
+  lr:
+    rate: 5.0e-6
+    iterations: 10000
+    min: 8.0e-6
+
+

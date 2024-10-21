@@ -1,4 +1,22 @@
 ---
+sg_metrics:
+  metric:
+    - name: loss_inside_lam
+    - inside_lam: True
+    - wmse_contribution: False
+  metric: 
+    - name: loss_inside_lam_contribution
+    - inside_lam: True
+    - wmse_contribution: True
+  metric: 
+    - name: loss_outside_lam
+    - inside_lam: False
+    - wmse_contribution: False
+  metric: 
+    - name: loss_outside_lam_contribution
+    - inside_lam: True
+    - wmse_contribution: False    
+
 eval:
   enabled: False
   # use this to evaluate the model over longer rollouts, every so many validation batches

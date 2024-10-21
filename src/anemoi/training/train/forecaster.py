@@ -88,6 +88,8 @@ class GraphForecaster(pl.LightningModule):
             self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
         else:
             self.output_mask = NoOutputMask()
+
+
         self.loss_weights = self.output_mask.apply(self.loss_weights, dim=0, fill_value=0.0)
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
@@ -98,6 +100,25 @@ class GraphForecaster(pl.LightningModule):
         )
         self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
+        
+
+        # Options for stretched grid loss logging
+        self.data_split_index = torch.IntTensor(config.data.grid_lengths_cutout[0])
+        LOGGER.info(f"Number of input nodes inside LAM: {config.data.grid_lengths_cutout[0]}")
+        LOGGER.info(f"Number of input nodes outside LAM: {config.data.grid_lengths_cutout[1]}")
+        
+        # Check if the model is a stretched grid
+        if self.config.graph.nodes.hidden.node_builder.lam_resolution:
+            self.stretched_grid = True
+        else:
+            self.stretched_grid = False
+        
+        # Define stretched grid metrics
+        sg_config= config.diagnostics.sg_metrics
+        print(sg_config)
+        for _, loss_config in sg_config:
+            self.sg_metrics.append({loss_config.name: losses.WeightedMSELoss(node_weights = self.node_weights, data_split_index = self.data_split_index,
+                          inside_LAM = loss_config.inside_lam, wmse_contribution=loss_config.wmse_contribution, data_variances=loss_scaling)})
 
         if config.training.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
@@ -283,7 +304,9 @@ class GraphForecaster(pl.LightningModule):
                 y_pred_postprocessed[..., indices],
                 y_postprocessed[..., indices],
             )
-
+        if self.stretched_grid:
+            for name, metric in self.sg_metrics:
+                metrics[f"{name}_{rollout_step + 1}"] = metric(y_pred, y)
         if enable_plot:
             y_preds.append(y_pred)
         return metrics, y_preds
