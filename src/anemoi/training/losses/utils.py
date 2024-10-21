@@ -346,6 +346,9 @@ class ScaleTensor:
 
         return complete_scalar
 
+    def __mul__(self, tensor: torch.Tensor) -> torch.Tensor:
+        return self.scale(tensor)
+
     def __repr__(self):
         return f"ScalarTensor:\n - With {list(self.tensors.keys())}\n - With dims: {self._specified_dimensions}"
 
