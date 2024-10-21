@@ -196,6 +196,7 @@ class RolloutEval(Callback):
         )
         self.rollout = config.diagnostics.eval.rollout
         self.frequency = config.diagnostics.eval.frequency
+        self.config=config
 
     def _eval(
         self,
@@ -250,6 +251,22 @@ class RolloutEval(Callback):
             sync_dist=False,
             rank_zero_only=True,
         )
+        
+        #check if stretched grid
+        if self.config.graph.nodes.hidden.node_builder.lam_resolution:
+            for str_area in ["inside", "contribution_inside", "outside", "contribution_outside"]:
+                pl_module.log(
+                    f"val_wmse_{str_area}_LAM_r{self.rollout}",
+                    metrics["val_wmse_{str_area}_LAM_1"],
+                    on_epoch=True,
+                    on_step=True,
+                    prog_bar=False,
+                    logger=pl_module.logger_enabled,
+                    batch_size=bs,
+                    sync_dist=False,
+                    rank_zero_only=True,
+                )
+                
         for mname, mvalue in metrics.items():
             pl_module.log(
                 f"val_r{self.rollout}_" + mname,
@@ -650,6 +667,7 @@ class PlotSample(BasePlotCallback):
         """
         super().__init__(config)
         self.sample_idx = self.config.diagnostics.plot.sample_idx
+        self.config=config
         self.precip_and_related_fields = self.config.diagnostics.plot.precip_and_related_fields
         LOGGER.info(f"Using defined accumulation colormap for fields: {self.precip_and_related_fields}")
 
@@ -720,6 +738,43 @@ class PlotSample(BasePlotCallback):
                 tag=f"gnn_pred_val_sample_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
                 exp_log_tag=f"val_pred_sample_rstep{rollout_step:02d}_rank{local_rank:01d}",
             )
+            
+            #check if stretched grid
+            if self.config.graph.nodes.hidden.node_builder.lam_resolution:
+                fig_lam_inside = plot_predicted_multilevel_flat_sample(
+                    plot_parameters_dict,
+                    self.config.diagnostics.plot.per_sample,
+                    self.latlons[:pl_module.data_split_index],
+                    self.config.diagnostics.plot.accumulation_levels_plot,
+                    self.config.diagnostics.plot.cmap_accumulation,
+                    data[0, :, :pl_module.data_split_index, :].squeeze(),
+                    data[rollout_step + 1,  :, :pl_module.data_split_index, :].squeeze(),
+                    output_tensor[rollout_step, :, :pl_module.data_split_index, :],
+                )
+                self._output_figure(
+                    logger,
+                    fig_lam_inside,
+                    epoch=epoch,
+                    tag=f"lam_inside_pred_val_sample_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
+                    exp_log_tag=f"lam_inside_val_pred_sample_rstep{rollout_step:02d}_rank{local_rank:01d}",
+                )
+                fig_lam_outside = plot_predicted_multilevel_flat_sample(
+                    plot_parameters_dict,
+                    self.config.diagnostics.plot.per_sample,
+                    self.latlons[pl_module.data_split_index:],
+                    self.config.diagnostics.plot.accumulation_levels_plot,
+                    self.config.diagnostics.plot.cmap_accumulation,
+                    data[0, :, pl_module.data_split_index:, :].squeeze(),
+                    data[rollout_step + 1,  :, pl_module.data_split_index:, :].squeeze(),
+                    output_tensor[rollout_step, :, pl_module.data_split_index:, :],
+                )
+                self._output_figure(
+                    logger,
+                    fig_lam_outside,
+                    epoch=epoch,
+                    tag=f"lam_outside_pred_val_sample_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
+                    exp_log_tag=f"lam_outside_val_pred_sample_rstep{rollout_step:02d}_rank{local_rank:01d}",
+                )
 
     def on_validation_batch_end(
         self,
