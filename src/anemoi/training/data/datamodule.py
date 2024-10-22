@@ -162,10 +162,11 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         rollout: int = 1,
         label: str = "generic",
     ) -> NativeGridDataset:
+        
         r = max(rollout, self.rollout)
 
-         # Compute effective batch size 
-        effective_bs = self.config.dataloader.batch_size[label] *\
+        # Compute effective batch size 
+        effective_bs = self.config.dataloader.batch_size['training'] *\
             self.config.hardware.num_gpus_per_node *\
             self.config.hardware.num_nodes //\
             self.config.hardware.num_gpus_per_model

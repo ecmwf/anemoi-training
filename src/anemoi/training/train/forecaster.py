@@ -75,6 +75,8 @@ class GraphForecaster(pl.LightningModule):
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
 
+        self.model = torch.compile(self.model)
+
         self.data_indices = data_indices
 
         self.save_hyperparameters()
@@ -321,8 +323,11 @@ class GraphForecaster(pl.LightningModule):
         self.rollout = min(self.rollout, self.rollout_max)
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
+        print('I am doing validation!!!')
         with torch.no_grad():
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
+        print('Done step..')
+        print('Logging..')
         self.log(
             "val_wmse",
             val_loss,
@@ -333,7 +338,8 @@ class GraphForecaster(pl.LightningModule):
             batch_size=batch.shape[0],
             sync_dist=True,
         )
-        for mname, mvalue in metrics.items():
+        for i, (mname, mvalue) in enumerate(metrics.items()):
+            print(i)
             self.log(
                 "val_" + mname,
                 mvalue,
@@ -344,6 +350,7 @@ class GraphForecaster(pl.LightningModule):
                 batch_size=batch.shape[0],
                 sync_dist=True,
             )
+        print('Done')
         return val_loss, y_preds
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:
