@@ -8,7 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Please add your functional changes to the appropriate section in the PR.
 Keep it human-readable, your future self will thank you!
 
-## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.1.0...HEAD)
+## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.0...HEAD)
+
+### Added
+- Mlflow-sync to include new tag for server to server syncing [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
+- Mlflow-sync to include functionality to resume and fork server2server runs [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
+- Rollout training for Limited Area Models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
+- Feature: New `Boolean1DMask` class. Enables rollout training for limited area models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
+
+### Fixed
+- Mlflow-sync to handle creation of new experiments in the remote server [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
+- ci: fix pyshtools install error (#100) https://github.com/ecmwf/anemoi-training/pull/100
+
+### Changed
+
+
+## [0.2.0 - Feature release](https://github.com/ecmwf/anemoi-training/compare/0.1.0...0.2.0) - 2024-10-16
+
+- Make pin_memory of the Dataloader configurable (#64)
 
 ### Added
 
@@ -59,6 +76,7 @@ Keep it human-readable, your future self will thank you!
 - Subcommand for checkpoint handling
 
 #### Functionality
+
 - Searchpaths for Hydra configs, to enable configs in CWD, `ANEMOI_CONFIG_PATH` env, and `.config/anemoi/training` in addition to package defaults
 - MlFlow token authentication
 - Configurable pressure level scaling
