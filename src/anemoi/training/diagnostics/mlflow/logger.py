@@ -310,7 +310,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         self._fork_run_server2server = None
         self._parent_run_server2server = None
         tags = None
-        
+
         if rank_zero_only.rank == 0:
             enabled = authentication and not offline
             self.auth = TokenAuth(tracking_uri, enabled=enabled)
