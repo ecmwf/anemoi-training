@@ -13,6 +13,7 @@ import logging
 import uuid
 from typing import TYPE_CHECKING
 from typing import Callable
+from typing import Union
 
 import torch
 from torch import nn
@@ -59,7 +60,7 @@ def grad_scaler(
     return new_grad_in, grad_in[1]
 
 
-TENSOR_SPEC = tuple[int | tuple[int], torch.Tensor]
+TENSOR_SPEC = tuple[Union[int, tuple[int]], torch.Tensor]
 
 
 class Shape:
