@@ -886,11 +886,9 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
 
 
 class PlotHistogram(BasePlotAdditionalMetrics):
-    """Plots TP related metric comparing target and prediction.
+    """Plots histograms comparing target and prediction.
 
     The actual increment (output - input) is plot for prognostic variables while the output is plot for diagnostic ones.
-
-    - Histograms
     """
 
     def __init__(
