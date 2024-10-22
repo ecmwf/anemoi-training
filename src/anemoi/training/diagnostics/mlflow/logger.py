@@ -309,7 +309,8 @@ class AnemoiMLflowLogger(MLFlowLogger):
 
         self._fork_run_server2server = None
         self._parent_run_server2server = None
-
+        tags = None
+        
         if rank_zero_only.rank == 0:
             enabled = authentication and not offline
             self.auth = TokenAuth(tracking_uri, enabled=enabled)
@@ -321,14 +322,14 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 self.auth.authenticate()
                 health_check(tracking_uri)
 
-        run_id, run_name, tags = self._get_mlflow_run_params(
-            project_name=project_name,
-            run_name=run_name,
-            config_run_id=run_id,
-            fork_run_id=fork_run_id,
-            tracking_uri=tracking_uri,
-            on_resume_create_child=on_resume_create_child,
-        )
+            run_id, run_name, tags = self._get_mlflow_run_params(
+                project_name=project_name,
+                run_name=run_name,
+                config_run_id=run_id,
+                fork_run_id=fork_run_id,
+                tracking_uri=tracking_uri,
+                on_resume_create_child=on_resume_create_child,
+            )
 
         super().__init__(
             experiment_name=experiment_name,
