@@ -21,6 +21,7 @@ Keep it human-readable, your future self will thank you!
 - Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
     - Enable longer validation rollout than training
 - Mlflow-sync to handle creation of new experiments in the remote server [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
+- ci: fix pyshtools install error (#100) https://github.com/ecmwf/anemoi-training/pull/100
 
 ### Changed
 
