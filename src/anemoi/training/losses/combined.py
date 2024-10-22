@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import functools
 from typing import Any
 from typing import Callable
 
@@ -122,3 +123,15 @@ class CombinedLoss(torch.nn.Module):
     @property
     def name(self) -> str:
         return "combined_" + "_".join(getattr(loss, "name", loss.__class__.__name__.lower()) for loss in self.losses)
+
+    def __getattr__(self, name: str) -> Callable:
+        """Allow access to underlying attributes of the loss functions."""
+        if not all(hasattr(loss, name) for loss in self.losses):
+            error_msg = f"Attribute {name} not found in all loss functions"
+            raise AttributeError(error_msg)
+
+        @functools.wraps(getattr(self.losses[0], name))
+        def hidden_func(*args, **kwargs) -> list[Any]:
+            return [getattr(loss, name)(*args, **kwargs) for loss in self.losses]
+
+        return hidden_func
