@@ -45,6 +45,8 @@ rollout:
   epoch_increment: 0
   # maximum rollout to use
   max: 1
+  # randomise rollout length during training
+  randomise: False
 
 max_epochs: 200
 lr:
