@@ -251,7 +251,7 @@ class RolloutEval(Callback):
             sync_dist=False,
             rank_zero_only=True,
         )
-        
+
         #check if stretched grid
         if self.config.graph.nodes.hidden.node_builder.lam_resolution:
             for str_area in ["inside", "contribution_inside", "outside", "contribution_outside"]:
@@ -266,7 +266,7 @@ class RolloutEval(Callback):
                     sync_dist=False,
                     rank_zero_only=True,
                 )
-                
+
         for mname, mvalue in metrics.items():
             pl_module.log(
                 f"val_r{self.rollout}_" + mname,
@@ -744,12 +744,12 @@ class PlotSample(BasePlotCallback):
                 fig_lam_inside = plot_predicted_multilevel_flat_sample(
                     plot_parameters_dict,
                     self.config.diagnostics.plot.per_sample,
-                    self.latlons[:pl_module.data_split_index],
+                    self.latlons[pl_module.mask],
                     self.config.diagnostics.plot.accumulation_levels_plot,
                     self.config.diagnostics.plot.cmap_accumulation,
-                    data[0, :, :pl_module.data_split_index, :].squeeze(),
-                    data[rollout_step + 1,  :, :pl_module.data_split_index, :].squeeze(),
-                    output_tensor[rollout_step, :, :pl_module.data_split_index, :],
+                    data[0, :, pl_module.mask, :].squeeze(),
+                    data[rollout_step + 1,  :, pl_module.mask, :].squeeze(),
+                    output_tensor[rollout_step, :, pl_module.mask, :],
                 )
                 self._output_figure(
                     logger,
@@ -761,12 +761,12 @@ class PlotSample(BasePlotCallback):
                 fig_lam_outside = plot_predicted_multilevel_flat_sample(
                     plot_parameters_dict,
                     self.config.diagnostics.plot.per_sample,
-                    self.latlons[pl_module.data_split_index:],
+                    self.latlons[~pl_module.mask],
                     self.config.diagnostics.plot.accumulation_levels_plot,
                     self.config.diagnostics.plot.cmap_accumulation,
-                    data[0, :, pl_module.data_split_index:, :].squeeze(),
-                    data[rollout_step + 1,  :, pl_module.data_split_index:, :].squeeze(),
-                    output_tensor[rollout_step, :, pl_module.data_split_index:, :],
+                    data[0, :, ~pl_module.mask, :].squeeze(),
+                    data[rollout_step + 1,  :, ~pl_module.mask, :].squeeze(),
+                    output_tensor[rollout_step, :, ~pl_module.mask, :],
                 )
                 self._output_figure(
                     logger,

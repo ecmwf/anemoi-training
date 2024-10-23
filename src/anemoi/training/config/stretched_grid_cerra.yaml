@@ -14,11 +14,16 @@ diagnostics:
     mlflow:
       enabled: True
       offline: False
+      authentication: True
       experiment_name: 'aifs-stretch-cerra'
+      log_model: False
+      tracking_uri: 'https://mlflow.ecmwf.int'
+#      system: True
+#      terminal: True
     wandb:
       enabled: False
   plot:
-    enabled: True
+    enabled: False
 #    learned_features: False
     parameters:
       # - z_500
@@ -50,7 +55,7 @@ dataloader:
   dataset:
     cutout:
       - dataset: ${hardware.paths.data}/experimental/${hardware.files.dataset_lam}
-        thinning: 2
+#        thinning: 2
       - dataset: ${hardware.paths.data}/stable/${hardware.files.dataset}
     adjust: all
 
@@ -59,20 +64,20 @@ dataloader:
     validation: 20
 
   training:
-    start: "1984-09-01"
-    end: "2018-12-31"
+    start: 1984
+    end: 2005
     #drop: [sdor, slor, cp] #, u_600, v_600, z_600, t_600, q_600, w_600]
     statistics: ${hardware.paths.data}/stable/${hardware.files.dataset}
 #    sort_vars: True
   validation:
-    start: "2019-01-01"
-    end: "2019-12-31"
+    start: 2006
+    end: 2007
     #drop: [sdor, slor, cp] #, u_600, v_600, z_600, t_600, q_600, w_600]
     statistics: ${hardware.paths.data}/stable/${hardware.files.dataset}
 #    sort_vars: True
   test:
-    start: "2020-01-01"
-    end: "2020-12-31"
+    start: 2008
+    end: 2008
     #drop: [sdor, slor, cp] #, u_600, v_600, z_600, t_600, q_600, w_600]
     statistics: ${hardware.paths.data}/stable/${hardware.files.dataset}
 #    sort_vars: True
@@ -84,7 +89,7 @@ hardware:
     grids: /home/mlx/ai-ml/grids/
     output: ${oc.env:HPCPERM}/anemoi/
     checkpoints: ${oc.env:SCRATCH}/anemoi/checkpoint/
-    #graph: /hpcperm/nld1247/graphs #/lustre/storeB/project/nwp/aifs/test_graphs/
+    graph: ${oc.env:HPCPERM}/anemoi/graphs/
   files:
     dataset: aifs-ea-an-oper-0001-mars-o96-1979-2022-6h-v6.zarr
     dataset_lam: cerra-rr-an-oper-0001-mars-5p5km-1984-2008-6h-v1-smhi.zarr
@@ -92,7 +97,7 @@ hardware:
     warm_start: null #specific checkpoint to start from, defaults to last.ckpt
 
 data:
-  resolution: None
+  resolution: 5p5km
 
 model:
   num_channels: 512

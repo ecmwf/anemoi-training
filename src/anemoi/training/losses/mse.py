@@ -99,7 +99,7 @@ class WeightedMSELossStretchedGrid(nn.Module):
     def __init__(
         self,
         node_weights: torch.Tensor,
-        data_split_index: torch.Tensor,
+        mask: torch.Tensor,
         inside_LAM: bool = True,
         wmse_contribution: bool = False,
         data_variances: torch.Tensor | None = None,
@@ -108,11 +108,11 @@ class WeightedMSELossStretchedGrid(nn.Module):
         """Latitude- and (inverse-)variance-weighted MSE Loss.
 
         Parameters
-        ----------        
+        ----------
         node_weights : torch.Tensor of shape (N, )
             Weight of each node in the loss function
-        data_split_index : torch.Tensor
-            the index marking the end of the regional data points
+        mask: torch.Tensor
+            the mask marking the indices of the regional data points (bool)
         inside_LAM: bool
             compute the loss inside or outside the limited area, by default inside (True)
         wmse_contribution: bool
@@ -130,9 +130,9 @@ class WeightedMSELossStretchedGrid(nn.Module):
         self.inside_LAM = inside_LAM
         self.wmse_contribution = wmse_contribution
         self.register_buffer("weights", node_weights, persistent=True)
-        self.register_buffer("weights_inside_LAM", node_weights[:data_split_index], persistent=True)
-        self.register_buffer("weights_outside_LAM", node_weights[data_split_index:], persistent=True)
-        self.register_buffer("dsi", data_split_index, persistent=True)
+        self.register_buffer("weights_inside_LAM", node_weights[mask], persistent=True)
+        self.register_buffer("weights_outside_LAM", node_weights[~mask], persistent=True)
+        self.register_buffer("mask", mask, persistent=True)
         if data_variances is not None:
             self.register_buffer("ivar", data_variances, persistent=True)
 
@@ -162,19 +162,19 @@ class WeightedMSELossStretchedGrid(nn.Module):
         full_out_dims = pred[:, :, :, 0]
 
         if self.inside_LAM:
-            pred = pred[ :, :, :self.dsi]
-            target = target[:, :, :self.dsi]
-            weights_selected = self.weights_inside_LAM
+            pred = pred[ :, :, self.mask]
+            target = target[:, :, self.mask]
+            weights_selected = self.weights_inside_LAM.to("cuda")
         else:
-            pred = pred[ :, :, self.dsi:]
-            target = target[:, :, self.dsi:]
-            weights_selected = self.weights_outside_LAM
+            pred = pred[ :, :, ~self.mask]
+            target = target[:, :, ~self.mask]
+            weights_selected = self.weights_outside_LAM.to("cuda")
 
         out = torch.square(pred - target)
 
         # Use variances if available
         if hasattr(self, "ivar"):
-            out *= self.ivar
+            out *= self.ivar.to("cuda")
 
         # Squash by last dimension
         if squash:

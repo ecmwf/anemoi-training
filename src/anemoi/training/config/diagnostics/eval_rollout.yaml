@@ -1,21 +1,21 @@
 ---
 sg_metrics:
-  metric:
-    - name: loss_inside_lam
-    - inside_lam: True
-    - wmse_contribution: False
-  metric: 
-    - name: loss_inside_lam_contribution
-    - inside_lam: True
-    - wmse_contribution: True
-  metric: 
-    - name: loss_outside_lam
-    - inside_lam: False
-    - wmse_contribution: False
-  metric: 
-    - name: loss_outside_lam_contribution
-    - inside_lam: True
-    - wmse_contribution: False    
+  metric_1:
+    name: loss_inside_lam
+    inside_lam: True
+    wmse_contribution: False
+  metric_2: 
+    name: loss_inside_lam_contribution
+    inside_lam: True
+    wmse_contribution: True
+  metric_3: 
+    name: loss_outside_lam
+    inside_lam: False
+    wmse_contribution: False
+  metric_4: 
+    name: loss_outside_lam_contribution
+    inside_lam: True
+    wmse_contribution: False    
 
 eval:
   enabled: False

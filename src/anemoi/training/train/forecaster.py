@@ -28,7 +28,7 @@ from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
-from anemoi.training.losses.mse import WeightedMSELoss
+from anemoi.training.losses.mse import WeightedMSELoss, WeightedMSELossStretchedGrid
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.masks import Boolean1DMask
@@ -100,25 +100,23 @@ class GraphForecaster(pl.LightningModule):
         )
         self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
-        
 
         # Options for stretched grid loss logging
-        self.data_split_index = torch.IntTensor(config.data.grid_lengths_cutout[0])
-        LOGGER.info(f"Number of input nodes inside LAM: {config.data.grid_lengths_cutout[0]}")
-        LOGGER.info(f"Number of input nodes outside LAM: {config.data.grid_lengths_cutout[1]}")
-        
+        self.mask_name = config.graph.nodes.hidden.node_builder.mask_attr_name
+        self.mask = graph_data[config.graph.data][self.mask_name].squeeze().bool()
+
         # Check if the model is a stretched grid
-        if self.config.graph.nodes.hidden.node_builder.lam_resolution:
+        if config.graph.nodes.hidden.node_builder.lam_resolution:
             self.stretched_grid = True
         else:
             self.stretched_grid = False
-        
+
         # Define stretched grid metrics
         sg_config= config.diagnostics.sg_metrics
-        print(sg_config)
-        for _, loss_config in sg_config:
-            self.sg_metrics.append({loss_config.name: losses.WeightedMSELoss(node_weights = self.node_weights, data_split_index = self.data_split_index,
-                          inside_LAM = loss_config.inside_lam, wmse_contribution=loss_config.wmse_contribution, data_variances=loss_scaling)})
+        self.sg_metrics = []
+        for item in sg_config.values():
+            self.sg_metrics.append({"name": item.name, "metric": WeightedMSELossStretchedGrid(node_weights = self.loss_weights, mask = self.mask,
+                          inside_LAM = item.inside_lam, wmse_contribution=item.wmse_contribution, data_variances=loss_scaling)})
 
         if config.training.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
@@ -305,8 +303,8 @@ class GraphForecaster(pl.LightningModule):
                 y_postprocessed[..., indices],
             )
         if self.stretched_grid:
-            for name, metric in self.sg_metrics:
-                metrics[f"{name}_{rollout_step + 1}"] = metric(y_pred, y)
+            for item in self.sg_metrics:
+                metrics["{}_{}".format(item["name"], rollout_step + 1)] = item["metric"](y_pred, y)
         if enable_plot:
             y_preds.append(y_pred)
         return metrics, y_preds
