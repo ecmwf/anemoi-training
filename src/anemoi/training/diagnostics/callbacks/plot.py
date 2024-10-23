@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 import copy
 import logging
 import sys
@@ -46,27 +48,6 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class ParallelExecutor(ThreadPoolExecutor):
-    """Wraps parallel execution and provides accurate information about errors.
-
-    Extends ThreadPoolExecutor to preserve the original traceback and line number.
-
-    Reference: https://stackoverflow.com/questions/19309514/getting-original-line-
-    number-for-exception-in-concurrent-futures/24457608#24457608
-    """
-
-    def submit(self, fn: Any, *args, **kwargs) -> Callable:
-        """Submits the wrapped function instead of `fn`."""
-        return super().submit(self._function_wrapper, fn, *args, **kwargs)
-
-    def _function_wrapper(self, fn: Any, *args: list, **kwargs: dict) -> Callable:
-        """Wraps `fn` in order to preserve the traceback of any kind of."""
-        try:
-            return fn(*args, **kwargs)
-        except Exception as exc:
-            raise sys.exc_info()[0](traceback.format_exc()) from exc
-
-
 class BasePlotCallback(Callback, ABC):
     """Factory for creating a callback that plots data to Experiment Logging."""
 
@@ -90,11 +71,21 @@ class BasePlotCallback(Callback, ABC):
 
         self.plot = self._plot
         self._executor = None
+        self._error: Optional[BaseException] = None
+        self.scatter_plotting = config.diagnostics.plot.scatter
 
         if self.config.diagnostics.plot.asynchronous:
-            self._executor = ParallelExecutor(max_workers=1)
-            self._error: BaseException | None = None
+            LOGGER.info("Setting up asynchronous plotting ...")
             self.plot = self._async_plot
+            self._executor = ThreadPoolExecutor(max_workers=1)
+            self.loop_thread = threading.Thread(target=self.start_event_loop, daemon=True)
+            self.loop_thread.start()        
+
+    def start_event_loop(self):
+        """Start the event loop in a separate thread."""
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()            
 
     @rank_zero_only
     def _output_figure(
@@ -110,27 +101,42 @@ class BasePlotCallback(Callback, ABC):
             save_path = Path(
                 self.save_basedir,
                 "plots",
-                f"{tag}_epoch{epoch:03d}.png",
+                f"{tag}_epoch{epoch:03d}.jpg",
             )
 
             save_path.parent.mkdir(parents=True, exist_ok=True)
-            fig.savefig(save_path, dpi=100, bbox_inches="tight")
+
+            fig.canvas.draw()
+            image_array = np.array(fig.canvas.renderer.buffer_rgba())
+            plt.imsave(save_path, image_array, dpi=100)
             if self.config.diagnostics.log.wandb.enabled:
                 import wandb
 
                 logger.experiment.log({exp_log_tag: wandb.Image(fig)})
-
             if self.config.diagnostics.log.mlflow.enabled:
                 run_id = logger.run_id
                 logger.experiment.log_artifact(run_id, str(save_path))
 
         plt.close(fig)  # cleanup
 
-    def teardown(self, trainer: pl.Trainer, pl_module: pl.LightningModule, stage: str) -> None:
-        """Method is called to close the threads."""
-        del trainer, pl_module, stage  # unused
+    @rank_zero_only
+    def _plot_with_error_catching(self, trainer, *args, **kwargs):
+        """To execute the plot function but ensuring we catch any errors."""
+        try:
+            self._plot(trainer, *args, **kwargs)
+        except BaseException:
+            import os
+
+            LOGGER.error(traceback.format_exc())
+            os._exit(1)  # to force exit when sanity val steps are used
+
+
+    def teardown(self, trainer, pl_module, stage) -> None:
+        """Teardown the callback."""
         if self._executor is not None:
             self._executor.shutdown(wait=True)
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            self.loop_thread.join()
 
     @abstractmethod
     @rank_zero_only
@@ -143,26 +149,34 @@ class BasePlotCallback(Callback, ABC):
     ) -> None:
         """Plotting function to be implemented by subclasses."""
 
+    # Async function to run the plot function in the background thread
+    async def submit_plot(self, trainer, *args, **kwargs):
+        """Async function or coroutine to schedule the plot function."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            self._executor,
+            self._plot_with_error_catching,
+            trainer,
+            *args,
+            *kwargs.values(),
+        )  # ONE FOR KWARGS OTHERWISE IT BREAKS!
+
+
     @rank_zero_only
     def _async_plot(
         self,
-        trainer: pl.Trainer,
-        *args: list,
-        **kwargs: dict,
+        trainer,
+        *args,
+        **kwargs,
     ) -> None:
-        """To execute the plot function but ensuring we catch any errors."""
-        future = self._executor.submit(
-            self._plot,
-            trainer,
-            *args,
-            **kwargs,
-        )
-        # otherwise the error won't be thrown till the validation epoch is finished
-        try:
-            future.result()
-        except Exception:
-            LOGGER.exception("Critical error occurred in asynchronous plots.")
-            sys.exit(1)
+        """Run the plot function asynchronously.
+
+        This is the function that is called by the callback. It schedules the plot
+        function to run in the background thread. Since we have an event loop running in
+        the background thread, we need to schedule the plot function to run in that
+        loop.
+        """
+        asyncio.run_coroutine_threadsafe(self.submit_plot(trainer, *args, **kwargs), self.loop)
 
 
 class BasePerBatchPlotCallback(BasePlotCallback):
@@ -431,7 +445,7 @@ class GraphNodeTrainableFeaturesPlot(BasePerEpochPlotCallback):
         _ = epoch
         model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
 
-        fig = plot_graph_node_features(model)
+        fig = plot_graph_node_features(model, scatter=self.scatter_plotting)
 
         tag = "node_trainable_params"
         exp_log_tag = "node_trainable_params"
@@ -754,6 +768,7 @@ class PlotSample(BasePerBatchPlotCallback):
                 data[0, ...].squeeze(),
                 data[rollout_step + 1, ...].squeeze(),
                 output_tensor[rollout_step, ...],
+                scatter = self.scatter_plotting,
                 precip_and_related_fields=self.precip_and_related_fields,
             )
 

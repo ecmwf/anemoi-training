@@ -545,6 +545,8 @@ def single_plot(
     fig,
     ax,
     lon: np.array,
+    lat: np.array,
+    data: np.array,
     cmap: str = "viridis",
     norm: Optional[str] = None,
     title: Optional[str] = None,
