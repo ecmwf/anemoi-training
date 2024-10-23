@@ -112,11 +112,13 @@ class GraphForecaster(pl.LightningModule):
             self.stretched_grid = False
 
         # Define stretched grid metrics
+        
         sg_config= config.diagnostics.sg_metrics
-        self.sg_metrics = torch.nn.ModuleDict()
-        for item in sg_config.values():
-            self.sg_metrics[item.name] = WeightedMSELossStretchedGrid(node_weights = self.loss_weights, mask = self.mask,
-                          inside_LAM = item.inside_lam, wmse_contribution=item.wmse_contribution, data_variances=loss_scaling)
+        if sg_config is not None:
+            self.sg_metrics = torch.nn.ModuleDict()
+            for item in sg_config.values():
+                self.sg_metrics[item.name] = WeightedMSELossStretchedGrid(node_weights = self.loss_weights, mask = self.mask,
+                            inside_LAM = item.inside_lam, wmse_contribution=item.wmse_contribution, data_variances=loss_scaling)
 
         if config.training.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
