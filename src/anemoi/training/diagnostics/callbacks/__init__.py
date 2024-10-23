@@ -13,14 +13,15 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 from typing import Callable
 from typing import Iterable
+from typing import Optional
 
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from anemoi.training.diagnostics.callbacks.checkpoint import AnemoiCheckpoint
-from anemoi.training.diagnostics.callbacks.provenance import ParentUUIDCallback
 from anemoi.training.diagnostics.callbacks.optimiser import LearningRateMonitor
 from anemoi.training.diagnostics.callbacks.optimiser import StochasticWeightAveraging
+from anemoi.training.diagnostics.callbacks.provenance import ParentUUIDCallback
 
 if TYPE_CHECKING:
     from pytorch_lightning.callbacks import Callback
@@ -29,8 +30,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def nestedget(conf: DictConfig, key, default):
-    """
-    Get a nested key from a DictConfig object
+    """Get a nested key from a DictConfig object
 
     E.g.
     >>> nestedget(config, "diagnostics.log.wandb.enabled", False)
@@ -53,6 +53,7 @@ CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str | Callable[[DictConfig], bo
         LearningRateMonitor,
     ),
 ]
+
 
 def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint] | None:
     """Get checkpointing callback"""

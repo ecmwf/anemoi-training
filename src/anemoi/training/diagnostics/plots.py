@@ -15,10 +15,9 @@ import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
 import pandas as pd
-from datashader.mpl_ext import dsshow
-
 import torch
 from anemoi.models.layers.mapper import GraphEdgeMixin
+from datashader.mpl_ext import dsshow
 from matplotlib.collections import LineCollection
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import ListedColormap
@@ -337,7 +336,7 @@ def plot_predicted_multilevel_flat_sample(
     x: np.ndarray,
     y_true: np.ndarray,
     y_pred: np.ndarray,
-    scatter: Optional[bool] = False,
+    scatter: bool = False,
     precip_and_related_fields: list | None = None,
 ) -> Figure:
     """Plots data for one multilevel latlon-"flat" sample.
@@ -432,7 +431,7 @@ def plot_flat_sample(
     vname: str,
     clevels: float,
     cmap_precip: str,
-    scatter: Optional[bool] = False,
+    scatter: bool = False,
     precip_and_related_fields: list | None = None,
 ) -> None:
     """Plot a "flat" 1D sample.
@@ -465,7 +464,7 @@ def plot_flat_sample(
         Scatter plot, by default False
     precip_and_related_fields : list, optional
         List of precipitation-like variables, by default []
-        
+
     Returns
     -------
     None
@@ -483,7 +482,17 @@ def plot_flat_sample(
         # converting to mm from m
         truth *= 1000.0
         pred *= 1000.0
-        single_plot(fig, ax[1], lon, lat, truth, cmap=precip_colormap, norm=norm, title=f"{vname} target", scatter=scatter)
+        single_plot(
+            fig,
+            ax[1],
+            lon,
+            lat,
+            truth,
+            cmap=precip_colormap,
+            norm=norm,
+            title=f"{vname} target",
+            scatter=scatter,
+        )
         single_plot(fig, ax[2], lon, lat, pred, cmap=precip_colormap, norm=norm, title=f"{vname} pred", scatter=scatter)
         single_plot(
             fig,
@@ -542,19 +551,21 @@ def plot_flat_sample(
 
 
 def single_plot(
-    fig,
-    ax,
+    fig: plt.Figure,
+    ax: plt.axes,
     lon: np.array,
     lat: np.array,
     data: np.array,
     cmap: str = "viridis",
-    norm: Optional[str] = None,
-    title: Optional[str] = None,
-    scatter: Optional[bool] = False,
+    norm: str | None = None,
+    title: str | None = None,
+    scatter: bool = False,
 ) -> None:
     """Plot a single lat-lon map.
+
     Plotting can be made either using scatter plot or Datashader(bin) plots.
     By default it uses Datashader since it is faster and more efficient.
+
     Parameters
     ----------
     fig : _type_
@@ -575,11 +586,11 @@ def single_plot(
         Title for plot, by default None
     scatter: bool, optional
         Scatter plot, by default False
+
     Returns
     -------
     None
     """
-
     if scatter:
         psc = ax.scatter(
             lon,
@@ -689,7 +700,7 @@ def sincos_to_latlon(sincos_coords: torch.Tensor) -> torch.Tensor:
     return torch.atan2(sin_y, cos_y)
 
 
-def plot_graph_node_features(model: torch.nn.Module, scatter: Optional[bool] = False) -> Figure:
+def plot_graph_node_features(model: torch.nn.Module, scatter: bool = False) -> Figure:
     """Plot trainable graph node features.
 
     Parameters
@@ -698,7 +709,6 @@ def plot_graph_node_features(model: torch.nn.Module, scatter: Optional[bool] = F
         Model object
     scatter: bool, optional
         Scatter plot, by default False
-
 
     Returns
     -------
@@ -726,7 +736,7 @@ def plot_graph_node_features(model: torch.nn.Module, scatter: Optional[bool] = F
                 lat=lat,
                 data=features[..., i],
                 title=f"{mesh} trainable feature #{i + 1}",
-                scatter=scatter
+                scatter=scatter,
             )
 
     return fig
