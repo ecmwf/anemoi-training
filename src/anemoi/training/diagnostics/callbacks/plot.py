@@ -1,11 +1,13 @@
-# ruff: noqa: ANN001
-
-# (C) Copyright 2024 European Centre for Medium-Range Weather Forecasts.
+# (C) Copyright 2024 Anemoi contributors.
+#
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
+
+# ruff: noqa: ANN001
 
 from __future__ import annotations
 
@@ -879,7 +881,7 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
                 for name in self.parameters
             }
 
-            fig = plot_histogram(
+            fig = plot_power_spectrum(
                 plot_parameters_dict_histogram,
                 data[0, ...].squeeze(),
                 data[rollout_step + 1, ...].squeeze(),
@@ -962,7 +964,7 @@ class PlotHistogram(BasePlotAdditionalMetrics):
                 for name in self.parameters
             }
 
-            fig = plot_power_spectrum(
+            fig = plot_histogram(
                 plot_parameters_dict_spectrum,
                 self.latlons,
                 data[0, ...].squeeze(),
