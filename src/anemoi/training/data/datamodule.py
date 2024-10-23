@@ -122,7 +122,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @cached_property
     def ds_valid(self) -> NativeGridDataset:
-        r = self.rollout
+        r = self.rollou
         if self.config.diagnostics.eval.enabled:
             r = max(r, self.config.diagnostics.eval.rollout)
         if self.config.diagnostics.plot.get("longrollout") and self.config.diagnostics.plot.longrollout.enabled:
