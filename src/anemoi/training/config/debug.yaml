@@ -16,15 +16,6 @@ defaults:
 # hardware:
 #   num_gpus_per_node: 1
 
-diagnostics:
-  plot:
-    enabled: True
-  log:
-    mlflow:
-      enabled: True
-      authentication: True
-      tracking_uri: https://mlflow.ecmwf.int
-
 model:
   num_channels: 128
 dataloader:
