@@ -7,7 +7,6 @@
 # nor does it submit to any jurisdiction.
 
 import omegaconf
-import pytest
 import yaml
 
 from anemoi.training.diagnostics.callbacks import get_callbacks
@@ -26,13 +25,8 @@ diagnostics:
 
   profiler: False
 
-<<<<<<< HEAD
   enable_checkpointing: False
   checkpoint:
-=======
-  checkpoint:
-    enabled: False
->>>>>>> 3a0df9d (rebase)
 
   log: {}
 """
@@ -45,18 +39,6 @@ def test_no_extra_callbacks_set():
     assert len(callbacks) == 1  # ParentUUIDCallback
 
 
-<<<<<<< HEAD
-=======
-def test_deprecation_warning():
-    # Test deprecation warning
-    with pytest.warns(DeprecationWarning):
-        config = omegaconf.OmegaConf.create(default_config)
-        config.diagnostics.update({"eval": {"enabled": True, "rollout": 1, "frequency": 1}})
-        callbacks = get_callbacks(config)
-        assert len(callbacks) == 2
-
-
->>>>>>> 3a0df9d (rebase)
 def test_add_config_enabled_callback():
     # Add logging callback
     config = omegaconf.OmegaConf.create(default_config)
@@ -67,13 +49,9 @@ def test_add_config_enabled_callback():
 
 def test_add_callback():
     config = omegaconf.OmegaConf.create(default_config)
-<<<<<<< HEAD
     config.diagnostics.callbacks.append(
         {"_target_": "anemoi.training.diagnostics.callbacks.provenance.ParentUUIDCallback"},
     )
-=======
-    config.diagnostics.callbacks.append({"_target_": "anemoi.training.diagnostics.callbacks.id.ParentUUIDCallback"})
->>>>>>> 3a0df9d (rebase)
     callbacks = get_callbacks(config)
     assert len(callbacks) == 2
 
