@@ -20,9 +20,15 @@ from omegaconf import DictConfig
 from anemoi.training.diagnostics.callbacks import plot
 from anemoi.training.diagnostics.callbacks.checkpoint import AnemoiCheckpoint
 from anemoi.training.diagnostics.callbacks.evaluation import RolloutEval
+<<<<<<< HEAD
 from anemoi.training.diagnostics.callbacks.optimiser import LearningRateMonitor
 from anemoi.training.diagnostics.callbacks.optimiser import StochasticWeightAveraging
 from anemoi.training.diagnostics.callbacks.provenance import ParentUUIDCallback
+=======
+from anemoi.training.diagnostics.callbacks.id import ParentUUIDCallback
+from anemoi.training.diagnostics.callbacks.learning_rate import LearningRateMonitor
+from anemoi.training.diagnostics.callbacks.swa import StochasticWeightAveraging
+>>>>>>> 3a0df9d (rebase)
 
 if TYPE_CHECKING:
     from pytorch_lightning.callbacks import Callback
@@ -54,12 +60,23 @@ CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str | Callable[[DictConfig], bo
         or nestedget(config, "diagnostics.log.mflow.enabled", False),
         LearningRateMonitor,
     ),
+    (
+        "diagnostics.plot.learned_features",
+        [
+            plotting.GraphNodeTrainableFeaturesPlot,
+            plotting.GraphEdgeTrainableFeaturesPlot,
+        ],
+    ),
 ]
 
 
 def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint] | None:
     """Get checkpointing callback"""
+<<<<<<< HEAD
     if not config.diagnostics.get("enable_checkpointing", True):
+=======
+    if not config.diagnostics.checkpoint.get("enabled", True):
+>>>>>>> 3a0df9d (rebase)
         return []
 
     checkpoint_settings = {
@@ -141,10 +158,25 @@ def _get_config_enabled_callbacks(config: DictConfig) -> list[Callback]:
             return all(nestedget(config, k, False) for k in key)
         return nestedget(config, key, False)
 
+<<<<<<< HEAD
     for enable_key, callback_list in CONFIG_ENABLED_CALLBACKS:
         if check_key(config, enable_key):
             callbacks.append(callback_list(config))
 
+=======
+    for deprecated_key, callback_list in DEPRECATED_CONFIGS:
+        if check_key(config, deprecated_key):
+            warnings.warn(
+                f"Deprecated config {deprecated_key} found. Please update your config file to use the new callback initialisation method.",
+                DeprecationWarning,
+            )
+            callbacks.append(callback_list(config))
+
+    for enable_key, callback_list in CONFIG_ENABLED_CALLBACKS:
+        if check_key(config, enable_key):
+            callbacks.append(callback_list(config))
+
+>>>>>>> 3a0df9d (rebase)
     return callbacks
 
 
@@ -197,7 +229,11 @@ def get_callbacks(config: DictConfig) -> list[Callback]:  # noqa: C901
 
     # Plotting callbacks
     if config.diagnostics.plot.enabled:
+<<<<<<< HEAD
         for callback in config.diagnostics.plot.get("callbacks", None) or []:
+=======
+        for callback in config.diagnostics.plot.get("callbacks", []):
+>>>>>>> 3a0df9d (rebase)
             # Instantiate new callbacks
             trainer_callbacks.append(instantiate(callback, config))
 
