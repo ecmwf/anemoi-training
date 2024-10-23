@@ -868,7 +868,7 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
                 for name in self.parameters
             }
 
-            fig = plot_histogram(
+            fig = plot_power_spectrum(
                 plot_parameters_dict_histogram,
                 data[0, ...].squeeze(),
                 data[rollout_step + 1, ...].squeeze(),
@@ -951,7 +951,7 @@ class PlotHistogram(BasePlotAdditionalMetrics):
                 for name in self.parameters
             }
 
-            fig = plot_power_spectrum(
+            fig = plot_histogram(
                 plot_parameters_dict_spectrum,
                 self.latlons,
                 data[0, ...].squeeze(),
