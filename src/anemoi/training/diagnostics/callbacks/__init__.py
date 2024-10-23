@@ -1,6 +1,8 @@
-# (C) Copyright 2024 European Centre for Medium-Range Weather Forecasts.
+# (C) Copyright 2024 Anemoi contributors.
+#
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
@@ -8,7 +10,6 @@
 from __future__ import annotations
 
 import logging
-import warnings
 from datetime import timedelta
 from typing import TYPE_CHECKING
 from typing import Callable
@@ -17,9 +18,7 @@ from typing import Iterable
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from anemoi.training.diagnostics.callbacks import plot
 from anemoi.training.diagnostics.callbacks.checkpoint import AnemoiCheckpoint
-from anemoi.training.diagnostics.callbacks.evaluation import RolloutEval
 from anemoi.training.diagnostics.callbacks.optimiser import LearningRateMonitor
 from anemoi.training.diagnostics.callbacks.optimiser import StochasticWeightAveraging
 from anemoi.training.diagnostics.callbacks.provenance import ParentUUIDCallback
