@@ -128,9 +128,12 @@ class GraphForecaster(pl.LightningModule):
         )
         self.lr_iterations = config.training.lr.iterations
         self.lr_min = config.training.lr.min
+
         self.rollout = config.training.rollout.start
-        self.rollout_epoch_increment = config.training.rollout.epoch_increment
+        self.rollout_randomisation = config.training.rollout.get("randomise", False)
+        self.rollout_min = config.training.rollout.start
         self.rollout_max = config.training.rollout.max
+        self.rollout_epoch_increment = config.training.rollout.epoch_increment
 
         self.use_zero_optimizer = config.training.zero_optimizer
 
@@ -139,6 +142,7 @@ class GraphForecaster(pl.LightningModule):
         LOGGER.debug("Rollout window length: %d", self.rollout)
         LOGGER.debug("Rollout increase every : %d epochs", self.rollout_epoch_increment)
         LOGGER.debug("Rollout max : %d", self.rollout_max)
+        LOGGER.debug("Rollout randomisation : %d", self.rollout_randomisation)
         LOGGER.debug("Multistep: %d", self.multi_step)
 
         self.model_comm_group_id = int(os.environ.get("SLURM_PROCID", "0")) // config.hardware.num_gpus_per_model
@@ -396,15 +400,26 @@ class GraphForecaster(pl.LightningModule):
         batch: torch.Tensor,
         batch_idx: int,
         validation_mode: bool = False,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], int]:
         del batch_idx
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}
         y_preds = []
 
+        rollout_length = self.rollout
+        if getattr(self, "rollout_randomisation", False):
+            # If randomising rollout follow the below behaviour
+            # If epoch_increment set, randomly pick between min and current rollout as given by the epoch
+            # If epoch_increment not set, randomly pick between min and max rollout
+            randomiser = np.random.default_rng()
+            if self.rollout_epoch_increment > 0:
+                rollout_length = randomiser.uniform(self.rollout_min, self.rollout + 1)
+            else:
+                rollout_length = randomiser.uniform(self.rollout_min, self.rollout_max + 1)
+
         for loss_next, metrics_next, y_preds_next in self.rollout_step(
             batch,
-            rollout=self.rollout,
+            rollout=rollout_length,
             training_mode=True,
             validation_mode=validation_mode,
         ):
@@ -412,8 +427,8 @@ class GraphForecaster(pl.LightningModule):
             metrics.update(metrics_next)
             y_preds.extend(y_preds_next)
 
-        loss *= 1.0 / self.rollout
-        return loss, metrics, y_preds
+        loss *= 1.0 / rollout_length
+        return loss, metrics, y_preds, rollout_length
 
     def calculate_val_metrics(
         self,
@@ -463,7 +478,7 @@ class GraphForecaster(pl.LightningModule):
         return metrics
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
-        train_loss, _, _ = self._step(batch, batch_idx)
+        train_loss, _, _, rollout = self._step(batch, batch_idx)
         self.log(
             f"train_{getattr(self.loss, 'name', self.loss.__class__.__name__.lower())}",
             train_loss,
@@ -474,14 +489,16 @@ class GraphForecaster(pl.LightningModule):
             batch_size=batch.shape[0],
             sync_dist=True,
         )
+
         self.log(
             "rollout",
-            float(self.rollout),
+            float(rollout),
             on_step=True,
             logger=self.logger_enabled,
             rank_zero_only=True,
             sync_dist=False,
         )
+
         return train_loss
 
     def lr_scheduler_step(self, scheduler: CosineLRScheduler, metric: None = None) -> None:
@@ -506,7 +523,7 @@ class GraphForecaster(pl.LightningModule):
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
         with torch.no_grad():
-            val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
+            val_loss, metrics, y_preds, _ = self._step(batch, batch_idx, validation_mode=True)
         self.log(
             f"val_{getattr(self.loss, 'name', self.loss.__class__.__name__.lower())}",
             val_loss,

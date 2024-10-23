@@ -16,6 +16,18 @@ forecaster that users may want to adapt to their own applications are:
 of the model is controlled. It also contains functions that enable the
 user to profile the training of the model (``profiler.py``).
 
+**Rollout**
+
+``training.rollout`` allows for configuration of the rollout of the
+model during training. A ``minimum/start``, ``maximum`` and
+``epoch_increment`` can be set. If ``epoch_increment`` is set to ``0``,
+the rollout will not be increased at all. Additionally, setting
+``randomise`` to ``True`` allows for a randomised rollout to be trained
+upon. If ``epoch_increment`` is set, the random value will be chosen
+between the current rollout step as altered by the increment and the
+``maximum``. If not set, the random value will be chosen between the
+``minimum/start`` and the ``maximum``.
+
 .. automodule:: anemoi.training.train.forecaster
    :members:
    :no-undoc-members:

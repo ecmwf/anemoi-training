@@ -71,7 +71,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         # Set the maximum rollout to be expected
         self.rollout = (
             self.config.training.rollout.max
-            if self.config.training.rollout.epoch_increment > 0
+            if self.config.training.rollout.epoch_increment > 0 or self.config.training.rollout.get("randomise", False)
             else self.config.training.rollout.start
         )
 

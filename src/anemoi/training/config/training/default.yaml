@@ -71,6 +71,8 @@ rollout:
   epoch_increment: 0
   # maximum rollout to use
   max: 1
+  # randomise rollout length during training
+  randomise: False
 
 # Set max_epochs or max_steps. Training stops at the first limit reached.
 max_epochs: null
