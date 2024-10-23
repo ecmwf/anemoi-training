@@ -56,7 +56,7 @@ CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str | Callable[[DictConfig], bo
 
 def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint] | None:
     """Get checkpointing callback"""
-    if not config.diagnostics.checkpoint.get("enabled", True):
+    if not config.diagnostics.get("enable_checkpointing", True):
         return []
 
     checkpoint_settings = {
@@ -194,7 +194,7 @@ def get_callbacks(config: DictConfig) -> list[Callback]:  # noqa: C901
 
     # Plotting callbacks
     if config.diagnostics.plot.enabled:
-        for callback in config.diagnostics.plot.get("callbacks", []):
+        for callback in config.diagnostics.plot.get("callbacks", None) or []:
             # Instantiate new callbacks
             trainer_callbacks.append(instantiate(callback, config))
 
