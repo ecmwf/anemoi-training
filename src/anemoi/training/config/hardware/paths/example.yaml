@@ -1,6 +1,6 @@
-data: ???
-grids: ???
-output: ???
+grids: /home/mlx/ai-ml/grids/
+data: /home/mlx/ai-ml/datasets/stable/
+output: ${oc.env:SCRATCH}/aifs/${data.resolution}/
 logs:
   base: ${hardware.paths.output}logs/
   wandb: ${hardware.paths.logs.base}
