@@ -194,10 +194,9 @@ def get_callbacks(config: DictConfig) -> list[Callback]:  # noqa: C901
         trainer_callbacks.append(instantiate(callback, config))
 
     # Plotting callbacks
-    if config.diagnostics.plot.enabled:
-        for callback in config.diagnostics.plot.get("callbacks", None) or []:
-            # Instantiate new callbacks
-            trainer_callbacks.append(instantiate(callback, config))
+    for callback in config.diagnostics.plot.get("callbacks", None) or []:
+        # Instantiate new callbacks
+        trainer_callbacks.append(instantiate(callback, config))
 
     # Extend with config enabled callbacks
     trainer_callbacks.extend(_get_config_enabled_callbacks(config))
