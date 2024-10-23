@@ -126,8 +126,6 @@ class GraphForecaster(pl.LightningModule):
         LOGGER.debug("Rollout max : %d", self.rollout_max)
         LOGGER.debug("Multistep: %d", self.multi_step)
 
-        self.enable_plot = config.diagnostics.plot.enabled
-
         self.model_comm_group_id = int(os.environ.get("SLURM_PROCID", "0")) // config.hardware.num_gpus_per_model
         self.model_comm_group_rank = int(os.environ.get("SLURM_PROCID", "0")) % config.hardware.num_gpus_per_model
         self.model_comm_num_groups = math.ceil(
