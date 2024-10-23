@@ -21,18 +21,17 @@ functionality to use both Weights & Biases and Tensorboard.
 
 The callbacks can also be used to evaluate forecasts over longer
 rollouts beyond the forecast time that the model is trained on. The
-number of rollout steps (or forecast iteration steps) is set using
-``config.eval.rollout = *num_of_rollout_steps*``.
+number of rollout steps for verification (or forecast iteration steps)
+is set using ``config.dataloader.validation_rollout =
+*num_of_rollout_steps*``.
 
 Note the user has the option to evaluate the callbacks asynchronously
 (using the following config option
 ``config.diagnostics.plot.asynchronous``, which means that the model
 training doesn't stop whilst the callbacks are being evaluated).
-However, note that callbacks can still be slow, and therefore the
-plotting callbacks can be switched off by setting
-``config.diagnostics.plot.enabled`` to ``False`` or all the callbacks
-can be completely switched off by setting
-``config.diagnostics.eval.enabled`` to ``False``.
+Callbacks are configured in the config file under the
+``config.diagnostics.callbacks`` key, and plotting callbacks under the
+``config.diagnostics.plot`` key.
 
 Below is the documentation for the default callbacks provided, but it is
 also possible for users to add callbacks using the same structure:

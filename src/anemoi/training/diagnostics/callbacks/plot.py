@@ -135,6 +135,12 @@ class BasePlotCallback(Callback, ABC):
             self.loop.call_soon_threadsafe(self.loop.stop)
             self.loop_thread.join()
 
+    def apply_output_mask(self, pl_module: pl.LightningModule, data: torch.Tensor) -> torch.Tensor:
+        if hasattr(pl_module, "output_mask") and pl_module.output_mask is not None:
+            # Fill with NaNs values where the mask is False
+            data[:, :, ~pl_module.output_mask, :] = np.nan
+        return data
+
     @abstractmethod
     @rank_zero_only
     def _plot(
@@ -264,7 +270,6 @@ class LongRolloutPlots(BasePlotCallback):
         self,
         config: OmegaConf,
         rollout: list[int],
-        batch_frequency: int,
         epoch_frequency: int = 1,
         sample_idx: int = 0,
     ) -> None:
@@ -276,8 +281,6 @@ class LongRolloutPlots(BasePlotCallback):
             Config object
         rollout : list[int]
             Rollout steps to plot at
-        batch_frequency : int
-            Batch frequency to plot at
         epoch_frequency : int, optional
             Epoch frequency to plot at, by default 1
         sample_idx : int, optional
@@ -286,7 +289,6 @@ class LongRolloutPlots(BasePlotCallback):
         super().__init__(config)
 
         self.epoch_frequency = epoch_frequency
-        self.batch_frequency = batch_frequency
 
         LOGGER.debug(
             "Setting up callback for plots with long rollout: rollout = %d, frequency = every %d epoch ...",
@@ -328,17 +330,10 @@ class LongRolloutPlots(BasePlotCallback):
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
 
-        batch = pl_module.model.pre_processors(batch, in_place=False)
-        # prepare input tensor for rollout from preprocessed batch
-        x = batch[
-            :,
-            0 : pl_module.multi_step,
-            ...,
-            pl_module.data_indices.internal_data.input.full,
-        ]  # (bs, multi_step, latlon, nvar)
-        assert (
-            batch.shape[1] >= max(self.rollout) + pl_module.multi_step
-        ), "Batch length not sufficient for requested rollout length!"
+        assert batch.shape[1] >= self.rollout + pl_module.multi_step, (
+            "Batch length not sufficient for requested validation rollout length! "
+            f"Set `dataloader.validation_rollout` to at least {self.rollout + pl_module.multi_step}"
+        )
 
         # prepare input tensor for plotting
         input_tensor_0 = batch[
@@ -351,10 +346,7 @@ class LongRolloutPlots(BasePlotCallback):
 
         # start rollout
         with torch.no_grad():
-            for rollout_step in range(max(self.rollout)):
-                y_pred = pl_module(x)  # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-
-                x = pl_module.advance_input(x, y_pred, batch, rollout_step)
+            for rollout_step, (_, _, y_pred) in enumerate(pl_module.rollout_step(batch, rollout=max(self.rollout))):
 
                 if (rollout_step + 1) in self.rollout:
                     # prepare true output tensor for plotting
@@ -403,7 +395,7 @@ class LongRolloutPlots(BasePlotCallback):
         batch: torch.Tensor,
         batch_idx: int,
     ) -> None:
-        if (batch_idx) % self.batch_frequency == 0 and (trainer.current_epoch + 1) % self.epoch_frequency == 0:
+        if (batch_idx) == 0 and (trainer.current_epoch + 1) % self.epoch_frequency == 0:
             precision_mapping = {
                 "16-mixed": torch.float16,
                 "bf16-mixed": torch.bfloat16,
@@ -747,12 +739,15 @@ class PlotSample(BasePerBatchPlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors(input_tensor)
 
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy()
 
         for rollout_step in range(pl_module.rollout):
             fig = plot_predicted_multilevel_flat_sample(
@@ -805,11 +800,15 @@ class BasePlotAdditionalMetrics(BasePerBatchPlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+
+        data = self.post_processors(input_tensor)
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy()
         return data, output_tensor
 
 
@@ -898,11 +897,9 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
 
 
 class PlotHistogram(BasePlotAdditionalMetrics):
-    """Plots TP related metric comparing target and prediction.
+    """Plots histograms comparing target and prediction.
 
     The actual increment (output - input) is plot for prognostic variables while the output is plot for diagnostic ones.
-
-    - Histograms
     """
 
     def __init__(
