@@ -10,10 +10,9 @@
 from __future__ import annotations
 
 import asyncio
-import threading
 import copy
 import logging
-import sys
+import threading
 import time
 import traceback
 from abc import ABC
@@ -23,8 +22,6 @@ from contextlib import nullcontext
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
-from typing import Any
-from typing import Callable
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -71,7 +68,7 @@ class BasePlotCallback(Callback, ABC):
 
         self.plot = self._plot
         self._executor = None
-        self._error: Optional[BaseException] = None
+        self._error: BaseException = None
         self.scatter_plotting = config.diagnostics.plot.scatter
 
         if self.config.diagnostics.plot.asynchronous:
@@ -79,13 +76,13 @@ class BasePlotCallback(Callback, ABC):
             self.plot = self._async_plot
             self._executor = ThreadPoolExecutor(max_workers=1)
             self.loop_thread = threading.Thread(target=self.start_event_loop, daemon=True)
-            self.loop_thread.start()        
+            self.loop_thread.start()
 
-    def start_event_loop(self):
+    def start_event_loop(self) -> None:
         """Start the event loop in a separate thread."""
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-        self.loop.run_forever()            
+        self.loop.run_forever()
 
     @rank_zero_only
     def _output_figure(
@@ -120,19 +117,19 @@ class BasePlotCallback(Callback, ABC):
         plt.close(fig)  # cleanup
 
     @rank_zero_only
-    def _plot_with_error_catching(self, trainer, *args, **kwargs):
+    def _plot_with_error_catching(self, trainer, *args, **kwargs) -> None:
         """To execute the plot function but ensuring we catch any errors."""
         try:
             self._plot(trainer, *args, **kwargs)
         except BaseException:
             import os
 
-            LOGGER.error(traceback.format_exc())
+            LOGGER.exception(traceback.format_exc())
             os._exit(1)  # to force exit when sanity val steps are used
-
 
     def teardown(self, trainer, pl_module, stage) -> None:
         """Teardown the callback."""
+        del trainer, pl_module, stage  # unused
         if self._executor is not None:
             self._executor.shutdown(wait=True)
             self.loop.call_soon_threadsafe(self.loop.stop)
@@ -150,7 +147,7 @@ class BasePlotCallback(Callback, ABC):
         """Plotting function to be implemented by subclasses."""
 
     # Async function to run the plot function in the background thread
-    async def submit_plot(self, trainer, *args, **kwargs):
+    async def submit_plot(self, trainer, *args, **kwargs) -> None:
         """Async function or coroutine to schedule the plot function."""
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(
@@ -160,7 +157,6 @@ class BasePlotCallback(Callback, ABC):
             *args,
             *kwargs.values(),
         )  # ONE FOR KWARGS OTHERWISE IT BREAKS!
-
 
     @rank_zero_only
     def _async_plot(
@@ -768,7 +764,7 @@ class PlotSample(BasePerBatchPlotCallback):
                 data[0, ...].squeeze(),
                 data[rollout_step + 1, ...].squeeze(),
                 output_tensor[rollout_step, ...],
-                scatter = self.scatter_plotting,
+                scatter=self.scatter_plotting,
                 precip_and_related_fields=self.precip_and_related_fields,
             )
 
