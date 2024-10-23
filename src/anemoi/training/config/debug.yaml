@@ -18,13 +18,10 @@ defaults:
 
 diagnostics:
   plot:
-    enabled: True
-  log:
-    mlflow:
-      enabled: True
-      authentication: True
-      tracking_uri: https://mlflow.ecmwf.int
-
+    enabled: False
+hardware:
+  files:
+    graph: ???
 model:
   num_channels: 128
 dataloader:
