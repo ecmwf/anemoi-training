@@ -1,13 +1,61 @@
 ---
-defaults:
-  - plot: detailed
-  - callbacks: pretraining
 
-eval:
-  enabled: False
-  # use this to evaluate the model over longer rollouts, every so many validation batches
-  rollout: 12
-  frequency: 20
+callbacks:
+  # Add callbacks here
+  - _target_: anemoi.training.diagnostics.callbacks.evaluation.RolloutEval
+    rollout: 12
+    frequency: 20
+
+plot:
+  enabled: True
+
+  callbacks:
+    # Add extra plot callbacks here
+    - _target_: anemoi.training.diagnostics.callbacks.plot.GraphTrainableFeaturesPlot
+    - _target_: anemoi.training.diagnostics.callbacks.plot.PlotLoss
+    - _target_: anemoi.training.diagnostics.callbacks.plot.PlotSample
+
+  asynchronous: True
+  frequency: 750
+  sample_idx: 0
+  per_sample: 6
+  parameters:
+  - z_500
+  - t_850
+  - u_850
+  - v_850
+  - 2t
+  - 10u
+  - 10v
+  - sp
+  - tp
+  - cp
+  #Defining the accumulation levels for precipitation related fields and the colormap
+  accumulation_levels_plot: [0, 0.05, 0.1, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 100] # in mm
+  cmap_accumulation: ["#ffffff", "#04e9e7", "#019ff4", "#0300f4", "#02fd02", "#01c501", "#008e00", "#fdf802", "#e5bc00", "#fd9500", "#fd0000", "#d40000", "#bc0000", "#f800fd"]
+  precip_and_related_fields: [tp, cp]
+  # Histogram and Spectrum plots
+  parameters_histogram:
+  - z_500
+  - tp
+  - 2t
+  - 10u
+  - 10v
+  parameters_spectrum:
+  - z_500
+  - tp
+  - 2t
+  - 10u
+  - 10v
+  # group parameters by categories when visualizing contributions to the loss
+  # one-parameter groups are possible to highlight individual parameters
+  parameter_groups:
+    moisture: [tp, cp, tcw]
+    sfc_wind: [10u, 10v]
+  longrollout:
+    enabled: False
+    rollout: [60]
+    frequency: 20 # every X epochs
 
 debug:
   # this will detect and trace back NaNs / Infs etc. but will slow down training
@@ -19,6 +67,7 @@ profiler: False
 
 enable_checkpointing: True
 checkpoint:
+  enabled: True
   every_n_minutes:
     save_frequency: 30 # Approximate, as this is checked at the end of training steps
     num_models_saved: 3 # If set to k, saves the 'last' k model weights in the training.
