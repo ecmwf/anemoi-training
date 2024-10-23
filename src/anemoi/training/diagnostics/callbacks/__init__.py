@@ -60,13 +60,6 @@ CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str | Callable[[DictConfig], bo
         or nestedget(config, "diagnostics.log.mflow.enabled", False),
         LearningRateMonitor,
     ),
-    (
-        "diagnostics.plot.learned_features",
-        [
-            plotting.GraphNodeTrainableFeaturesPlot,
-            plotting.GraphEdgeTrainableFeaturesPlot,
-        ],
-    ),
 ]
 
 
