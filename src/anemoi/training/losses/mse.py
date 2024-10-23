@@ -164,17 +164,17 @@ class WeightedMSELossStretchedGrid(nn.Module):
         if self.inside_LAM:
             pred = pred[ :, :, self.mask]
             target = target[:, :, self.mask]
-            weights_selected = self.weights_inside_LAM.to("cuda")
+            weights_selected = self.weights_inside_LAM
         else:
             pred = pred[ :, :, ~self.mask]
             target = target[:, :, ~self.mask]
-            weights_selected = self.weights_outside_LAM.to("cuda")
+            weights_selected = self.weights_outside_LAM
 
         out = torch.square(pred - target)
 
         # Use variances if available
         if hasattr(self, "ivar"):
-            out *= self.ivar.to("cuda")
+            out *= self.ivar
 
         # Squash by last dimension
         if squash:
