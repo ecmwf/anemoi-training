@@ -48,6 +48,8 @@ plot:
     enabled: False
     rollout: [60]
     frequency: 20 # every X epochs
+    video_enabled: False
+    video_rollout: 56 # 14 days in 6h steps
 
 debug:
   # this will detect and trace back NaNs / Infs etc. but will slow down training
