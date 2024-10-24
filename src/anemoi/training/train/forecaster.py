@@ -227,7 +227,7 @@ class GraphForecaster(pl.LightningModule):
         return loss_function
 
     @staticmethod
-    def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> dict:
+    def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, dict]:
 
         metric_ranges = defaultdict(list)
         metric_ranges_validation = defaultdict(list)
@@ -416,7 +416,7 @@ class GraphForecaster(pl.LightningModule):
                 )
                 continue
 
-            for mkey, indices in self.metric_ranges_validation.items():
+            for mkey, indices in self.val_metric_ranges.items():
                 metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
                     y_pred_postprocessed[..., indices],
                     y_postprocessed[..., indices],
