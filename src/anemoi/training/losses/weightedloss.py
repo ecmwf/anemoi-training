@@ -65,7 +65,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         self.register_buffer("node_weights", node_weights, persistent=True)
 
         if variable_scaling is not None:
-            self.scalar.add_scalar(-1, variable_scaling, "variable_scaling")
+            self.scalar.add_scalar(-1, variable_scaling, name="variable_scaling")
 
     @functools.wraps(ScaleTensor.add_scalar, assigned=("__doc__", "__annotations__"))
     def add_scalar(self, dimension: int | tuple[int], scalar: torch.Tensor, *, name: str | None = None) -> None:
@@ -94,7 +94,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         if len(self.scalar) == 0:
             return x
 
-        scalar = self.scalar.get_scalar(x.ndim)
+        scalar = self.scalar.get_scalar(x.ndim).to(x)
 
         if feature_indices is None or "variable_scaling" not in self.scalar:
             return x * scalar

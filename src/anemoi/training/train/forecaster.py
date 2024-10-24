@@ -193,7 +193,8 @@ class GraphForecaster(pl.LightningModule):
 
         for key in loss_config:  # Go through all keys given in the config
             # If key does not start with `include_` or `add_scalar_`, add it to the loss_init_config
-            if not key.startswith("include_") or not key.startswith("add_scalar_"):
+            if not str(key).startswith(("include_", "add_scalar_")):
+                loss_init_config[key] = loss_config[key]
                 continue
             # If key starts with `add_scalar_`, remove the `add_scalar_` prefix
             # and check if the key is in kwargs, if it is add it to the scalars_to_add
@@ -218,7 +219,7 @@ class GraphForecaster(pl.LightningModule):
         loss_function = instantiate(loss_init_config)
 
         # Add scalars to the loss function
-        if not hasattr(loss_function, "add_scalar"):
+        if not hasattr(loss_function, "add_scalar") and scalars_to_add:
             error_msg = f"Loss function {loss_function.__class__.__name__!r} does not have an `add_scalar` method"
             raise ValueError(error_msg)
 

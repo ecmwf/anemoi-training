@@ -217,13 +217,11 @@ class ScaleTensor:
             name = str(uuid.uuid4())
 
         if name in self.tensors:
-            self.tensors[name] = (
-                dimension,
-                self.tensors[name] * scalar,
-            )
+            self._specified_dimensions.remove(self.tensors[name][0])
+            self.tensors[name] = (dimension, self.tensors[name][1] * scalar)
         else:
             self.tensors[name] = (dimension, scalar)
-            self._specified_dimensions.append(dimension)
+        self._specified_dimensions.append(dimension)
 
     def subset(self, scalars: str | Sequence[str]) -> ScaleTensor:
         """Get subset of the scalars, filtering by name.
@@ -313,7 +311,7 @@ class ScaleTensor:
         """
         return tensor * self.get_scalar(tensor.ndim)
 
-    def get_scalar(self, ndim: int) -> torch.Tensor:
+    def get_scalar(self, ndim: int, device: str | None = None) -> torch.Tensor:
         """Get completely resolved scalar tensor.
 
         Parameters
@@ -321,6 +319,8 @@ class ScaleTensor:
         ndim : int
             Number of dimensions of the tensor to resolve the scalars to
             Used to resolve relative indices, and add singleton dimensions
+        device: str | None, optional
+            Device to move the scalar to, by default None
 
         Returns
         -------
@@ -332,7 +332,7 @@ class ScaleTensor:
         ValueError
             If resolving relative indices is invalid
         """
-        complete_scalar = torch.ones(1)
+        complete_scalar = None
 
         tensors = self.resolve(ndim).tensors
 
@@ -341,12 +341,21 @@ class ScaleTensor:
             reshape = [1] * len(missing_dims)
             reshape.extend(scalar.shape)
 
-            reshaped_scalar = scalar.view(reshape)
+            reshaped_scalar = scalar.reshape(reshape)
             reshaped_scalar = torch.moveaxis(reshaped_scalar, list(range(ndim)), (*missing_dims, *dims))
 
-            complete_scalar = complete_scalar if complete_scalar is None else complete_scalar * reshaped_scalar
+            complete_scalar = reshaped_scalar if complete_scalar is None else complete_scalar * reshaped_scalar
 
+        complete_scalar = torch.ones(1) if complete_scalar is None else complete_scalar
+
+        if device is not None:
+            return complete_scalar.to(device)
         return complete_scalar
+
+    def to(self, *args, **kwargs) -> None:
+        """Move scalars inplace."""
+        for name, (dims, tensor) in self.tensors.items():
+            self.tensors[name] = (dims, tensor.to(*args, **kwargs))
 
     def __mul__(self, tensor: torch.Tensor) -> torch.Tensor:
         return self.scale(tensor)
