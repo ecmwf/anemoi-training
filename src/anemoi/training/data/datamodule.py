@@ -149,6 +149,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             timeincrement=self.timeincrement,
             shuffle=shuffle,
             label=label,
+            read_shards=self.config.dataloader.read_shards,
         )
         self._check_resolution(data.resolution)
         return data

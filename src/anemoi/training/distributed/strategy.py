@@ -71,6 +71,7 @@ class DDPGroupStrategy(DDPStrategy):
             model_comm_group_id,
             model_comm_group_rank,
             model_comm_num_groups,
+            self.model_comm_group_size,
         )
 
         # set up reader groups by further splitting model_comm_group_ranks with read_frequency:
@@ -214,6 +215,7 @@ class DDPGroupStrategy(DDPStrategy):
 
         dataloader.dataset.set_comm_group_info(
             self.global_rank,
+            self.model_comm_group_size,
             model_comm_group_id,
             model_comm_group_rank,
             model_comm_num_groups,

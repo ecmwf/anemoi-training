@@ -38,6 +38,7 @@ class NativeGridDataset(IterableDataset):
         timeincrement: int = 1,
         shuffle: bool = True,
         label: str = "generic",
+        read_shards: bool = False,
     ) -> None:
         """Initialize (part of) the dataset state.
 
@@ -72,7 +73,10 @@ class NativeGridDataset(IterableDataset):
         self.model_comm_group_rank = 0
         self.model_comm_num_groups = 1
         self.model_comm_group_id = 0
+        self.model_comm_group_size = 1
         self.global_rank = 0
+
+        self.read_shards = read_shards
 
         self.reader_group_rank = 0
 
@@ -86,6 +90,7 @@ class NativeGridDataset(IterableDataset):
         assert self.multi_step > 0, "Multistep value must be greater than zero."
         self.ensemble_dim: int = 2
         self.ensemble_size = self.data.shape[self.ensemble_dim]
+        self.grid_size = self.data.shape[-1]
 
     @cached_property
     def statistics(self) -> dict:
@@ -124,6 +129,7 @@ class NativeGridDataset(IterableDataset):
     def set_comm_group_info(
         self,
         global_rank: int,
+        model_comm_group_size: int,
         model_comm_group_id: int,
         model_comm_group_rank: int,
         model_comm_num_groups: int,
@@ -135,6 +141,8 @@ class NativeGridDataset(IterableDataset):
         ----------
         global_rank : int
             Global rank
+        model_comm_group_size : int
+            Model communication group size
         model_comm_group_id : int
             Model communication group ID
         model_comm_group_rank : int
@@ -145,10 +153,20 @@ class NativeGridDataset(IterableDataset):
             Reader group rank
         """
         self.global_rank = global_rank
+        self.model_comm_group_size = model_comm_group_size
         self.model_comm_group_id = model_comm_group_id
         self.model_comm_group_rank = model_comm_group_rank
         self.model_comm_num_groups = model_comm_num_groups
         self.reader_group_rank = reader_group_rank
+
+        if self.read_shards:
+            # get the grid shard size and start/end indices
+            grid_shard_size = self.grid_size // self.model_comm_group_size
+            self.grid_start = self.model_comm_group_rank * grid_shard_size
+            if self.model_comm_group_rank == self.model_comm_group_size - 1:
+                self.grid_end = self.grid_size
+            else:
+                self.grid_end = (self.model_comm_group_rank + 1) * grid_shard_size
 
         LOGGER.debug(
             "NativeGridDataset.set_group_info(): global_rank %d, model_comm_group_id %d, "
@@ -272,7 +290,11 @@ class NativeGridDataset(IterableDataset):
             start = i - (self.multi_step - 1) * self.timeincrement
             end = i + (self.rollout + 1) * self.timeincrement
 
-            x = self.data[start : end : self.timeincrement]
+            if self.read_shards:
+                x = self.data[start : end : self.timeincrement, :, :, self.grid_start : self.grid_end]
+            else:
+                x = self.data[start : end : self.timeincrement, :, :, :]
+
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
 
