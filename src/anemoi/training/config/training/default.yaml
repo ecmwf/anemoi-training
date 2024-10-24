@@ -43,21 +43,31 @@ zero_optimizer: False
 training_loss:
   # loss class to initialise, can be anything subclassing torch.nn.Module
   _target_: anemoi.training.losses.mse.WeightedMSELoss
-  # what to include in the loss class initialisation
+  # Any key prefixed with "include_" will be evaluated by the forecaster
+  # And if set to True, the code generated `node_weights` will be provided to the loss init
+  # e.g. with include_node_weights: True, the loss will be initialised with node_weights
   include_node_weights: True
   include_variable_scaling: True
+  # Additonally, any key prefixed with "add_scalar_" will cause a scalar to be added to the loss class.
   # other kwargs
   ignore_nans: False
 
 loss_gradient_scaling: False
 
-# Validation metrics calculation
+# Validation metrics calculation,
+# This may be a list, in which case all metrics will be calculated
+# and logged according to their name
 validation_metrics:
   # loss class to initialise, can be anything subclassing torch.nn.Module
   - _target_: anemoi.training.losses.mse.WeightedMSELoss
     # what to include in the loss class initialisation
+    # Any key prefixed with "include_" will be evaluated by the forecaster
+    # And if set to True, the code generated `node_weights` will be provided to the loss init
+    # e.g. with include_node_weights: True, the loss will be initialised with node_weights
     include_node_weights: True
     include_variable_scaling: False
+    # Additonally, any key prefixed with "add_scalar_" will cause a scalar to be added to the loss
+    # class.
     # other kwargs
     ignore_nans: True
 
