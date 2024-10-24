@@ -10,6 +10,11 @@ Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.1...HEAD)
 
+
+### Added
+- Feat: Anemoi Profiler compatible with mlflow and using Pytorch (Kineto) Profiler for memory report [38](https://github.com/ecmwf/anemoi-training/pull/38/)
+
+
 ## [0.2.1 - Bugfix: resuming mlflow runs](https://github.com/ecmwf/anemoi-training/compare/0.2.0...0.2.1) - 2024-10-24
 
 ### Added
@@ -53,7 +58,6 @@ Keep it human-readable, your future self will thank you!
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
 - Feature: `AnemoiMlflowClient`, an mlflow client with authentication support [#86](https://github.com/ecmwf/anemoi-training/pull/86)
 - Long Rollout Plots
-- Feat: Anemoi Profiler compatible with mlflow and using Pytorch (Kineto) Profiler for memory report
 
 
 ### Fixed
