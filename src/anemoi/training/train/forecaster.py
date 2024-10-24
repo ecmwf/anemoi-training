@@ -147,7 +147,7 @@ class GraphForecaster(pl.LightningModule):
         return self.model(x, self.model_comm_group)
 
     @staticmethod
-    def get_loss_function(
+    def get_loss_function(  # noqa: C901
         config: DictConfig,
         **kwargs: Union[torch.Tensor, tuple[Union[int, tuple[int]], torch.Tensor]],  # noqa: FA100
     ) -> Union[torch.nn.Module, torch.nn.ModuleList]:  # noqa: FA100
@@ -196,23 +196,27 @@ class GraphForecaster(pl.LightningModule):
             if not str(key).startswith(("include_", "add_scalar_")):
                 loss_init_config[key] = loss_config[key]
                 continue
+            if loss_config[key] is False:
+                continue
             # If key starts with `add_scalar_`, remove the `add_scalar_` prefix
             # and check if the key is in kwargs, if it is add it to the scalars_to_add
             # if it is not raise a ValueError
             if key.startswith("add_scalar_"):
                 scalar_key = key.removeprefix("add_scalar_")
                 if scalar_key in kwargs:
-                    scalars_to_add[scalar_key] = loss_config[key]
+                    scalars_to_add[scalar_key] = kwargs[scalar_key]
                     continue
 
             # If key starts with `include_`, remove the `include_` prefix
             # and check if the key is in kwargs, if it is add it to the loss_init_config
             # if it is not raise a ValueError
-            key_suffix = key.removeprefix("include_")
-            if key_suffix in kwargs:
-                loss_init_config[key_suffix] = kwargs[key_suffix]
-                continue
-            error_msg = f"Key {key_suffix!r} not found in kwargs, {kwargs.keys()!s}"
+            if key.startswith("include_"):
+                include_key = key.removeprefix("include_")
+                if include_key in kwargs:
+                    loss_init_config[include_key] = kwargs[include_key]
+                    continue
+
+            error_msg = f"No value for {key!r} could be found in kwargs, {kwargs.keys()!s}"
             raise ValueError(error_msg)
 
         # Instantiate the loss function with the loss_init_config
@@ -224,7 +228,7 @@ class GraphForecaster(pl.LightningModule):
             raise ValueError(error_msg)
 
         for key, scalar in scalars_to_add.items():
-            loss_function.add_scalar(*scalar, name=kwargs[key])
+            loss_function.add_scalar(*scalar, name=key)
 
         return loss_function
 
