@@ -85,7 +85,7 @@ class GraphForecaster(pl.LightningModule):
         self.prediction_strategy = config.training.prediction_strategy
         self.step_functions = {
             "state": self._step_state,
-            "residual": self._step_state,
+            "residual": self._step_residual,
             "tendency": self._step_tendency,
         }
         assert self.prediction_strategy in self.step_functions, f"Invalid prediction mode: {self.prediction_strategy}"
@@ -94,6 +94,13 @@ class GraphForecaster(pl.LightningModule):
         LOGGER.info("Using prediction strategy: %s", self.prediction_strategy)
 
         self.data_indices = data_indices
+        self.sigma_delta = statistics_tendencies["stdev"][self.data_indices.data.output.full][
+            self.data_indices.model.output.prognostic
+        ]
+        self.sigma_state = (
+            1
+            / self.pre_processors_state.processors.state.normalizer._norm_mul[self.data_indices.model.input.prognostic]
+        )
 
         self.save_hyperparameters()
 
@@ -304,6 +311,73 @@ class GraphForecaster(pl.LightningModule):
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
 
+    def _step_residual(
+        self,
+        batch: torch.Tensor,
+        batch_idx: int,
+        validation_mode: bool = False,
+        in_place_proc: bool = True,
+        use_checkpoint: bool = True,
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        """Forward pass of trainer for residual prediction strategy.
+
+        y_pred = model(x_t0)
+        y_target = x_t1 - x_t0
+        loss(norm(y_pred - x_t0), norm(y_target))
+        """
+        del batch_idx, in_place_proc
+        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
+        batch = self.model.pre_processors_state(batch, in_place=not validation_mode)  # normalized in-place
+        metrics = {}
+
+        # Get batch tendencies from non processed batch
+        batch_residual_target = self.compute_target_residual(
+            batch[:, self.multi_step : self.multi_step + self.rollout, ...],
+            batch[:, self.multi_step - 1 : self.multi_step + self.rollout - 1, ...],
+        )
+
+        # state x is not processed)
+        x = batch[:, 0 : self.multi_step, ..., self.data_indices.data.input.full]  # (bs, multi_step, latlon, nvar)
+
+        y_preds = []
+        for rollout_step in range(self.rollout):
+            # normalise inputs
+            # prediction (normalized tendency)
+            y_pred = self(x)
+            y_pred_residual = self.compute_target_residual(y_pred, x)
+
+            y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
+            y_residual = batch_residual_target[:, rollout_step]
+
+            # access to normalizers only here?
+            # Just normalise the tendencies for the normalised states as they enter the loss? ###
+            y_pred_residual = self.norm_delta(y_pred_residual, self.sigma_state, self.sigma_delta)
+            y_residual = self.norm_delta(y_residual, self.sigma_state, self.sigma_delta)
+
+            # calculate loss
+            if use_checkpoint:
+                loss += checkpoint(self.loss, y_pred_residual, y_residual, use_reentrant=False)
+            else:
+                loss += self.loss(y_pred_residual, y_residual)
+
+            # re-construct non-processed predicted state
+
+            # advance input using non-processed x, y_pred and batch
+            x = self.advance_input(x, y_pred, batch, rollout_step)
+
+            if validation_mode:
+                metrics_next, y_preds_next = self.calculate_val_metrics(
+                    y_pred,
+                    y,
+                    rollout_step,
+                    enable_plot=self.enable_plot,
+                )
+                metrics.update(metrics_next)
+                y_preds.extend(y_preds_next)
+        # scale loss
+        loss *= 1.0 / self.rollout
+        return loss, metrics, y_preds
+
     def _step_tendency(
         self,
         batch: torch.Tensor,
@@ -393,6 +467,15 @@ class GraphForecaster(pl.LightningModule):
             data_index=self.data_indices.data.output.diagnostic,
         )
         return tendency
+
+    def compute_target_residual(self, x_t1: torch.Tensor, x_t0: torch.Tensor) -> torch.Tensor:
+        tendency = x_t1[..., self.data_indices.data.output.full] - x_t0[..., self.data_indices.data.output.full]
+        # diagnostic variables are taken from x_t1, normalised as full fields:
+        tendency[..., self.data_indices.model.output.diagnostic] = x_t1[..., self.data_indices.data.output.diagnostic]
+        return tendency
+
+    def norm_delta(self, y_delta: torch.Tensor, sigma_state: torch.Tensor, sigma_delta: torch.Tensor) -> torch.Tensor:
+        return sigma_state * y_delta / sigma_delta
 
     def calculate_val_metrics(
         self,
