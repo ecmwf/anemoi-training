@@ -1,4 +1,5 @@
 prefetch_factor: 2
+pin_memory: True
 
 # ============
 # read_frequency:
