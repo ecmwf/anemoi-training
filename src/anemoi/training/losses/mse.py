@@ -44,6 +44,10 @@ class WeightedMSELoss(nn.Module):
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
+        # register_buffer:
+        #   1. save the tensor to the model
+        #   2. make sure that the tensor is moved to the same device as the model
+        self.register_buffer("variable_node_mask", torch.ones(1), persistent=False)  # not saved in state_dict
         self.register_buffer("weights", node_weights, persistent=True)
         if data_variances is not None:
             self.register_buffer("ivar", data_variances, persistent=True)
@@ -77,6 +81,9 @@ class WeightedMSELoss(nn.Module):
         if hasattr(self, "ivar"):
             out *= self.ivar
 
+        # apply variable node mask (masking input-NaN-positions with 0)
+        out = self.variable_node_mask * out
+
         # Squash by last dimension
         if squash:
             out = self.avg_function(out, dim=-1)
@@ -90,3 +97,7 @@ class WeightedMSELoss(nn.Module):
         # keep last dimension (variables) when summing weights
         out /= self.sum_function(self.weights[..., None].expand_as(out), axis=(0, 1, 2))
         return self.sum_function(out, axis=(0, 1, 2))
+
+    def update_variable_node_mask(self, variable_node_mask: torch.tensor) -> None:
+        """Update the variable node weights."""
+        self.variable_node_mask = variable_node_mask
