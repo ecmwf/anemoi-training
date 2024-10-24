@@ -189,6 +189,10 @@ class ScaleTensor:
     ) -> None:
         """Add new scalar to be applied along `dimension`.
 
+        Dimension can be a single int even for a multi-dimensional scalar,
+        in this case the dimensions are assigned as a range from the given int.
+        Negative indexes are also valid, and will be resolved against the tensor's ndim.
+
         Parameters
         ----------
         dimension : int | tuple[int]
