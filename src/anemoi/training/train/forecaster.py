@@ -101,20 +101,22 @@ class GraphForecaster(pl.LightningModule):
         self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
 
-        # Options for stretched grid loss logging
-        self.mask_name = config.graph.nodes.hidden.node_builder.mask_attr_name
-        self.mask = graph_data[config.graph.data][self.mask_name].squeeze().bool()
+        
 
         # Check if the model is a stretched grid
-        if config.graph.nodes.hidden.node_builder.lam_resolution:
+        # if config.graph.nodes.hidden.node_builder.lam_resolution:
+        if "lam_resolution" in getattr(config.graph.nodes.hidden, "node_builder", []):
             self.stretched_grid = True
+            # Options for stretched grid loss logging
+            self.mask_name = config.graph.nodes.hidden.node_builder.mask_attr_name
+            self.mask = graph_data[config.graph.data][self.mask_name].squeeze().bool()
         else:
             self.stretched_grid = False
-
+        # print("STRETCHED GRID", self.stretched_grid)
+        # print("CONFIG", config.diagnostics.sg_metrics)
         # Define stretched grid metrics
-        
         sg_config= config.diagnostics.sg_metrics
-        if sg_config is not None:
+        if sg_config is not None and self.stretched_grid == True:
             self.sg_metrics = torch.nn.ModuleDict()
             for item in sg_config.values():
                 self.sg_metrics[item.name] = WeightedMSELossStretchedGrid(node_weights = self.loss_weights, mask = self.mask,
