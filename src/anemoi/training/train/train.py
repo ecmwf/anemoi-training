@@ -22,7 +22,7 @@ import pytorch_lightning as pl
 import torch
 from anemoi.utils.config import DotDict
 from anemoi.utils.provenance import gather_provenance_info
-from hydra.core.config_store import ConfigStore
+from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
@@ -37,14 +37,6 @@ from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.checkpoint import transfer_learning_loading
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.schemas.base_config import BaseConfig
-from anemoi.training.utils.schemas.data import DataConfig
-from anemoi.training.utils.schemas.diagnostics import DiagnosticsConfig
-from anemoi.training.utils.schemas.hardware import HardwareConfig
-from anemoi.training.utils.schemas.models.base_model import BaseModelConfig
-from anemoi.training.utils.schemas.models.gnn import GNNConfig
-from anemoi.training.utils.schemas.models.graph_transformer import GraphTransformerConfig
-from anemoi.training.utils.schemas.models.transformer import TransformerConfig
-from anemoi.training.utils.schemas.training import TrainingConfig
 from anemoi.training.utils.seeding import get_base_seed
 
 if TYPE_CHECKING:
@@ -52,22 +44,11 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
-cs = ConfigStore.instance()
-cs.store(name="base_config", node=BaseConfig)
-cs.store(group="training", name="training", node=TrainingConfig)
-cs.store(group="hardware", name="hardware", node=HardwareConfig)
-cs.store(group="data", name="data", node=DataConfig)
-cs.store(group="model", name="gnn", node=GNNConfig)
-cs.store(group="model", name="base_model", node=BaseModelConfig)
-cs.store(group="model", name="transformer", node=TransformerConfig)
-cs.store(group="model", name="graphtransformer", node=GraphTransformerConfig)
-cs.store(group="diagnostics", name="diagnostics", node=DiagnosticsConfig)
-
 
 class AnemoiTrainer:
     """Utility class for training the model."""
 
-    def __init__(self, config: BaseConfig) -> None:
+    def __init__(self, config: DictConfig) -> None:
         """Initialize the Anemoi trainer.
 
         Parameters
@@ -81,7 +62,7 @@ class AnemoiTrainer:
         torch.set_float32_matmul_precision("high")
         # Resolve the config to avoid shenanigans with lazy loading
         OmegaConf.resolve(config)
-        self.config = config
+        self.config = BaseConfig(**config)
 
         self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
         self.load_weights_only = self.config.training.load_weights_only
@@ -437,7 +418,7 @@ class AnemoiTrainer:
 
 
 @hydra.main(version_base=None, config_path="../config", config_name="debug")
-def main(config: BaseConfig) -> None:
+def main(config: DictConfig) -> None:
     AnemoiTrainer(config).train()
 
 

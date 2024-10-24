@@ -8,22 +8,18 @@
 #
 
 
-from dataclasses import dataclass
 from typing import Any
 
-from .data import DataConfig
-from .diagnostics import DiagnosticsConfig
+from pydantic import BaseModel
+
 from .hardware import HardwareConfig
-from .models.base_model import BaseModelConfig
-from .training import TrainingConfig
 
 
-@dataclass
-class BaseConfig:
-    data: DataConfig
+class BaseConfig(BaseModel):
+    data: Any  # DataConfig
     dataloader: Any
-    diagnostics: DiagnosticsConfig
+    diagnostics: Any  # DiagnosticsConfig
     hardware: HardwareConfig
-    graph: Any
-    model: BaseModelConfig
-    training: TrainingConfig
+    graph: Any  # BaseGraphConfig
+    model: Any  # BaseModelConfig
+    training: Any  # TrainingConfig

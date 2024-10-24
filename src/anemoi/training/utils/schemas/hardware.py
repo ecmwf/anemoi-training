@@ -9,34 +9,30 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 
-@dataclass
-class Checkpoint:
+class Checkpoint(BaseModel):
     every_n_epochs: str
     every_n_train_steps: str
     every_n_minutes: str
 
 
-@dataclass
-class FilesConfig:
+class FilesConfig(BaseModel):
     dataset: str
     graph: str
-    checkpoint: Checkpoint
+    checkpoint: dict[str, str]
     warm_start: str | None
 
 
-@dataclass
-class Logs:
+class Logs(BaseModel):
     base: str
     wandb: str
     mlflow: str
     tensorboard: str
 
 
-@dataclass
-class PathsConfig:
+class PathsConfig(BaseModel):
     data: str
     grids: str
     output: str
@@ -47,8 +43,7 @@ class PathsConfig:
     graph: str
 
 
-@dataclass
-class HardwareConfig:
+class HardwareConfig(BaseModel):
     accelerator: str
     num_gpus_per_node: int
     num_nodes: int
