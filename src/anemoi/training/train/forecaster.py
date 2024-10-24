@@ -97,12 +97,12 @@ class GraphForecaster(pl.LightningModule):
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
         self.multi_step = config.training.multistep_input
-        self.lr = (
-            config.hardware.num_nodes
-            * config.hardware.num_gpus_per_node
-            * config.training.lr.rate
-            / config.hardware.num_gpus_per_model
-        )
+        print('config.hardware.num_nodes', config.hardware.num_nodes, type(config.hardware.num_nodes))
+        print('config.hardware.num_gpus_per_node', config.hardware.num_gpus_per_node, type(config.hardware.num_gpus_per_node))
+        print('config.training.lr.rate', config.training.lr.rate, type(config.training.lr.rate))
+        print('config.hardware.num_gpus_per_model', config.hardware.num_gpus_per_model, type(config.hardware.num_gpus_per_model))
+        self.lr = config.hardware.num_nodes * config.hardware.num_gpus_per_node * config.training.lr.rate / config.hardware.num_gpus_per_model
+        
         self.lr_iterations = config.training.lr.iterations
         self.lr_min = config.training.lr.min
         self.rollout = config.training.rollout.start
@@ -323,11 +323,10 @@ class GraphForecaster(pl.LightningModule):
         self.rollout = min(self.rollout, self.rollout_max)
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
-        print('I am doing validation!!!')
+        
         with torch.no_grad():
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
-        print('Done step..')
-        print('Logging..')
+
         self.log(
             "val_wmse",
             val_loss,
@@ -338,8 +337,8 @@ class GraphForecaster(pl.LightningModule):
             batch_size=batch.shape[0],
             sync_dist=True,
         )
+
         for i, (mname, mvalue) in enumerate(metrics.items()):
-            print(i)
             self.log(
                 "val_" + mname,
                 mvalue,
@@ -350,7 +349,7 @@ class GraphForecaster(pl.LightningModule):
                 batch_size=batch.shape[0],
                 sync_dist=True,
             )
-        print('Done')
+
         return val_loss, y_preds
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:

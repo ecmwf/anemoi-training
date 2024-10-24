@@ -287,11 +287,12 @@ class AnemoiTrainer:
         LOGGER.debug("Total number of auxiliary variables: %d", len(self.config.data.forcing))
 
         # Log learning rate multiplier when running single-node, multi-GPU and/or multi-node
-        total_number_of_model_instances = (
+        total_number_of_model_instances = int(
             self.config.hardware.num_nodes
             * self.config.hardware.num_gpus_per_node
             / self.config.hardware.num_gpus_per_model
         )
+
         LOGGER.debug(
             "Total GPU count / model group size: %d - NB: the learning rate will be scaled by this factor!",
             total_number_of_model_instances,
