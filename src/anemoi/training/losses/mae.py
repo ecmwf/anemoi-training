@@ -14,74 +14,15 @@ import logging
 
 import torch
 
-from anemoi.training.losses.weightedloss import BaseWeightedLoss
+from anemoi.training.losses.weightedloss import FunctionalWeightedLoss
 
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedMAELoss(BaseWeightedLoss):
+class WeightedMAELoss(FunctionalWeightedLoss):
     """Node-weighted MAE loss."""
 
     name = "wmae"
 
-    def __init__(
-        self,
-        node_weights: torch.Tensor,
-        variable_scaling: torch.Tensor | None = None,
-        ignore_nans: bool = False,
-        **kwargs,
-    ) -> None:
-        """Node- and feature weighted MAE Loss.
-
-        Also known as the Weighted L1 loss.
-
-        Parameters
-        ----------
-        node_weights : torch.Tensor of shape (N, )
-            Weight of each node in the loss function
-        variable_scaling : Optional[torch.Tensor], optional
-            precomputed, per-variable weights, by default None
-        ignore_nans : bool, optional
-            Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
-
-        """
-        super().__init__(
-            node_weights=node_weights,
-            variable_scaling=variable_scaling,
-            ignore_nans=ignore_nans,
-            **kwargs,
-        )
-
-    def forward(
-        self,
-        pred: torch.Tensor,
-        target: torch.Tensor,
-        squash: bool = True,
-        feature_indices: torch.Tensor | None = None,
-        feature_scale: bool = True,
-    ) -> torch.Tensor:
-        """Calculates the lat-weighted MAE loss.
-
-        Parameters
-        ----------
-        pred : torch.Tensor
-            Prediction tensor, shape (bs, ensemble, lat*lon, n_outputs)
-        target : torch.Tensor
-            Target tensor, shape (bs, ensemble, lat*lon, n_outputs)
-        squash : bool, optional
-            Average last dimension, by default True
-        feature_indices:
-            feature indices (relative to full model output) of the features passed in pred and target
-        feature_scale:
-            If True, scale the loss by the feature_weights
-
-        Returns
-        -------
-        torch.Tensor
-            Weighted MAE loss
-        """
-        out = torch.abs(pred - target)
-
-        if feature_scale:
-            out = self.scale(out, feature_indices)
-        return self.scale_by_node_weights(out, squash)
+    def calculate_difference(self, pred, target):
+        return torch.abs(pred - target)

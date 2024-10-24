@@ -43,7 +43,6 @@ class BaseWeightedLoss(nn.Module, ABC):
 
         Registers:
         - self.node_weights: torch.Tensor of shape (N, )
-        - self.variable_scaling: torch.Tensor if given
 
         Parameters
         ----------
@@ -96,12 +95,15 @@ class BaseWeightedLoss(nn.Module, ABC):
 
         scalar = self.scalar.get_scalar(x.ndim).to(x)
 
-        if feature_indices is None or "variable_scaling" not in self.scalar:
+        if feature_indices is None:
             return x * scalar
         return x * scalar[..., feature_indices]
 
     def scale_by_node_weights(self, x: torch.Tensor, squash: bool = True) -> torch.Tensor:
         """Scale a tensor by the node_weights.
+
+        Equivalent to reducing and averaging accordingly across all
+        dimensions of the tensor.
 
         Parameters
         ----------
@@ -169,3 +171,53 @@ class BaseWeightedLoss(nn.Module, ABC):
     def name(self) -> str:
         """Used for logging identification purposes."""
         return self.__class__.__name__.lower()
+
+
+class FunctionalWeightedLoss(BaseWeightedLoss):
+    """WeightedLoss which a user can subclass and provide `calculate_difference`."""
+
+    def __init__(
+        self,
+        node_weights: torch.Tensor,
+        variable_scaling: torch.Tensor | None = None,
+        ignore_nans: bool = False,
+    ) -> None:
+        super().__init__(node_weights, variable_scaling, ignore_nans)
+
+    @abstractmethod
+    def calculate_difference(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Calculate Difference between prediction and target"""
+
+    def forward(
+        self,
+        pred: torch.Tensor,
+        target: torch.Tensor,
+        squash: bool = True,
+        feature_indices: torch.Tensor | None = None,
+        feature_scale: bool = True,
+    ) -> torch.Tensor:
+        """Calculates the lat-weighted scaled loss.
+
+        Parameters
+        ----------
+        pred : torch.Tensor
+            Prediction tensor, shape (bs, ensemble, lat*lon, n_outputs)
+        target : torch.Tensor
+            Target tensor, shape (bs, ensemble, lat*lon, n_outputs)
+        squash : bool, optional
+            Average last dimension, by default True
+        feature_indices:
+            feature indices (relative to full model output) of the features passed in pred and target
+        feature_scale:
+            If True, scale the loss by the feature_weights
+
+        Returns
+        -------
+        torch.Tensor
+            Weighted loss
+        """
+        out = self.calculate_difference(pred, target)
+
+        if feature_scale:
+            out = self.scale(out, feature_indices)
+        return self.scale_by_node_weights(out, squash)
