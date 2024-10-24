@@ -10,48 +10,32 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import field
+from pydantic import BaseModel
+from pydantic import Field
 
 
-@dataclass
-class NormalizerConfig:
+class NormalizerConfig(BaseModel):
     default: str
     min_max: str | None = None
-    max: list[str] = field(default_factory=list)
-    none: list[str] = field(default_factory=list)
+    max: list[str] = Field(default_factory=list)
+    none: list[str] = Field(default_factory=list)
 
 
-@dataclass
-class Processor:
+class ImputerConfig(BaseModel):
+    default: str
+
+
+class RemapperConfig(BaseModel):
+    default: str
+
+
+class Processor(BaseModel):
     _target_: str
     _convert_: str
-    config: str
+    config: NormalizerConfig | ImputerConfig | RemapperConfig
 
 
-@dataclass
-class Normalizer(Processor):
-    _target_: str
-    _convert_: str
-    config: NormalizerConfig
-
-
-@dataclass
-class Imputer(Processor):
-    _target_: str
-    _convert_: str
-    config: dict[str, str]
-
-
-@dataclass
-class Remapper(Processor):
-    _target_: str
-    _convert_: str
-    config: dict[str, str]
-
-
-@dataclass
-class DataConfig:
+class DataConfig(BaseModel):
     """A class used to represent the overall configuration of the dataset.
 
     Attributes
@@ -68,8 +52,6 @@ class DataConfig:
         The list of features used as forcing to generate the forecast state.
     diagnostic : List[str]
         The list of features that are only part of the forecast state.
-    remapped : Optional[str]
-        The remapped features, if any.
     processors : Dict[str, Processor]
         The Processors configuration.
     num_features : Optional[int]
@@ -80,8 +62,7 @@ class DataConfig:
     resolution: str
     frequency: str
     timestep: str
-    processors: dict
-    forcing: list[str] = field(default_factory=list)
-    diagnostic: list[str] = field(default_factory=list)
-    remapped: str | None = None
+    processors: dict[str, Processor]
+    forcing: list[str] = Field(default_factory=list)
+    diagnostic: list[str] = Field(default_factory=list)
     num_features: int | None = None

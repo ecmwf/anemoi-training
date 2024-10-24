@@ -12,11 +12,12 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from .data import DataConfig
 from .hardware import HardwareConfig
 
 
 class BaseConfig(BaseModel):
-    data: Any  # DataConfig
+    data: DataConfig
     dataloader: Any
     diagnostics: Any  # DiagnosticsConfig
     hardware: HardwareConfig
