@@ -77,11 +77,11 @@ def _get_checkpoint_callback(config: DictConfig) -> list[AnemoiCheckpoint]:
     ckpt_frequency_save_dict = {}
 
     for key, frequency_dict in config.diagnostics.checkpoint.items():
-        frequency = frequency_dict["save_frequency"]
-        n_saved = frequency_dict["num_models_saved"]
-        if key == "every_n_minutes" and frequency_dict["save_frequency"] is not None:
+        frequency = frequency_dict.save_frequency
+        n_saved = frequency_dict.num_models_saved
+        if key == "every_n_minutes" and frequency_dict.save_frequency is not None:
             target = "train_time_interval"
-            frequency = timedelta(minutes=frequency_dict["save_frequency"])
+            frequency = timedelta(minutes=frequency_dict.save_frequency)
         else:
             target = key
         ckpt_frequency_save_dict[target] = (

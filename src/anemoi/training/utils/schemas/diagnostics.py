@@ -9,19 +9,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import field
+from pydantic import BaseModel
+from pydantic import Field
 
 
-@dataclass
-class Eval:
+class Eval(BaseModel):
     enabled: bool
     rollout: int
     frequency: int
 
 
-@dataclass
-class Plot:
+class Plot(BaseModel):
     enabled: bool
     asynchronous: bool
     frequency: int
@@ -37,30 +35,26 @@ class Plot:
     learned_features: bool
 
 
-@dataclass
-class Debug:
+class Debug(BaseModel):
     anomaly_detection: bool
 
 
-@dataclass
-class Checkpoint:
+class Checkpoint(BaseModel):
     save_frequency: int | None
     num_models_saved: int
 
 
-@dataclass
-class Wandb:
+class Wandb(BaseModel):
     enabled: bool
     offline: bool
     log_model: bool
     project: str
-    entity: str | None
     gradients: bool
     parameters: bool
+    entity: str | None = None
 
 
-@dataclass
-class Mlflow:
+class Mlflow(BaseModel):
     enabled: bool
     offline: bool
     authentication: bool
@@ -74,16 +68,18 @@ class Mlflow:
     on_resume_create_child: bool
 
 
-@dataclass
-class Logging:
+class Tensorboard(BaseModel):
+    enabled: bool
+
+
+class Logging(BaseModel):
     wandb: Wandb
-    tensorboard: dict[str, bool]
+    tensorboard: Tensorboard
     mlflow: Mlflow
     interval: int
 
 
-@dataclass
-class DiagnosticsConfig:
+class DiagnosticsConfig(BaseModel):
     eval: Eval
     plot: Plot
     debug: Debug
@@ -91,4 +87,4 @@ class DiagnosticsConfig:
     log: Logging
     enable_progress_bar: bool
     print_memory_summary: bool
-    checkpoint: dict[str, Checkpoint] = field(default_factory=dict)
+    checkpoint: dict[str, Checkpoint] = Field(default_factory=dict)

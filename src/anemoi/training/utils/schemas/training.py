@@ -9,40 +9,35 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import field
+from pydantic import BaseModel
+from pydantic import Field
 
 
-@dataclass
-class GradientClip:
+class GradientClip(BaseModel):
     """Gradient clipping configuration."""
 
     val: float = 32.0
     algorithm: str = "value"
 
 
-@dataclass
-class SWA:
+class SWA(BaseModel):
     enabled: bool = False
     lr: float = 1.0e-4
 
 
-@dataclass
-class Rollout:
+class Rollout(BaseModel):
     start: int = 1
     epoch_increment: int = 0
     max: int = 1
 
 
-@dataclass
-class LR:
+class LR(BaseModel):
     rate: float = 0.625e-4
     iterations: int = 300000
     min: float = 3e-7
 
 
-@dataclass
-class PressureLevel:
+class PressureLevel(BaseModel):
     q: float | None = 0.6
     t: float | None = 6
     u: float | None = 0.8
@@ -51,8 +46,7 @@ class PressureLevel:
     z: float | None = 12
 
 
-@dataclass
-class Surface:
+class Surface(BaseModel):
     sp: float | None = 10
     u10: float | None = 0.1
     v10: float | None = 0.1
@@ -61,22 +55,19 @@ class Surface:
     cp: float | None = 0.0025
 
 
-@dataclass
-class LossScaling:
+class LossScaling(BaseModel):
     default: int = 1
-    pl: PressureLevel = field(default_factory=PressureLevel)
-    sfc: Surface = field(default_factory=Surface)
+    pl: PressureLevel = Field(default_factory=PressureLevel)
+    sfc: Surface = Field(default_factory=Surface)
 
 
-@dataclass
-class PressureLevelScaler:
+class PressureLevelScaler(BaseModel):
     _target_: str = "anemoi.training.data.scaling.ReluPressureLevelScaler"
     minimum: float = 0.2
     slope: float = 0.001
 
 
-@dataclass
-class TrainingConfig:
+class TrainingConfig(BaseModel):
     """Training configuration."""
 
     run_id: str | None = None
@@ -86,13 +77,13 @@ class TrainingConfig:
     precision: str = "16-mixed"
     multistep_input: int = 4
     accum_grad_batches: int = 1
-    gradient_clip: GradientClip = field(default_factory=GradientClip)
-    swa: SWA = field(default_factory=SWA)
+    gradient_clip: GradientClip = Field(default_factory=GradientClip)
+    swa: SWA = Field(default_factory=SWA)
     zero_optimizer: bool = False
     loss_gradient_scaling: bool = False
-    rollout: Rollout = field(default_factory=Rollout)
+    rollout: Rollout = Field(default_factory=Rollout)
     max_epochs: int = 200
-    lr: LR = field(default_factory=LR)
-    loss_scaling: LossScaling = field(default_factory=LossScaling)
-    metrics: list[str] = field(default_factory=list)
-    pressure_level_scaler: PressureLevelScaler = field(default_factory=PressureLevelScaler)
+    lr: LR = Field(default_factory=LR)
+    loss_scaling: LossScaling = Field(default_factory=LossScaling)
+    metrics: list[str] = Field(default_factory=list)
+    pressure_level_scaler: PressureLevelScaler = Field(default_factory=PressureLevelScaler)

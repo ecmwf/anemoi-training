@@ -13,14 +13,16 @@ from typing import Any
 from pydantic import BaseModel
 
 from .data import DataConfig
+from .diagnostics import DiagnosticsConfig
 from .hardware import HardwareConfig
+from .training import TrainingConfig
 
 
 class BaseConfig(BaseModel):
     data: DataConfig
     dataloader: Any
-    diagnostics: Any  # DiagnosticsConfig
+    diagnostics: DiagnosticsConfig
     hardware: HardwareConfig
     graph: Any  # BaseGraphConfig
-    model: Any  # BaseModelConfig
-    training: Any  # TrainingConfig
+    model: Any
+    training: TrainingConfig

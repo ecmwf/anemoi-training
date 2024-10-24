@@ -66,3 +66,4 @@ class DataConfig(BaseModel):
     forcing: list[str] = Field(default_factory=list)
     diagnostic: list[str] = Field(default_factory=list)
     num_features: int | None = None
+    remapped: dict | None = None
