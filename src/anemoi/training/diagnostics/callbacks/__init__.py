@@ -14,6 +14,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 from typing import Callable
 from typing import Iterable
+from typing import Optional
 
 from hydra.utils import instantiate
 from omegaconf import DictConfig
@@ -30,8 +31,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def nestedget(conf: DictConfig, key, default):
-    """
-    Get a nested key from a DictConfig object
+    """Get a nested key from a DictConfig object
 
     E.g.
     >>> nestedget(config, "diagnostics.log.wandb.enabled", False)

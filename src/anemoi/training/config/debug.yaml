@@ -1,7 +1,7 @@
 defaults:
 - data: zarr
 - dataloader: native_grid
-- diagnostics: eval_rollout
+- diagnostics: evaluation
 - hardware: example
 - graph: multi_scale
 - model: gnn
@@ -16,12 +16,6 @@ defaults:
 # hardware:
 #   num_gpus_per_node: 1
 
-diagnostics:
-  plot:
-    enabled: False
-hardware:
-  files:
-    graph: ???
 model:
   num_channels: 128
 dataloader:
