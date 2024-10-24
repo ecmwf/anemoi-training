@@ -36,11 +36,9 @@ class NativeGridDataset(IterableDataset):
         rollout: int = 1,
         multistep: int = 1,
         timeincrement: int = 1,
-        model_comm_group_rank: int = 0,
-        model_comm_group_id: int = 0,
-        model_comm_num_groups: int = 1,
         shuffle: bool = True,
         label: str = "generic",
+        read_shards: bool = False,
     ) -> None:
         """Initialize (part of) the dataset state.
 
@@ -54,12 +52,6 @@ class NativeGridDataset(IterableDataset):
             time increment between samples, by default 1
         multistep : int, optional
             collate (t-1, ... t - multistep) into the input state vector, by default 1
-        model_comm_group_rank : int, optional
-            process rank in the torch.distributed group (important when running on multiple GPUs), by default 0
-        model_comm_group_id: int, optional
-            device group ID, default 0
-        model_comm_num_groups : int, optional
-            total number of device groups, by default 1
         shuffle : bool, optional
             Shuffle batches, by default True
         label : str, optional
@@ -77,11 +69,16 @@ class NativeGridDataset(IterableDataset):
         self.n_samples_per_epoch_total: int = 0
         self.n_samples_per_epoch_per_worker: int = 0
 
-        # DDP-relevant info
-        self.model_comm_group_rank = model_comm_group_rank
-        self.model_comm_num_groups = model_comm_num_groups
-        self.model_comm_group_id = model_comm_group_id
-        self.global_rank = int(os.environ.get("SLURM_PROCID", "0"))
+        # lazy init model and reader group info, will be set by the DDPGroupStrategy:
+        self.model_comm_group_rank = 0
+        self.model_comm_num_groups = 1
+        self.model_comm_group_id = 0
+        self.model_comm_group_size = 1
+        self.global_rank = 0
+
+        self.read_shards = read_shards
+
+        self.reader_group_rank = 0
 
         # additional state vars (lazy init)
         self.n_samples_per_worker = 0
@@ -93,6 +90,7 @@ class NativeGridDataset(IterableDataset):
         assert self.multi_step > 0, "Multistep value must be greater than zero."
         self.ensemble_dim: int = 2
         self.ensemble_size = self.data.shape[self.ensemble_dim]
+        self.grid_size = self.data.shape[-1]
 
     @cached_property
     def statistics(self) -> dict:
@@ -127,6 +125,58 @@ class NativeGridDataset(IterableDataset):
         (if time_increment is 1).
         """
         return get_usable_indices(self.data.missing, len(self.data), self.rollout, self.multi_step, self.timeincrement)
+
+    def set_comm_group_info(
+        self,
+        global_rank: int,
+        model_comm_group_size: int,
+        model_comm_group_id: int,
+        model_comm_group_rank: int,
+        model_comm_num_groups: int,
+        reader_group_rank: int,
+    ) -> None:
+        """Set model and reader communication group information (called by DDPGroupStrategy).
+
+        Parameters
+        ----------
+        global_rank : int
+            Global rank
+        model_comm_group_size : int
+            Model communication group size
+        model_comm_group_id : int
+            Model communication group ID
+        model_comm_group_rank : int
+            Model communication group rank
+        model_comm_num_groups : int
+            Number of model communication groups
+        reader_group_rank : int
+            Reader group rank
+        """
+        self.global_rank = global_rank
+        self.model_comm_group_size = model_comm_group_size
+        self.model_comm_group_id = model_comm_group_id
+        self.model_comm_group_rank = model_comm_group_rank
+        self.model_comm_num_groups = model_comm_num_groups
+        self.reader_group_rank = reader_group_rank
+
+        if self.read_shards:
+            # get the grid shard size and start/end indices
+            grid_shard_size = self.grid_size // self.model_comm_group_size
+            self.grid_start = self.model_comm_group_rank * grid_shard_size
+            if self.model_comm_group_rank == self.model_comm_group_size - 1:
+                self.grid_end = self.grid_size
+            else:
+                self.grid_end = (self.model_comm_group_rank + 1) * grid_shard_size
+
+        LOGGER.debug(
+            "NativeGridDataset.set_group_info(): global_rank %d, model_comm_group_id %d, "
+            "model_comm_group_rank %d, model_comm_num_groups %d, reader_group_rank %d",
+            global_rank,
+            model_comm_group_id,
+            model_comm_group_rank,
+            model_comm_num_groups,
+            reader_group_rank,
+        )
 
     def per_worker_init(self, n_workers: int, worker_id: int) -> None:
         """Called by worker_init_func on each copy of dataset.
@@ -206,6 +256,13 @@ class NativeGridDataset(IterableDataset):
         Currently it receives data with an ensemble dimension, which is discarded for
         now. (Until the code is "ensemble native".)
         """
+        if self.reader_group_rank != 0:
+            # yield dummy data only with shape information for non-root ranks (shape used for broadcast)
+            shape = (self.rollout + self.multi_step, self.data.shape[2], self.data.shape[3], self.data.shape[1])
+            for _ in self.chunk_index_range:
+                yield torch.tensor(shape, dtype=torch.long)
+            return
+
         if self.shuffle:
             shuffled_chunk_indices = self.rng.choice(
                 self.chunk_index_range,
@@ -233,7 +290,11 @@ class NativeGridDataset(IterableDataset):
             start = i - (self.multi_step - 1) * self.timeincrement
             end = i + (self.rollout + 1) * self.timeincrement
 
-            x = self.data[start : end : self.timeincrement]
+            if self.read_shards:
+                x = self.data[start : end : self.timeincrement, :, :, self.grid_start : self.grid_end]
+            else:
+                x = self.data[start : end : self.timeincrement, :, :, :]
+
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
 

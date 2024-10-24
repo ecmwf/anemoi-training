@@ -9,8 +9,6 @@
 
 
 import logging
-import math
-import os
 from collections import defaultdict
 from collections.abc import Mapping
 
@@ -119,6 +117,7 @@ class GraphForecaster(pl.LightningModule):
         self.use_zero_optimizer = config.training.zero_optimizer
 
         self.model_comm_group = None
+        self.reader_groups = None
 
         LOGGER.debug("Rollout window length: %d", self.rollout)
         LOGGER.debug("Rollout increase every : %d epochs", self.rollout_epoch_increment)
@@ -127,11 +126,16 @@ class GraphForecaster(pl.LightningModule):
 
         self.enable_plot = config.diagnostics.plot.enabled
 
-        self.model_comm_group_id = int(os.environ.get("SLURM_PROCID", "0")) // config.hardware.num_gpus_per_model
-        self.model_comm_group_rank = int(os.environ.get("SLURM_PROCID", "0")) % config.hardware.num_gpus_per_model
-        self.model_comm_num_groups = math.ceil(
-            config.hardware.num_gpus_per_node * config.hardware.num_nodes / config.hardware.num_gpus_per_model,
-        )
+        # lazy init model and reader group info, will be set by the DDPGroupStrategy:
+        self.model_comm_group_id = 0
+        self.model_comm_group_rank = 0
+        self.model_comm_num_groups = 1
+
+        self.reader_group_id = 0
+        self.reader_group_rank = 0
+        self.reader_group_root = 0
+
+        self.read_shards = config.dataloader.read_shards
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
@@ -192,9 +196,37 @@ class GraphForecaster(pl.LightningModule):
                 metric_ranges_validation[key] = [idx]
         return metric_ranges, metric_ranges_validation, loss_scaling
 
-    def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:
-        LOGGER.debug("set_model_comm_group: %s", model_comm_group)
+    def set_model_comm_group(
+        self,
+        model_comm_group: ProcessGroup,
+        model_comm_group_id: int,
+        model_comm_group_rank: int,
+        model_comm_num_groups: int,
+        model_comm_group_size: int,
+    ) -> None:
         self.model_comm_group = model_comm_group
+        self.model_comm_group_id = model_comm_group_id
+        self.model_comm_group_rank = model_comm_group_rank
+        self.model_comm_num_groups = model_comm_num_groups
+        self.model_comm_group_size = model_comm_group_size
+
+    def set_reader_groups(
+        self,
+        reader_groups: list[ProcessGroup],
+        reader_group_id: int,
+        reader_group_rank: int,
+        reader_group_size: int,
+        reader_group_root: int,
+    ) -> None:
+        self.reader_groups = reader_groups
+        self.reader_group_id = reader_group_id
+        self.reader_group_rank = reader_group_rank
+        self.reader_group_size = reader_group_size
+        self.reader_group_root = reader_group_root
+
+        assert not (
+            self.reader_group_size > 1 and self.read_shards
+        ), "Reading shards is not supported with reader group size > 1"
 
     def advance_input(
         self,
@@ -230,9 +262,18 @@ class GraphForecaster(pl.LightningModule):
         validation_mode: bool = False,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         del batch_idx
-        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
+
+        if self.reader_groups is not None and self.reader_group_size > 1:
+            batch = self.broadcast_batch(batch)
+
+        # all gather grid shards from model_comm_group
+        if self.model_comm_group is not None and self.read_shards:
+            batch = self.allgather_batch(batch)
+
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch = self.model.pre_processors(batch, in_place=not validation_mode)
+
+        loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}
 
         # start rollout of preprocessed batch
@@ -267,6 +308,41 @@ class GraphForecaster(pl.LightningModule):
         # scale loss
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
+
+    def broadcast_batch(self, batch: torch.Tensor) -> torch.Tensor:
+        if self.reader_group_rank != 0:
+            # init batch tensor with correct shape on non-root ranks
+            shape = (batch.shape[0], *tuple(batch[0].tolist()))
+            batch = torch.empty(shape, device=self.device)
+
+        torch.distributed.broadcast(
+            batch,
+            src=self.reader_group_root,
+            group=self.reader_groups[self.reader_group_id],
+        )
+
+        return batch
+
+    def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
+        # get shard shapes
+        grid_size = self.model.metadata["dataset"]["shape"][-1]
+        shard_shape = list(batch.shape)
+        # handle cases of last grid shard
+        shard_shape[-2] = grid_size // self.model_comm_group_size
+        last_grid_dim = grid_size - (shard_shape[-2] * (self.model_comm_group_size - 1))
+
+        tensor_list = [
+            torch.empty(tuple(shard_shape), device=self.device) for _ in range(self.model_comm_group_size - 1)
+        ]
+        tensor_list.append(torch.empty((*tuple(shard_shape[:-2]), last_grid_dim, shard_shape[-1]), device=self.device))
+
+        torch.distributed.all_gather(
+            tensor_list,
+            batch,
+            group=self.model_comm_group,
+        )
+
+        return torch.cat(tensor_list, dim=-2)
 
     def calculate_val_metrics(
         self,
