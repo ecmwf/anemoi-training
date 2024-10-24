@@ -62,6 +62,7 @@ Keep it human-readable, your future self will thank you!
 - Show correct subcommand in MLFlow - Addresses [#39](https://github.com/ecmwf/anemoi-training/issues/39) in [#61](https://github.com/ecmwf/anemoi-training/pull/61)
 - Fix interactive multi-GPU training [#82](https://github.com/ecmwf/anemoi-training/pull/82)
 - Allow 500 characters in mlflow logging [#88](https://github.com/ecmwf/anemoi-training/pull/88)
+- Expand iterables in logging [#90](https://github.com/ecmwf/anemoi-training/pull/90)
 
 ### Changed
 
