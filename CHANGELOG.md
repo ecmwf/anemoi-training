@@ -38,6 +38,7 @@ Keep it human-readable, your future self will thank you!
 - Add anemoi-transform link to documentation
 - Codeowners file (#56)
 - Changelog merge strategy (#56)
+- Sub-hour datasets [#63](https://github.com/ecmwf/anemoi-training/pull/63)
 
 #### Miscellaneous
 
