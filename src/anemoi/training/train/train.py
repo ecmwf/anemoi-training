@@ -1,11 +1,12 @@
-# (C) Copyright 2024 ECMWF.
+# (C) Copyright 2024 Anemoi contributors.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-#
+
 
 from __future__ import annotations
 
@@ -202,8 +203,12 @@ class AnemoiTrainer:
         if Path(checkpoint).exists():
             LOGGER.info("Resuming training from last checkpoint: %s", checkpoint)
             return checkpoint
-        msg = "Could not find last checkpoint: %s", checkpoint
-        raise RuntimeError(msg)
+
+        if rank_zero_only.rank == 0:
+            msg = "Could not find last checkpoint: %s", checkpoint
+            raise RuntimeError(msg)
+
+        return None
 
     @cached_property
     def callbacks(self) -> list[pl.callbacks.Callback]:
