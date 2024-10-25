@@ -332,9 +332,9 @@ class LongRolloutPlots(BasePlotCallback):
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
 
-        assert batch.shape[1] >= self.rollout + pl_module.multi_step, (
+        assert batch.shape[1] >= max(self.rollout) + pl_module.multi_step, (
             "Batch length not sufficient for requested validation rollout length! "
-            f"Set `dataloader.validation_rollout` to at least {self.rollout + pl_module.multi_step}"
+            f"Set `dataloader.validation_rollout` to at least {max(self.rollout) + pl_module.multi_step}"
         )
 
         # prepare input tensor for plotting
@@ -407,7 +407,7 @@ class LongRolloutPlots(BasePlotCallback):
             context = torch.autocast(device_type=batch.device.type, dtype=dtype) if dtype is not None else nullcontext()
 
             with context:
-                self.plot(trainer, pl_module, output, batch, batch_idx)
+                self.plot(trainer, pl_module, output, batch, batch_idx, trainer.current_epoch)
 
 
 class GraphNodeTrainableFeaturesPlot(BasePerEpochPlotCallback):
@@ -827,7 +827,6 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
         config: OmegaConf,
         sample_idx: int,
         parameters: list[str],
-        precip_and_related_fields: list[str],
         batch_frequency: int | None = None,
     ) -> None:
         """Initialise the PlotSpectrum callback.
@@ -840,19 +839,12 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
             Sample to plot
         parameters : list[str]
             Parameters to plot
-        precip_and_related_fields : list[str] | None, optional
-            Precip variable names, by default None
         batch_frequency : int | None, optional
             Override for batch frequency, by default None
         """
         super().__init__(config, batch_frequency=batch_frequency)
         self.sample_idx = sample_idx
         self.parameters = parameters
-        self.precip_and_related_fields = precip_and_related_fields
-        LOGGER.info(
-            "Using precip histogram plotting method for fields: %s.",
-            self.precip_and_related_fields,
-        )
 
     @rank_zero_only
     def _plot(
@@ -873,7 +865,7 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
             # Build dictionary of inidicies and parameters to be plotted
 
             diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
-            plot_parameters_dict_histogram = {
+            plot_parameters_dict_spectrum = {
                 pl_module.data_indices.model.output.name_to_index[name]: (
                     name,
                     name not in diagnostics,
@@ -882,19 +874,19 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
             }
 
             fig = plot_power_spectrum(
-                plot_parameters_dict_histogram,
+                plot_parameters_dict_spectrum,
+                self.latlons,
                 data[0, ...].squeeze(),
                 data[rollout_step + 1, ...].squeeze(),
                 output_tensor[rollout_step, ...],
-                precip_and_related_fields=self.precip_and_related_fields,
             )
 
             self._output_figure(
                 logger,
                 fig,
                 epoch=epoch,
-                tag=f"gnn_pred_val_histo_rstep_{rollout_step:02d}_batch{batch_idx:04d}_rank0",
-                exp_log_tag=f"val_pred_histo_rstep_{rollout_step:02d}_rank{local_rank:01d}",
+                tag=f"gnn_pred_val_spec_rstep_{rollout_step:02d}_batch{batch_idx:04d}_rank0",
+                exp_log_tag=f"val_pred_spec_rstep_{rollout_step:02d}_rank{local_rank:01d}",
             )
 
 
@@ -956,7 +948,7 @@ class PlotHistogram(BasePlotAdditionalMetrics):
             # Build dictionary of inidicies and parameters to be plotted
             diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
 
-            plot_parameters_dict_spectrum = {
+            plot_parameters_dict_histogram = {
                 pl_module.data_indices.model.output.name_to_index[name]: (
                     name,
                     name not in diagnostics,
@@ -965,17 +957,17 @@ class PlotHistogram(BasePlotAdditionalMetrics):
             }
 
             fig = plot_histogram(
-                plot_parameters_dict_spectrum,
-                self.latlons,
+                plot_parameters_dict_histogram,
                 data[0, ...].squeeze(),
                 data[rollout_step + 1, ...].squeeze(),
                 output_tensor[rollout_step, ...],
+                self.precip_and_related_fields,
             )
 
             self._output_figure(
                 logger,
                 fig,
                 epoch=epoch,
-                tag=f"gnn_pred_val_spec_rstep_{rollout_step:02d}_batch{batch_idx:04d}_rank0",
-                exp_log_tag=f"val_pred_spec_rstep_{rollout_step:02d}_rank{local_rank:01d}",
+                tag=f"gnn_pred_val_histo_rstep_{rollout_step:02d}_batch{batch_idx:04d}_rank0",
+                exp_log_tag=f"val_pred_histo_rstep_{rollout_step:02d}_rank{local_rank:01d}",
             )
