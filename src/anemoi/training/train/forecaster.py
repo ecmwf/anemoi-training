@@ -133,9 +133,6 @@ class GraphForecaster(pl.LightningModule):
 
         self.reader_group_id = 0
         self.reader_group_rank = 0
-        self.reader_group_root = 0
-
-        self.read_shards = config.dataloader.read_shards
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
@@ -216,17 +213,11 @@ class GraphForecaster(pl.LightningModule):
         reader_group_id: int,
         reader_group_rank: int,
         reader_group_size: int,
-        reader_group_root: int,
     ) -> None:
         self.reader_groups = reader_groups
         self.reader_group_id = reader_group_id
         self.reader_group_rank = reader_group_rank
         self.reader_group_size = reader_group_size
-        self.reader_group_root = reader_group_root
-
-        assert not (
-            self.reader_group_size > 1 and self.read_shards
-        ), "Reading shards is not supported with reader group size > 1"
 
     def advance_input(
         self,
@@ -263,11 +254,8 @@ class GraphForecaster(pl.LightningModule):
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         del batch_idx
 
-        if self.reader_groups is not None and self.reader_group_size > 1:
-            batch = self.broadcast_batch(batch)
-
-        # all gather grid shards from model_comm_group
-        if self.model_comm_group is not None and self.read_shards:
+        # all gather grid shards from reader group
+        if self.reader_group_size > 1:
             batch = self.allgather_batch(batch)
 
         # for validation not normalized in-place because remappers cannot be applied in-place
@@ -309,37 +297,24 @@ class GraphForecaster(pl.LightningModule):
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
 
-    def broadcast_batch(self, batch: torch.Tensor) -> torch.Tensor:
-        if self.reader_group_rank != 0:
-            # init batch tensor with correct shape on non-root ranks
-            shape = (batch.shape[0], *tuple(batch[0].tolist()))
-            batch = torch.empty(shape, device=self.device)
-
-        torch.distributed.broadcast(
-            batch,
-            src=self.reader_group_root,
-            group=self.reader_groups[self.reader_group_id],
-        )
-
-        return batch
-
     def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
-        # get shard shapes
         grid_size = self.model.metadata["dataset"]["shape"][-1]
-        shard_shape = list(batch.shape)
-        # handle cases of last grid shard
-        shard_shape[-2] = grid_size // self.model_comm_group_size
-        last_grid_dim = grid_size - (shard_shape[-2] * (self.model_comm_group_size - 1))
+        grid_shard_size = grid_size // self.reader_group_size
+        last_grid_shard_size = grid_size - (grid_shard_size * (self.reader_group_size - 1))
 
-        tensor_list = [
-            torch.empty(tuple(shard_shape), device=self.device) for _ in range(self.model_comm_group_size - 1)
-        ]
-        tensor_list.append(torch.empty((*tuple(shard_shape[:-2]), last_grid_dim, shard_shape[-1]), device=self.device))
+        # prepare tensor list with correct shapes for all_gather
+        shard_shape = list(batch.shape)
+        shard_shape[-2] = grid_shard_size
+        last_shard_shape = list(batch.shape)
+        last_shard_shape[-2] = last_grid_shard_size
+
+        tensor_list = [torch.empty(tuple(shard_shape), device=self.device) for _ in range(self.reader_group_size - 1)]
+        tensor_list.append(torch.empty(last_shard_shape, device=self.device))
 
         torch.distributed.all_gather(
             tensor_list,
             batch,
-            group=self.model_comm_group,
+            group=self.reader_groups[self.reader_group_id],
         )
 
         return torch.cat(tensor_list, dim=-2)

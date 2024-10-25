@@ -38,7 +38,6 @@ class NativeGridDataset(IterableDataset):
         timeincrement: int = 1,
         shuffle: bool = True,
         label: str = "generic",
-        read_shards: bool = False,
     ) -> None:
         """Initialize (part of) the dataset state.
 
@@ -73,12 +72,10 @@ class NativeGridDataset(IterableDataset):
         self.model_comm_group_rank = 0
         self.model_comm_num_groups = 1
         self.model_comm_group_id = 0
-        self.model_comm_group_size = 1
         self.global_rank = 0
 
-        self.read_shards = read_shards
-
         self.reader_group_rank = 0
+        self.reader_group_size = 1
 
         # additional state vars (lazy init)
         self.n_samples_per_worker = 0
@@ -129,11 +126,11 @@ class NativeGridDataset(IterableDataset):
     def set_comm_group_info(
         self,
         global_rank: int,
-        model_comm_group_size: int,
         model_comm_group_id: int,
         model_comm_group_rank: int,
         model_comm_num_groups: int,
         reader_group_rank: int,
+        reader_group_size: int,
     ) -> None:
         """Set model and reader communication group information (called by DDPGroupStrategy).
 
@@ -141,8 +138,6 @@ class NativeGridDataset(IterableDataset):
         ----------
         global_rank : int
             Global rank
-        model_comm_group_size : int
-            Model communication group size
         model_comm_group_id : int
             Model communication group ID
         model_comm_group_rank : int
@@ -151,22 +146,24 @@ class NativeGridDataset(IterableDataset):
             Number of model communication groups
         reader_group_rank : int
             Reader group rank
+        reader_group_size : int
+            Reader group size
         """
         self.global_rank = global_rank
-        self.model_comm_group_size = model_comm_group_size
         self.model_comm_group_id = model_comm_group_id
         self.model_comm_group_rank = model_comm_group_rank
         self.model_comm_num_groups = model_comm_num_groups
         self.reader_group_rank = reader_group_rank
+        self.reader_group_size = reader_group_size
 
-        if self.read_shards:
+        if self.reader_group_size > 1:
             # get the grid shard size and start/end indices
-            grid_shard_size = self.grid_size // self.model_comm_group_size
-            self.grid_start = self.model_comm_group_rank * grid_shard_size
-            if self.model_comm_group_rank == self.model_comm_group_size - 1:
+            grid_shard_size = self.grid_size // self.reader_group_size
+            self.grid_start = self.reader_group_rank * grid_shard_size
+            if self.reader_group_rank == self.reader_group_size - 1:
                 self.grid_end = self.grid_size
             else:
-                self.grid_end = (self.model_comm_group_rank + 1) * grid_shard_size
+                self.grid_end = (self.reader_group_rank + 1) * grid_shard_size
 
         LOGGER.debug(
             "NativeGridDataset.set_group_info(): global_rank %d, model_comm_group_id %d, "
@@ -256,13 +253,6 @@ class NativeGridDataset(IterableDataset):
         Currently it receives data with an ensemble dimension, which is discarded for
         now. (Until the code is "ensemble native".)
         """
-        if self.reader_group_rank != 0:
-            # yield dummy data only with shape information for non-root ranks (shape used for broadcast)
-            shape = (self.rollout + self.multi_step, self.data.shape[2], self.data.shape[3], self.data.shape[1])
-            for _ in self.chunk_index_range:
-                yield torch.tensor(shape, dtype=torch.long)
-            return
-
         if self.shuffle:
             shuffled_chunk_indices = self.rng.choice(
                 self.chunk_index_range,
@@ -290,9 +280,9 @@ class NativeGridDataset(IterableDataset):
             start = i - (self.multi_step - 1) * self.timeincrement
             end = i + (self.rollout + 1) * self.timeincrement
 
-            if self.read_shards:
+            if self.reader_group_size > 1:  # read only a subset of the grid
                 x = self.data[start : end : self.timeincrement, :, :, self.grid_start : self.grid_end]
-            else:
+            else:  # read the full grid
                 x = self.data[start : end : self.timeincrement, :, :, :]
 
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")

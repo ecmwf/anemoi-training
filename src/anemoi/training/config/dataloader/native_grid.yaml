@@ -2,22 +2,15 @@ prefetch_factor: 2
 pin_memory: True
 
 # ============
-# read_frequency:
-#   Only ever read_frequency-th GPU of each model commm group reads data
-#   to reduce CPU memory usage.
-#   The number of GPUs per model must be divisible by read_frequency.
-#   Default: 1 (all GPUs read data), only if read_shards is False
-# ============
-read_frequency: 1
-
-# ============
-# read_shards:
-#   Every GPU only reads 1/num_gpus_per_model of its data sharded along
-#   the grid dimension which is then put back together via all-gather.
+# read_group_size:
+#   Form subgroups of model comm groups that read data together.
+#   Each reader in the group only reads 1/read_group_size of the data
+#   which is then all-gathered between the group.
 #   This can reduce CPU memory usage as well as increase dataloader throughput.
-#  Default: True, only works if read_frequency is 1
+#   The number of GPUs per model must be divisible by read_group_size.
+#   Good values are num_gpus_per_model or num_gpus_per_node.
 # ============
-read_shards: True
+read_group_size: 1
 
 num_workers:
   training: 8

@@ -26,22 +26,22 @@ LOGGER = logging.getLogger(__name__)
 class DDPGroupStrategy(DDPStrategy):
     """Distributed Data Parallel strategy with group communication."""
 
-    def __init__(self, num_gpus_per_model: int, read_frequency: int, **kwargs: dict) -> None:
+    def __init__(self, num_gpus_per_model: int, read_group_size: int, **kwargs: dict) -> None:
         """Initialize the distributed strategy.
 
         Parameters
         ----------
         num_gpus_per_model : int
             Number of GPUs per model to shard over.
-        read_frequency : int
-            Frequency of dataloader readers per model group.
+        read_group_size : int
+            Number of GPUs per reader group.
         **kwargs : dict
             Additional keyword arguments.
 
         """
         super().__init__(**kwargs)
         self.model_comm_group_size = num_gpus_per_model
-        self.read_frequency = read_frequency
+        self.read_group_size = read_group_size
 
     def setup(self, trainer: pl.Trainer) -> None:
         assert self.accelerator is not None, "Accelerator is not initialized for distributed strategy"
@@ -74,23 +74,23 @@ class DDPGroupStrategy(DDPStrategy):
             self.model_comm_group_size,
         )
 
-        # set up reader groups by further splitting model_comm_group_ranks with read_frequency:
+        # set up reader groups by further splitting model_comm_group_ranks with read_group_size:
 
-        assert self.model_comm_group_size % self.read_frequency == 0, (
-            f"Number of GPUs per model ({self.model_comm_group_size}) must be divisible by the read frequency "
-            f"({self.read_frequency})."
+        assert self.model_comm_group_size % self.read_group_size == 0, (
+            f"Number of GPUs per model ({self.model_comm_group_size}) must be divisible by read_group_size "
+            f"({self.read_group_size})."
         )
 
         reader_group_ranks = np.array(
             [
-                np.split(group_ranks, int(self.model_comm_group_size / self.read_frequency))
+                np.split(group_ranks, int(self.model_comm_group_size / self.read_group_size))
                 for group_ranks in model_comm_group_ranks
             ],
-        )  # Shape: (num_model_comm_groups, model_comm_grp_size/read_freq, read_freq)
+        )  # Shape: (num_model_comm_groups, model_comm_grp_size/read_group_size, read_group_size)
         reader_groups = [[torch.distributed.new_group(x) for x in group_ranks] for group_ranks in reader_group_ranks]
         reader_group_id, reader_group_rank, reader_group_size, reader_group_root = self.get_my_reader_group(
             model_comm_group_rank,
-            self.read_frequency,
+            self.read_group_size,
         )
         # get all reader groups of the current model group
         model_reader_groups = reader_groups[model_comm_group_id]
@@ -99,7 +99,6 @@ class DDPGroupStrategy(DDPStrategy):
             reader_group_id,
             reader_group_rank,
             reader_group_size,
-            reader_group_root,
         )
 
         LOGGER.debug(
@@ -169,25 +168,25 @@ class DDPGroupStrategy(DDPStrategy):
 
         return model_comm_group_id, model_comm_group_rank, model_comm_num_groups
 
-    def get_my_reader_group(self, model_comm_group_rank: int, read_frequency: int) -> tuple[int, int, int]:
+    def get_my_reader_group(self, model_comm_group_rank: int, read_group_size: int) -> tuple[int, int, int]:
         """Determine tasks that work together and from a reader group.
 
         Parameters
         ----------
         model_comm_group_rank : int
             Rank within the model communication group.
-        read_frequency : int
-            Frequency of dataloader readers per model group.
+        read_group_size : int
+            Number of dataloader readers per model group.
 
         Returns
         -------
         tuple[int, int, int]
             Reader_group id, Reader_group rank, Reader_group root (global rank)
         """
-        reader_group_id = model_comm_group_rank // read_frequency
-        reader_group_rank = model_comm_group_rank % read_frequency
-        reader_group_size = read_frequency
-        reader_group_root = (self.global_rank // read_frequency) * read_frequency
+        reader_group_id = model_comm_group_rank // read_group_size
+        reader_group_rank = model_comm_group_rank % read_group_size
+        reader_group_size = read_group_size
+        reader_group_root = (self.global_rank // read_group_size) * read_group_size
 
         return reader_group_id, reader_group_rank, reader_group_size, reader_group_root
 
@@ -211,15 +210,15 @@ class DDPGroupStrategy(DDPStrategy):
         model_comm_group_id, model_comm_group_rank, model_comm_num_groups = self.get_my_model_comm_group(
             self.model_comm_group_size,
         )
-        _, reader_group_rank, _, _ = self.get_my_reader_group(model_comm_group_rank, self.read_frequency)
+        _, reader_group_rank, _, _ = self.get_my_reader_group(model_comm_group_rank, self.read_group_size)
 
         dataloader.dataset.set_comm_group_info(
             self.global_rank,
-            self.model_comm_group_size,
             model_comm_group_id,
             model_comm_group_rank,
             model_comm_num_groups,
             reader_group_rank,
+            self.read_group_size,
         )
 
         return dataloader
