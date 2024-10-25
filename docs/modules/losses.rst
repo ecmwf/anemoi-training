@@ -100,29 +100,6 @@ calculation.
 Then in the config, set ``_target_`` to the class name, and any
 additional kwargs to the loss function.
 
-*******************
- Utility Functions
-*******************
-
-There is also generic functions that are useful for losses in
-``anemoi/training/losses/utils.py``.
-
-``grad_scaler`` is used to automatically scale the loss gradients in the
-loss function using the formula in https://arxiv.org/pdf/2306.06079.pdf,
-section 4.3.2. This can be switched on in the config by setting the
-option ``config.training.loss_gradient_scaling=True``.
-
-``ScaleTensor`` is a class that can record and apply arbitrary scaling
-factors to tensors. It supports relative indexing, combining multiple
-scalars over the same dimensions, and is only constructed at
-broadcasting time, so the shape can be resolved to match the tensor
-exactly.
-
-.. automodule:: anemoi.training.losses.utils
-   :members:
-   :no-undoc-members:
-   :show-inheritance:
-
 *****************
  Combined Losses
 *****************
@@ -150,6 +127,29 @@ functions, and the loss weights are used to scale the individual losses
 before combining them.
 
 .. automodule:: anemoi.training.losses.combined
+   :members:
+   :no-undoc-members:
+   :show-inheritance:
+
+*******************
+ Utility Functions
+*******************
+
+There is also generic functions that are useful for losses in
+``anemoi/training/losses/utils.py``.
+
+``grad_scaler`` is used to automatically scale the loss gradients in the
+loss function using the formula in https://arxiv.org/pdf/2306.06079.pdf,
+section 4.3.2. This can be switched on in the config by setting the
+option ``config.training.loss_gradient_scaling=True``.
+
+``ScaleTensor`` is a class that can record and apply arbitrary scaling
+factors to tensors. It supports relative indexing, combining multiple
+scalars over the same dimensions, and is only constructed at
+broadcasting time, so the shape can be resolved to match the tensor
+exactly.
+
+.. automodule:: anemoi.training.losses.utils
    :members:
    :no-undoc-members:
    :show-inheritance:
