@@ -103,7 +103,7 @@ doing:
 
 .. code:: bash
 
-   pip install -e .[profile]
+   pip install -e anemoi-training[profile]
 
 Config
 ======
