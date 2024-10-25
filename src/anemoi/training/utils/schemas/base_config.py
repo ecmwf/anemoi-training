@@ -10,6 +10,7 @@
 
 from typing import Any
 
+from omegaconf import OmegaConf
 from pydantic import BaseModel
 
 from .data import DataConfig
@@ -26,3 +27,17 @@ class BaseConfig(BaseModel):
     graph: Any  # BaseGraphConfig
     model: Any
     training: TrainingConfig
+
+
+def convert_to_omegaconf(config: BaseConfig) -> dict:
+
+    config = {
+        "data": config.data.model_dump(by_alias=True),
+        "dataloader": config.dataloader,
+        "diagnostics": config.diagnostics.model_dump(),
+        "hardware": config.hardware.model_dump(),
+        "graph": config.graph,
+        "model": config.model,
+        "training": config.training.model_dump(),
+    }
+    return OmegaConf.create(config)

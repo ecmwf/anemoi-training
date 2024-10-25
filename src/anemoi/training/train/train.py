@@ -37,6 +37,7 @@ from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.checkpoint import transfer_learning_loading
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.schemas.base_config import BaseConfig
+from anemoi.training.utils.schemas.base_config import convert_to_omegaconf
 from anemoi.training.utils.seeding import get_base_seed
 
 if TYPE_CHECKING:
@@ -240,7 +241,7 @@ class AnemoiTrainer:
         return map_config_to_primitives(
             {
                 "version": "1.0",
-                "config": self.config,
+                "config": convert_to_omegaconf(self.config),
                 "seed": self.initial_seed,
                 "run_id": self.run_id,
                 "dataset": self.datamodule.metadata,

@@ -13,6 +13,8 @@ from __future__ import annotations
 from pydantic import BaseModel
 from pydantic import Field
 
+from .utils import HydraInstantiable
+
 
 class NormalizerConfig(BaseModel):
     default: str
@@ -29,9 +31,7 @@ class RemapperConfig(BaseModel):
     default: str
 
 
-class Processor(BaseModel):
-    _target_: str
-    _convert_: str
+class Processor(HydraInstantiable):
     config: NormalizerConfig | ImputerConfig | RemapperConfig
 
 
