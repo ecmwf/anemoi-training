@@ -6,7 +6,6 @@
 # nor does it submit to any jurisdiction.
 from __future__ import annotations
 
-import json
 import logging
 import re
 from pathlib import Path
@@ -260,11 +259,23 @@ class DummyProfiler(Profiler):
         pass
 
 
+def _convert_npint_to_int(obj: Any) -> dict | list | int | str | float:
+    """Recursively converts all np.int64 values in the input to Python int."""
+    # Recursively converts all np.int64 to int
+    if isinstance(obj, dict):
+        return {k: _convert_npint_to_int(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_convert_npint_to_int(item) for item in obj]
+    if isinstance(obj, np.integer):
+        return int(obj)  # Convert np.int64 to int
+    return obj
+
+
 class PatchedProfile(profile):
 
     def _get_distributed_info(self) -> dict[str, str]:
         dist_info = super()._get_distributed_info()
-        return json.dumps(dist_info, default=str)
+        return _convert_npint_to_int(dist_info)
 
 
 class BenchmarkProfiler(Profiler):
