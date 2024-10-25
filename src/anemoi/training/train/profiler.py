@@ -344,3 +344,7 @@ class AnemoiProfiler(AnemoiTrainer):
 @hydra.main(version_base=None, config_path="../config", config_name="config")
 def main(config: DictConfig) -> None:
     AnemoiProfiler(config).profile()
+
+
+if __name__ == "__main__":
+    main()

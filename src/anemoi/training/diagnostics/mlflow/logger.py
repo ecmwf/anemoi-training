@@ -377,7 +377,9 @@ class AnemoiMLflowLogger(MLFlowLogger):
         tags = {"projectName": project_name}
 
         # create a tag with the command used to run the script
-        command = os.environ.get("ANEMOI_TRAINING_CMD", sys.argv[0])
+        command = os.environ.get("ANEMOI_TRAINING_CMD", sys.argv[0]) or os.environ.get(
+            "ANEMOI_PROFILER_CMD", sys.argv[0],
+        )
         tags["command"] = command.split("/")[-1]  # get the python script name
         tags["mlflow.source.name"] = command
         if len(sys.argv) > 1:

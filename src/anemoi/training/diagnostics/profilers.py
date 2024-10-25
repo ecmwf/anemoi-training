@@ -332,6 +332,7 @@ class BenchmarkProfiler(Profiler):
 
                     worker_name = f"{socket.gethostname()}_{os.getpid()}"
                     file_name = str(dir_name / f"{worker_name}.{stage}.{time.time_ns()}.pt.trace.json")
+                    LOGGER.info("Saving memory trace to %s", file_name)
                     prof.export_chrome_trace(file_name)
 
                 return handler_fn

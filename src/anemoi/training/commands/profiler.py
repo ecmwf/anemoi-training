@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from anemoi.training.commands import Command
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class Profile(Command):
+class Profiler(Command):
     """Commands to profile Anemoi models."""
 
     accept_unknown_args = True
@@ -29,19 +31,55 @@ class Profile(Command):
     def add_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         return parser
 
-    @staticmethod
-    def run(args: list[str], unknown_args: list[str] | None = None) -> None:
-        del args
+    def run(self, args: list[str], unknown_args: list[str] | None = None) -> None:
+        # This will be picked up by the logger
+        os.environ["ANEMOI_PROFILER_CMD"] = f"{sys.argv[0]} {args.command}"
+        # Merge the known subcommands with a non-whitespace character for hydra
+        new_sysargv = self._merge_sysargv(args)
 
+        # Add the unknown arguments (belonging to hydra) to sys.argv
         if unknown_args is not None:
-            sys.argv = [sys.argv[0], *unknown_args]
+            sys.argv = [new_sysargv, *unknown_args]
         else:
-            sys.argv = [sys.argv[0]]
+            sys.argv = [new_sysargv]
 
+        # Import and run the profiler command
         LOGGER.info("Running anemoi profiling command with overrides: %s", sys.argv[1:])
-        from anemoi.training.train.profiler import main as anemoi_profile
+        main()
 
-        anemoi_profile()
+    def _merge_sysargv(self, args: argparse.Namespace) -> str:
+        """Merge the sys.argv with the known subcommands to pass to hydra.
+
+        Parameters
+        ----------
+        args : argparse.Namespace
+            args from the command line
+
+        Returns
+        -------
+        str
+            Modified sys.argv as string
+        """
+        argv = Path(sys.argv[0])
+
+        # this will turn "/env/bin/anemoi-training train" into "/env/bin/.anemoi-training-train"
+        # the dot at the beginning is intentional to not interfere with autocomplete
+        modified_sysargv = argv.with_name(f".{argv.name}-{args.command}")
+
+        if hasattr(args, "subcommand"):
+            modified_sysargv += f"-{args.subcommand}"
+        return str(modified_sysargv)
 
 
-command = Profile
+def main() -> None:
+    # Use the environment variable to check if main is being called from the subcommand, not from the ddp entrypoint
+    if not os.environ.get("ANEMOI_PROFILER_CMD"):
+        error = "This entrypoint should not be called directly. Use `anemoi-training profiler` instead."
+        raise RuntimeError(error)
+
+    from anemoi.training.train.profiler import main as anemoi_profiler
+
+    anemoi_profiler()
+
+
+command = Profiler
