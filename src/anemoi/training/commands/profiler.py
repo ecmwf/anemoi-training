@@ -1,39 +1,32 @@
-# (C) Copyright 2024 ECMWF.
+# (C) Copyright 2024 Anemoi contributors.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
+
 
 from __future__ import annotations
 
 import logging
 import os
 import sys
-from pathlib import Path
-from typing import TYPE_CHECKING
 
-from anemoi.training.commands import Command
-
-if TYPE_CHECKING:
-    import argparse
+from anemoi.training.commands.train import Train
 
 LOGGER = logging.getLogger(__name__)
 
 
-class Profiler(Command):
+class Profiler(Train):
     """Commands to profile Anemoi models."""
 
     accept_unknown_args = True
 
-    @staticmethod
-    def add_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-        return parser
-
     def run(self, args: list[str], unknown_args: list[str] | None = None) -> None:
         # This will be picked up by the logger
-        os.environ["ANEMOI_PROFILER_CMD"] = f"{sys.argv[0]} {args.command}"
+        os.environ["ANEMOI_TRAINING_CMD"] = f"{sys.argv[0]} {args.command}"
         # Merge the known subcommands with a non-whitespace character for hydra
         new_sysargv = self._merge_sysargv(args)
 
@@ -47,33 +40,10 @@ class Profiler(Command):
         LOGGER.info("Running anemoi profiling command with overrides: %s", sys.argv[1:])
         main()
 
-    def _merge_sysargv(self, args: argparse.Namespace) -> str:
-        """Merge the sys.argv with the known subcommands to pass to hydra.
-
-        Parameters
-        ----------
-        args : argparse.Namespace
-            args from the command line
-
-        Returns
-        -------
-        str
-            Modified sys.argv as string
-        """
-        argv = Path(sys.argv[0])
-
-        # this will turn "/env/bin/anemoi-training train" into "/env/bin/.anemoi-training-train"
-        # the dot at the beginning is intentional to not interfere with autocomplete
-        modified_sysargv = argv.with_name(f".{argv.name}-{args.command}")
-
-        if hasattr(args, "subcommand"):
-            modified_sysargv += f"-{args.subcommand}"
-        return str(modified_sysargv)
-
 
 def main() -> None:
     # Use the environment variable to check if main is being called from the subcommand, not from the ddp entrypoint
-    if not os.environ.get("ANEMOI_PROFILER_CMD"):
+    if not os.environ.get("ANEMOI_TRAINING_CMD"):
         error = "This entrypoint should not be called directly. Use `anemoi-training profiler` instead."
         raise RuntimeError(error)
 
