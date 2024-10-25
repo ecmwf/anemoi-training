@@ -70,10 +70,8 @@ class CombinedLoss(torch.nn.Module):
             losses:
                 - __target__: anemoi.training.losses.mse.WeightedMSELoss
                 - __target__: anemoi.training.losses.mae.WeightedMAELoss
-                 include_variable_scaling: True
-            loss_weights: [1.0]
-            include_node_weights: True
-            variable_scaling: True
+            scalars: ['variable']
+            loss_weights: [1.0,0.5]
         ```
         """
         super().__init__()

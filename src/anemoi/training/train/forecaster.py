@@ -98,15 +98,19 @@ class GraphForecaster(pl.LightningModule):
 
         self.val_metric_ranges, _ = self.get_val_metric_ranges(config, data_indices)
 
-        loss_kwargs = {"node_weights": self.loss_weights, "variable_scaling": variable_scaling}
+        # Kwargs to pass to the loss function
+        loss_kwargs = {"node_weights": self.loss_weights}
+        # Scalars to include in the loss function, must be of form (dim, scalar)
+        scalars = {"variable": (-1, variable_scaling)}
 
-        self.loss = self.get_loss_function(config.training.training_loss, **loss_kwargs)
+        self.loss = self.get_loss_function(config.training.training_loss, scalars=scalars, **loss_kwargs)
+
         assert isinstance(self.loss, torch.nn.Module) and not isinstance(
             self.loss,
             torch.nn.ModuleList,
         ), f"Loss function must be a `torch.nn.Module`, not a {type(self.loss).__name__!r}"
 
-        self.metrics = self.get_loss_function(config.training.validation_metrics, **loss_kwargs)
+        self.metrics = self.get_loss_function(config.training.validation_metrics, scalars=scalars, **loss_kwargs)
         if not isinstance(self.metrics, torch.nn.ModuleList):
             self.metrics = torch.nn.ModuleList([self.metrics])
 
@@ -146,28 +150,42 @@ class GraphForecaster(pl.LightningModule):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
 
+    # Future import breaks other type hints TODO Harrison Cook
     @staticmethod
-    def get_loss_function(  # noqa: C901
+    def get_loss_function(
         config: DictConfig,
-        **kwargs: Union[torch.Tensor, tuple[Union[int, tuple[int]], torch.Tensor]],  # noqa: FA100
+        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,  # noqa: FA100
+        **kwargs,
     ) -> Union[torch.nn.Module, torch.nn.ModuleList]:  # noqa: FA100
-        # Future import breaks other type hints TODO Harrison Cook
         """
         Get loss functions from config.
 
-        Will include additional kwargs set from this init if specified in the config.
         Can be ModuleList if multiple losses are specified.
 
-        If a kwarg is to be included from the config, set `include_{key}: True` in the config.
-        If a scalar is to be included from the config, set `add_scalar_{key}: True` in the config.
+        Parameters
+        ----------
+        config : DictConfig
+            Loss function configuration, should include `scalars` if scalars are to be added to the loss function.
+        scalars : Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None], optional
+            Scalars which can be added to the loss function. Defaults to None., by default None
+            If a scalar is to be added to the loss, ensure it is in `scalars` in the loss config
+            E.g.
+                If `scalars: ['variable']` is set in the config, and `variable` in `scalars`
+                `variable` will be added to the scalar of the loss function.
+        kwargs : Any
+            Additional arguments to pass to the loss function
 
-        E.g.
-            If `include_node_weights: True` is set in the config, and `node_weights` in kwargs
-             `node_weights` will be included in the config to instantiate the module with.
-            If `add_scalar_nan_scaling: True` is set in the config, and `nan_scaling` in kwargs
-             `nan_scaling` will be added to the scalar of the loss function.
-             Requires the loss function to expose an `add_scalar` method.
-             Additionally, a scalar must be a tuple of (dimension, scalar) to be added to the loss function.
+        Returns
+        -------
+        Union[torch.nn.Module, torch.nn.ModuleList]
+            Loss function, or list of metrics
+
+        Raises
+        ------
+        TypeError
+            If not a subclass of `BaseWeightedLoss`
+        ValueError
+            If scalar is not found in valid scalars
         """
         config_container = OmegaConf.to_container(config, resolve=False)
         if isinstance(config_container, list):
@@ -182,53 +200,20 @@ class GraphForecaster(pl.LightningModule):
             )
 
         loss_config = OmegaConf.to_container(config, resolve=True)
-
-        # Create loss_config including elements from kwargs if they
-        # are specified in the config with `include_{key}: True`
-        # Will add scalars to the loss function if they are specified in the config
-        # with `add_scalar_{key}: True`, requires the loss function to expose an `add_scalar` method
-
-        loss_init_config = {}
-        scalars_to_add = {}
-
-        for key in loss_config:  # Go through all keys given in the config
-            # If key does not start with `include_` or `add_scalar_`, add it to the loss_init_config
-            if not str(key).startswith(("include_", "add_scalar_")):
-                loss_init_config[key] = loss_config[key]
-                continue
-            if loss_config[key] is False:
-                continue
-            # If key starts with `add_scalar_`, remove the `add_scalar_` prefix
-            # and check if the key is in kwargs, if it is add it to the scalars_to_add
-            # if it is not raise a ValueError
-            if key.startswith("add_scalar_"):
-                scalar_key = key.removeprefix("add_scalar_")
-                if scalar_key in kwargs:
-                    scalars_to_add[scalar_key] = kwargs[scalar_key]
-                    continue
-
-            # If key starts with `include_`, remove the `include_` prefix
-            # and check if the key is in kwargs, if it is add it to the loss_init_config
-            # if it is not raise a ValueError
-            if key.startswith("include_"):
-                include_key = key.removeprefix("include_")
-                if include_key in kwargs:
-                    loss_init_config[include_key] = kwargs[include_key]
-                    continue
-
-            error_msg = f"No value for {key!r} could be found in kwargs, {kwargs.keys()!s}"
-            raise ValueError(error_msg)
+        scalars_to_include = loss_config.pop("scalars", [])
 
         # Instantiate the loss function with the loss_init_config
-        loss_function = instantiate(loss_init_config)
+        loss_function = instantiate(loss_config, **kwargs)
 
-        # Add scalars to the loss function
-        if not hasattr(loss_function, "add_scalar") and scalars_to_add:
-            error_msg = f"Loss function {loss_function.__class__.__name__!r} does not have an `add_scalar` method"
-            raise ValueError(error_msg)
+        if not isinstance(loss_function, BaseWeightedLoss):
+            error_msg = f"Loss must be a subclass of 'BaseWeightedLoss', not {type(loss_function)}"
+            raise TypeError(error_msg)
 
-        for key, scalar in scalars_to_add.items():
-            loss_function.add_scalar(*scalar, name=key)
+        for key in scalars_to_include:
+            if key not in scalars:
+                error_msg = f"Scalar {key!r} not found in valid scalars: {list(scalars.keys())}"
+                raise ValueError(error_msg)
+            loss_function.add_scalar(*scalars[key], name=key)
 
         return loss_function
 
