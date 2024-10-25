@@ -186,7 +186,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             label=label,
             effective_bs=effective_bs
         )
-
         self._check_resolution(data.resolution)
         return data
 
