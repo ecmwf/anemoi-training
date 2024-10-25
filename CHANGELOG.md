@@ -10,6 +10,11 @@ Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.1...HEAD)
 
+### Fixed
+- Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
+- Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
+    - Enable longer validation rollout than training
+
 ## [0.2.1 - Bugfix: resuming mlflow runs](https://github.com/ecmwf/anemoi-training/compare/0.2.0...0.2.1) - 2024-10-24
 
 ### Added
@@ -20,13 +25,9 @@ Keep it human-readable, your future self will thank you!
 - Feature: New `Boolean1DMask` class. Enables rollout training for limited area models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
 
 ### Fixed
-- Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
-- Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
-    - Enable longer validation rollout than training
 - Mlflow-sync to handle creation of new experiments in the remote server [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
 - Fix for multi-gpu when using mlflow due to refactoring of _get_mlflow_run_params function [#99] (https://github.com/ecmwf/anemoi-training/pull/99)
 - ci: fix pyshtools install error (#100) https://github.com/ecmwf/anemoi-training/pull/100
-
 - Mlflow-sync to handle creation of new experiments in the remote server [#83](https://github.com/ecmwf/anemoi-training/pull/83)
 - Fix for multi-gpu when using mlflow due to refactoring of _get_mlflow_run_params function [#99](https://github.com/ecmwf/anemoi-training/pull/99)
 - ci: fix pyshtools install error [#100](https://github.com/ecmwf/anemoi-training/pull/100)
