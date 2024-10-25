@@ -64,3 +64,5 @@ callbacks:
     rollout:
       - ${dataloader.validation_rollout}
     epoch_frequency: 20
+    sample_idx: ${diagnostics.plot.sample_idx}
+    parameters: ${diagnostics.plot.parameters}

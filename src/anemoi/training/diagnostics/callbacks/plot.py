@@ -146,7 +146,7 @@ class BasePlotCallback(Callback, ABC):
         self,
         trainer: pl.Trainer,
         pl_module: pl.LightningModule,
-        epoch: int,
+        *args,
         **kwargs,
     ) -> None:
         """Plotting function to be implemented by subclasses."""
@@ -262,10 +262,14 @@ class LongRolloutPlots(BasePlotCallback):
         self,
         config: OmegaConf,
         rollout: list[int],
+        sample_idx: int,
+        parameters: list[str],
+        accumulation_levels_plot: list[float] | None = None,
+        cmap_accumulation: list[str] | None = None,
+        per_sample: int = 6,
         epoch_frequency: int = 1,
-        sample_idx: int = 0,
     ) -> None:
-        """Initialise RolloutEval callback.
+        """Initialise LongRolloutPlots callback.
 
         Parameters
         ----------
@@ -273,10 +277,18 @@ class LongRolloutPlots(BasePlotCallback):
             Config object
         rollout : list[int]
             Rollout steps to plot at
+        sample_idx : int
+            Sample to plot
+        parameters : list[str]
+            Parameters to plot
+        accumulation_levels_plot : list[float] | None
+            Accumulation levels to plot, by default None
+        cmap_accumulation : list[str] | None
+            Colors of the accumulation levels, by default None
+        per_sample : int, optional
+            Number of plots per sample, by default 6
         epoch_frequency : int, optional
             Epoch frequency to plot at, by default 1
-        sample_idx : int, optional
-            Sample to plot, by default 0
         """
         super().__init__(config)
 
@@ -289,6 +301,10 @@ class LongRolloutPlots(BasePlotCallback):
         )
         self.rollout = rollout
         self.sample_idx = sample_idx
+        self.accumulation_levels_plot = accumulation_levels_plot
+        self.cmap_accumulation = cmap_accumulation
+        self.per_sample = per_sample
+        self.parameters = parameters
 
     @rank_zero_only
     def _plot(
@@ -312,7 +328,7 @@ class LongRolloutPlots(BasePlotCallback):
                 name,
                 name not in self.config.data.get("diagnostic", []),
             )
-            for name in self.config.diagnostics.plot.parameters
+            for name in self.parameters
         }
 
         if self.post_processors is None:
@@ -357,10 +373,10 @@ class LongRolloutPlots(BasePlotCallback):
 
                     fig = plot_predicted_multilevel_flat_sample(
                         plot_parameters_dict,
-                        self.config.diagnostics.plot.per_sample,
+                        self.per_sample,
                         self.latlons,
-                        self.config.diagnostics.plot.get("accumulation_levels_plot", None),
-                        self.config.diagnostics.plot.get("cmap_accumulation", None),
+                        self.accumulation_levels_plot,
+                        self.cmap_accumulation,
                         data_0.squeeze(),
                         data_rollout_step.squeeze(),
                         output_tensor[0, 0, :, :],  # rolloutstep, first member
