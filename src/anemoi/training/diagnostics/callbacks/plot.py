@@ -322,9 +322,9 @@ class LongRolloutPlots(BasePlotCallback):
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
         local_rank = pl_module.local_rank
 
-        assert batch.shape[1] >= self.rollout + pl_module.multi_step, (
+        assert batch.shape[1] >= max(self.rollout) + pl_module.multi_step, (
             "Batch length not sufficient for requested validation rollout length! "
-            f"Set `dataloader.validation_rollout` to at least {self.rollout + pl_module.multi_step}"
+            f"Set `dataloader.validation_rollout` to at least {max(self.rollout) + pl_module.multi_step}"
         )
 
         # prepare input tensor for plotting
@@ -397,7 +397,7 @@ class LongRolloutPlots(BasePlotCallback):
             context = torch.autocast(device_type=batch.device.type, dtype=dtype) if dtype is not None else nullcontext()
 
             with context:
-                self.plot(trainer, pl_module, output, batch, batch_idx)
+                self.plot(trainer, pl_module, output, batch, batch_idx, trainer.current_epoch)
 
 
 class GraphNodeTrainableFeaturesPlot(BasePerEpochPlotCallback):
