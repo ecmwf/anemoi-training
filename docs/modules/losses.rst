@@ -13,23 +13,24 @@ enables scalar multiplication, and graph node weighting.
    :no-undoc-members:
    :show-inheritance:
 
+************************
+ Default Loss Functions
+************************
+
 By default anemoi-training trains the model using a latitude-weighted
 mean-squared-error, which is defined in the ``WeightedMSELoss`` class in
 ``anemoi/training/losses/mse.py``. The loss function can be configured
 in the config file at ``config.training.training_loss``, and
 ``config.training.validation_metrics``.
 
-************************
- Default Loss Functions
-************************
+The following loss functions are available by default:
 
-The following loss functions are available by default: -
-``WeightedMSELoss``: Latitude-weighted mean-squared-error. -
-``WeightedMAELoss``: Latitude-weighted mean-absolute-error. -
-``WeightedHuberLoss``: Latitude-weighted Huber loss. -
-``WeightedLogCoshLoss``: Latitude-weighted log-cosh loss. -
-``WeightedRMSELoss``: Latitude-weighted root-mean-squared-error. -
-``CombinedLoss``: Combined component weighted loss.
+-  ``WeightedMSELoss``: Latitude-weighted mean-squared-error.
+-  ``WeightedMAELoss``: Latitude-weighted mean-absolute-error.
+-  ``WeightedHuberLoss``: Latitude-weighted Huber loss.
+-  ``WeightedLogCoshLoss``: Latitude-weighted log-cosh loss.
+-  ``WeightedRMSELoss``: Latitude-weighted root-mean-squared-error.
+-  ``CombinedLoss``: Combined component weighted loss.
 
 These are available in the ``anemoi.training.losses`` module, at
 ``anemoi.training.losses.{short_name}.{class_name}``.
@@ -62,9 +63,10 @@ define whether to include them in the loss function by setting
       _target_: anemoi.training.losses.mse.WeightedMSELoss
       scalars: ['scalar1', 'scalar2']
 
-Currently, the following scalars are available for use: - ``variable``:
-Scale by the feature/variable weights as defined in the config
-``config.training.loss_scaling``.
+Currently, the following scalars are available for use:
+
+-  ``variable``: Scale by the feature/variable weights as defined in the
+   config ``config.training.loss_scaling``.
 
 ********************
  Validation Metrics
