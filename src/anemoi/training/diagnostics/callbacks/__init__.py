@@ -5,10 +5,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-# * [WHY ARE CALLBACKS UNDER __init__.py?]
-# * This functionality will be restructured in the near future
-# * so for now callbacks are under __init__.py
-
 from __future__ import annotations
 
 import copy
