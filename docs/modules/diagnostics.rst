@@ -17,9 +17,7 @@ during training. It is split into two parts:
 By default, anemoi-training uses MLFlow tracker, but it includes
 functionality to use both Weights & Biases and Tensorboard.
 
-###########
- Callbacks
-###########
+**Callbacks**
 
 The callbacks can also be used to evaluate forecasts over longer
 rollouts beyond the forecast time that the model is trained on. The
@@ -90,7 +88,27 @@ training doesn't stop whilst the callbacks are being evaluated)
 Below is the documentation for the default callbacks provided, but it is
 also possible for users to add callbacks using the same structure:
 
-.. automodule:: anemoi.training.diagnostics.callbacks
+.. automodule:: anemoi.training.diagnostics.callbacks.checkpoint
+   :members:
+   :no-undoc-members:
+   :show-inheritance:
+
+.. automodule:: anemoi.training.diagnostics.callbacks.evaluation
+   :members:
+   :no-undoc-members:
+   :show-inheritance:
+
+.. automodule:: anemoi.training.diagnostics.callbacks.optimiser
+   :members:
+   :no-undoc-members:
+   :show-inheritance:
+
+.. automodule:: anemoi.training.diagnostics.callbacks.plot
+   :members:
+   :no-undoc-members:
+   :show-inheritance:
+
+.. automodule:: anemoi.training.diagnostics.callbacks.provenance
    :members:
    :no-undoc-members:
    :show-inheritance:
