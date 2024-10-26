@@ -49,6 +49,7 @@ class GraphForecaster(pl.LightningModule):
         statistics: dict,
         data_indices: IndexCollection,
         metadata: dict,
+        supporting_arrays: dict,
     ) -> None:
         """Initialize graph neural network forecaster.
 
@@ -63,7 +64,9 @@ class GraphForecaster(pl.LightningModule):
         data_indices : IndexCollection
             Indices of the training data,
         metadata : dict
-            Provenance information
+            Metadata to store in the checkpoint
+        supporting_arrays : dict
+            Supporting NumPy arrays to store in the checkpoint
 
         """
         super().__init__()
@@ -74,6 +77,7 @@ class GraphForecaster(pl.LightningModule):
             statistics=statistics,
             data_indices=data_indices,
             metadata=metadata,
+            supporting_arrays=supporting_arrays,
             graph_data=graph_data,
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )

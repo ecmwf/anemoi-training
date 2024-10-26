@@ -1000,22 +1000,33 @@ class AnemoiCheckpoint(ModelCheckpoint):
 
             Path(lightning_checkpoint_filepath).parent.mkdir(parents=True, exist_ok=True)
 
+            # Clear the model config, metadata and supporting arrays before saving
+            # because we don't want to save them twice in the checkpoint
+            # We want them in the part of the checkpoint that we can load without pytorch
+
             save_config = model.config
             model.config = None
 
             tmp_metadata = model.metadata
             model.metadata = None
 
-            metadata = dict(**tmp_metadata)
+            tmp_supporting_arrays = model.supporting_arrays
+            model.supporting_arrays = None
+
+            # Make sure we don't accidentally modidy these
+            metadata = tmp_metadata.copy()
+            supporting_arrays = tmp_supporting_arrays.copy()
 
             inference_checkpoint_filepath = self._get_inference_checkpoint_filepath(lightning_checkpoint_filepath)
 
             torch.save(model, inference_checkpoint_filepath)
 
-            save_metadata(inference_checkpoint_filepath, metadata)
+            save_metadata(inference_checkpoint_filepath, metadata, supporting_arrays=supporting_arrays)
 
+            # Restore the model config, metadata and supporting arrays
             model.config = save_config
             model.metadata = tmp_metadata
+            model.supporting_arrays = tmp_supporting_arrays
 
             self._last_global_step_saved = trainer.global_step
 
