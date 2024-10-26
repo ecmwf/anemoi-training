@@ -235,7 +235,6 @@ class AnemoiTrainer:
     def supporting_arrays(self) -> dict:
         return self.datamodule.supporting_arrays
 
-
     @cached_property
     def profiler(self) -> PyTorchProfiler | None:
         """Returns a pytorch profiler object, if profiling is enabled."""
