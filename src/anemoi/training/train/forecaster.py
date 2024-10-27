@@ -140,8 +140,36 @@ class GraphForecaster(pl.LightningModule):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
 
+    def get_node_weights(self, graph_data: HeteroData, config: DictConfig) -> torch.Tensor:
+        loss_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
+
+        # Re-weight loss spatially, if specified. Useful for stretched grid.
+        if config.training.loss_scaling.spatial:
+            mask_name = config.training.loss_scaling.spatial.graph_node_attribute
+            mask = graph_data[config.graph.data][mask_name].squeeze().bool()
+            p = config.training.loss_scaling.spatial.percentage
+
+            # Calculate the current sum of weights for masked and unmasked nodes
+            masked_sum = torch.sum(loss_weights[mask])
+            unmasked_sum = torch.sum(loss_weights[~mask])
+
+            # Calculate the scaling factor to make masked nodes contribute p-% of total weights
+            scaling_factor = p / (1 - p) * unmasked_sum / masked_sum
+
+            # Apply the scaling factor to the masked nodes
+            loss_weights[mask] *= scaling_factor
+
+            LOGGER.info(
+                "The node weights of '%s' have been scaled by %.4f to contribute %.2f%% of the total.",
+                mask_name,
+                scaling_factor,
+                100 * p,
+            )
+
+        return loss_weights
+
     @staticmethod
-    def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, torch.Tensor]:
+    def metrics_loss_scaling(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, dict, torch.Tensor]:
         metric_ranges = defaultdict(list)
         metric_ranges_validation = defaultdict(list)
         loss_scaling = (
@@ -182,6 +210,7 @@ class GraphForecaster(pl.LightningModule):
             if key in config.training.metrics:
                 metric_ranges[key] = [idx]
         loss_scaling = torch.from_numpy(loss_scaling)
+
         # metric for validation, after postprocessing
         for key, idx in data_indices.model.output.name_to_index.items():
             # Split pressure levels on "_" separator
@@ -194,6 +223,7 @@ class GraphForecaster(pl.LightningModule):
             # Create specific metrics from hydra to log in logger
             if key in config.training.metrics:
                 metric_ranges_validation[key] = [idx]
+
         return metric_ranges, metric_ranges_validation, loss_scaling
 
     def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:

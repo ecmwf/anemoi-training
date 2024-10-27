@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
+import torch
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import ListedColormap
 from matplotlib.colors import TwoSlopeNorm
@@ -74,8 +75,8 @@ def _hide_axes_ticks(ax: plt.Axes) -> None:
     ax.tick_params(axis="both", which="both", length=0)
 
 
-def plot_loss(
-    x: np.ndarray,
+def plot_losses(
+    x: np.ndarray | dict[str, np.ndarray],
     colors: np.ndarray,
     xticks: dict[str, int] | None = None,
     legend_patches: list | None = None,
@@ -84,7 +85,7 @@ def plot_loss(
 
     Parameters
     ----------
-    x : np.ndarray
+    x : np.ndarray | dict[str, np.ndarray]
         Data for Plotting of shape (npred,)
     colors : np.ndarray
         Colors for the bars.
@@ -99,19 +100,31 @@ def plot_loss(
         The figure object handle.
 
     """
+    if not isinstance(x, dict):
+        x = {"Loss": x}
+
+    num_losses = len(x)
+
     # create plot
     # more space for legend
-    figsize = (8, 3) if legend_patches else (4, 3)
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
-    # histogram plot
-    ax.bar(np.arange(x.size), x, color=colors, log=1)
+    figsize = (8, 3 * num_losses) if legend_patches else (4, 3 * num_losses)
+    fig, axs = plt.subplots(num_losses, 1, figsize=figsize, sharey=True)
+    if not isinstance(axs, np.ndarray):
+        axs = np.array([axs])
 
-    # add xticks and legend if given
-    if xticks:
-        ax.set_xticks(list(xticks.values()), list(xticks.keys()), rotation=60)
+    for i, (name, data) in enumerate(x.items()):
+        # histogram plot
+        axs[i].bar(np.arange(data.size), data, color=colors, log=1)
+        axs[i].set_ylabel(name)
+
+        # add xticks and legend if given
+        if xticks:
+            axs[i].set_xticks(list(xticks.values()), list(xticks.keys()), rotation=60)
+
     if legend_patches:
         # legend outside and to the right of the plot
         plt.legend(handles=legend_patches, bbox_to_anchor=(1.01, 1), loc="upper left")
+
     plt.tight_layout()
 
     return fig
@@ -615,8 +628,6 @@ def scatter_plot(
         norm=norm,
         rasterized=True,
     )
-    ax.set_xlim((-np.pi, np.pi))
-    ax.set_ylim((-np.pi / 2, np.pi / 2))
 
     continents.plot_continents(ax)
 
@@ -628,36 +639,60 @@ def scatter_plot(
     fig.colorbar(psc, ax=ax)
 
 
-def plot_graph_features(
-    latlons: np.ndarray,
-    features: np.ndarray,
-) -> Figure:
-    """Plot trainable graph features.
+def sincos_to_latlon(sincos_coords: torch.Tensor) -> torch.Tensor:
+    """Get the lat/lon coordinates from the model.
 
     Parameters
     ----------
-    latlons : np.ndarray
-        Latitudes and longitudes
-    features : np.ndarray
-        Trainable Features
+    sincos_coords: torch.Tensor of shape (N, 4)
+        Sine and cosine of latitude and longitude coordinates.
+
+    Returns
+    -------
+    torch.Tensor of shape (N, 2)
+        Lat/lon coordinates.
+    """
+    ndim = sincos_coords.shape[1] // 2
+    sin_y, cos_y = sincos_coords[:, :ndim], sincos_coords[:, ndim:]
+    return torch.atan2(sin_y, cos_y)
+
+
+def plot_graph_node_features(model: torch.nn.Module, nodes_name: list[str]) -> Figure:
+    """Plot trainable graph node features.
+
+    Parameters
+    ----------
+    model: torch.nn.Module
+        Model object
+    nodes_name: list[str]
+        List of nodes to plot
 
     Returns
     -------
     Figure
         Figure object handle
-
     """
-    nplots = features.shape[-1]
-    figsize = (nplots * 4, 3)
-    fig, ax = plt.subplots(1, nplots, figsize=figsize)
+    nrows = len(nodes_name)
+    ncols = min(getattr(model, f"trainable_{m}").trainable.shape[1] for m in nodes_name)
+    figsize = (ncols * 4, nrows * 3)
+    fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
-    lat, lon = latlons[:, 0], latlons[:, 1]
+    for row, mesh in enumerate(nodes_name):
+        sincos_coords = getattr(model, f"latlons_{mesh}")
+        latlons = sincos_to_latlon(sincos_coords).cpu().numpy()
+        features = getattr(model, f"trainable_{mesh}").trainable.cpu().detach().numpy()
 
-    pc = EquirectangularProjection()
-    pc_lon, pc_lat = pc(lon, lat)
+        lat, lon = latlons[:, 0], latlons[:, 1]
 
-    for i in range(nplots):
-        ax_ = ax[i] if nplots > 1 else ax
-        scatter_plot(fig, ax_, lon=pc_lon, lat=pc_lat, data=features[..., i])
+        for i in range(ncols):
+            ax_ = ax[row, i] if ncols > 1 else ax[row]
+            scatter_plot(
+                fig,
+                ax_,
+                lon=lon,
+                lat=lat,
+                data=features[..., i],
+                title=f"{mesh} trainable feature #{i + 1}",
+            )
 
     return fig

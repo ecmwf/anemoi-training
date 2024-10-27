@@ -39,6 +39,7 @@ class NativeGridDataset(IterableDataset):
         model_comm_group_rank: int = 0,
         model_comm_group_id: int = 0,
         model_comm_num_groups: int = 1,
+        spatial_index: list[int] | None = None,
         shuffle: bool = True,
         label: str = "generic",
     ) -> None:
@@ -60,6 +61,8 @@ class NativeGridDataset(IterableDataset):
             device group ID, default 0
         model_comm_num_groups : int, optional
             total number of device groups, by default 1
+        spatial_index : list[int], optional
+            indices of the spatial indices to keep. Defaults to None, which keeps all spatial indices.
         shuffle : bool, optional
             Shuffle batches, by default True
         label : str, optional
@@ -72,6 +75,7 @@ class NativeGridDataset(IterableDataset):
 
         self.rollout = rollout
         self.timeincrement = timeincrement
+        self.spatial_index = spatial_index
 
         # lazy init
         self.n_samples_per_epoch_total: int = 0
@@ -239,6 +243,8 @@ class NativeGridDataset(IterableDataset):
             end = i + (self.rollout + 1) * self.timeincrement
 
             x = self.data[start : end : self.timeincrement]
+            if self.spatial_index is not None:
+                x = x[..., self.spatial_index]
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
 
