@@ -87,7 +87,8 @@ class NativeGridDataset(IterableDataset):
         assert self.multi_step > 0, "Multistep value must be greater than zero."
         self.ensemble_dim: int = 2
         self.ensemble_size = self.data.shape[self.ensemble_dim]
-        self.grid_size = self.data.shape[-1]
+        self.grid_dim: int = -1
+        self.grid_size = self.data.shape[self.grid_dim]
 
     @cached_property
     def statistics(self) -> dict:
