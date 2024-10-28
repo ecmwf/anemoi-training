@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from abc import ABC
+from abc import abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,9 +26,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class TrainBase(
-    Command,
-):
+class TrainBase(Command, ABC):
     accept_unknown_args = True
 
     @staticmethod
@@ -70,6 +70,9 @@ class TrainBase(
             sys.argv = [new_sysargv, *unknown_args]
         else:
             sys.argv = [new_sysargv]
+
+    @abstractmethod
+    def run(self, args: argparse.Namespace, unknown_args: list[str] | None = None) -> None: ...
 
 
 class Train(TrainBase):
