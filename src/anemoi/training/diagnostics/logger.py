@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -53,6 +54,9 @@ def get_mlflow_logger(config: DictConfig) -> None:
             ),
         )
         log_hyperparams = False
+
+    os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = str(config.diagnostics.log.mlflow.get("http_max_retries", 50))
+    os.environ["MLFLOW_HTTP_REQUEST_TIMEOUT"] = str(config.diagnostics.log.mlflow.get("http_timeout", 1200))
 
     LOGGER.info("AnemoiMLFlow logging to %s", tracking_uri)
     logger = AnemoiMLflowLogger(
