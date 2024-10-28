@@ -13,6 +13,8 @@ Keep it human-readable, your future self will thank you!
 ### Added
 - Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
 
+### Changed
+- Lock python version <3.13 [#107](https://github.com/ecmwf/anemoi-training/pull/107)
 
 ## [0.2.1 - Bugfix: resuming mlflow runs](https://github.com/ecmwf/anemoi-training/compare/0.2.0...0.2.1) - 2024-10-24
 
