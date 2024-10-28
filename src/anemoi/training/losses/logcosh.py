@@ -77,8 +77,7 @@ class WeightedLogCoshLoss(BaseWeightedLoss):
 
         """
         # Keep logcosh numerically stable
-        x = pred - target
-        s = torch.sign(x) * x
+        s = torch.abs(pred - target)
         p = torch.exp(-2 * s)
         out = s + torch.log1p(p) - np.log(2)
 
