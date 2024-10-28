@@ -84,13 +84,13 @@ class GraphForecaster(pl.LightningModule):
         self.save_hyperparameters()
 
         self.latlons_data = graph_data[config.graph.data].x
-        self.loss_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
+        self.node_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
 
         if config.model.get("output_mask", None) is not None:
             self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
         else:
             self.output_mask = NoOutputMask()
-        self.loss_weights = self.output_mask.apply(self.loss_weights, dim=0, fill_value=0.0)
+        self.node_weights = self.output_mask.apply(self.node_weights, dim=0, fill_value=0.0)
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
@@ -99,7 +99,7 @@ class GraphForecaster(pl.LightningModule):
         self.val_metric_ranges, _ = self.get_val_metric_ranges(config, data_indices)
 
         # Kwargs to pass to the loss function
-        loss_kwargs = {"node_weights": self.loss_weights}
+        loss_kwargs = {"node_weights": self.node_weights}
         # Scalars to include in the loss function, must be of form (dim, scalar)
         scalars = {"variable": (-1, variable_scaling)}
 
