@@ -18,7 +18,7 @@ defaults:
 
 diagnostics:
   plot:
-    enabled: False
+    callbacks: []
 hardware:
   files:
     graph: ???
