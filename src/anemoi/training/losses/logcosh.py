@@ -20,6 +20,21 @@ from anemoi.training.losses.weightedloss import BaseWeightedLoss
 LOGGER = logging.getLogger(__name__)
 
 
+class LogCosh(torch.autograd.Function):
+    """LogCosh custom autograd function."""
+
+    @staticmethod
+    def forward(ctx, inp: torch.Tensor) -> torch.Tensor:  # noqa: ANN001
+        ctx.save_for_backward(inp)
+        abs_input = torch.abs(inp)
+        return abs_input + torch.nn.functional.softplus(-2 * abs_input) - np.log(2)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:  # noqa: ANN001
+        (inp,) = ctx.saved_tensors
+        return grad_output * torch.tanh(inp)
+
+
 class WeightedLogCoshLoss(BaseWeightedLoss):
     """Node-weighted LogCosh loss."""
 
@@ -76,10 +91,7 @@ class WeightedLogCoshLoss(BaseWeightedLoss):
             Weighted LogCosh loss
 
         """
-        # Keep logcosh numerically stable
-        s = torch.abs(pred - target)
-        p = torch.exp(-2 * s)
-        out = s + torch.log1p(p) - np.log(2)
+        out = LogCosh.apply(pred - target)
 
         if feature_scale:
             out = self.scale(out, feature_indices)
