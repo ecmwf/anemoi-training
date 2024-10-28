@@ -193,6 +193,7 @@ class GraphForecaster(pl.LightningModule):
                 [
                     GraphForecaster.get_loss_function(
                         OmegaConf.create(loss_config),
+                        scalars=scalars,
                         **kwargs,
                     )
                     for loss_config in config
@@ -210,7 +211,7 @@ class GraphForecaster(pl.LightningModule):
             raise TypeError(error_msg)
 
         for key in scalars_to_include:
-            if key not in scalars:
+            if key not in scalars or []:
                 error_msg = f"Scalar {key!r} not found in valid scalars: {list(scalars.keys())}"
                 raise ValueError(error_msg)
             loss_function.add_scalar(*scalars[key], name=key)
