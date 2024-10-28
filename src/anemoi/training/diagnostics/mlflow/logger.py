@@ -502,7 +502,21 @@ class AnemoiMLflowLogger(MLFlowLogger):
 
     @rank_zero_only
     def log_hyperparams(self, params: dict[str, Any] | Namespace, *, expand_keys: list[str] | None = None) -> None:
-        """Overwrite the log_hyperparams method to flatten config params using '.'."""
+        """Overwrite the log_hyperparams method.
+
+        - flatten config params using '.'.
+        - expand keys within params to avoid truncation.
+        - log hyperparameters as an artifact.
+
+        Parameters
+        ----------
+        params : dict[str, Any] | Namespace
+            params to log
+        expand_keys : list[str] | None, optional
+            keys to expand within params. Any key being expanded will
+            have lists converted according to `expand_iterables`,
+            by default None.
+        """
         if self._flag_log_hparams:
             params = _convert_params(params)
 
@@ -518,15 +532,15 @@ class AnemoiMLflowLogger(MLFlowLogger):
             if Version(mlflow.VERSION) >= Version("1.28.0"):
                 truncation_length = 500
 
-            self.log_hyperparams_as_artifact(expand_iterables(params, size_threshold=truncation_length, delimiter="."))
+            self.log_hyperparams_as_artifact(params)
 
             expanded_params = {}
-            params = dict(params)
+            params = params.copy()
 
             for key in expand_keys or []:
                 if key in params:
                     expanded_params.update(
-                        expand_iterables(params.pop(key), size_threshold=truncation_length, delimiter="."),
+                        expand_iterables(params.pop(key), size_threshold=None, delimiter="."),
                     )
             expanded_params.update(params)
 
