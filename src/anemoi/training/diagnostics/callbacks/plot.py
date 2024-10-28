@@ -354,7 +354,9 @@ class LongRolloutPlots(BasePlotCallback):
 
         # start rollout
         with torch.no_grad():
-            for rollout_step, (_, _, y_pred) in enumerate(pl_module.rollout_step(batch, rollout=max(self.rollout))):
+            for rollout_step, (_, _, y_pred) in enumerate(
+                pl_module.rollout_step(batch, rollout=max(self.rollout), validation_mode=False, training_mode=False),
+            ):
 
                 if (rollout_step + 1) in self.rollout:
                     # prepare true output tensor for plotting

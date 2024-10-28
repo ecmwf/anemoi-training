@@ -15,6 +15,7 @@ from collections import defaultdict
 from collections.abc import Generator
 from collections.abc import Mapping
 from typing import Optional
+from typing import Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -227,8 +228,9 @@ class GraphForecaster(pl.LightningModule):
         self,
         batch: torch.Tensor,
         rollout: Optional[int] = None,  # noqa: FA100
+        training_mode: bool = True,
         validation_mode: bool = False,
-    ) -> Generator[tuple[torch.Tensor, dict, list], None, None]:
+    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:  # noqa: FA100
         """
         Rollout step for the forecaster.
 
@@ -238,15 +240,19 @@ class GraphForecaster(pl.LightningModule):
         ----------
         batch : torch.Tensor
             Batch to use for rollout
-        rollout : int | None, optional
+        rollout : Optional[int], optional
             Number of times to rollout for, by default None
+            If None, will use self.rollout
+        training_mode : bool, optional
+            Whether in training mode and to calculate the loss, by default True
+            If False, loss will be None
         validation_mode : bool, optional
             Whether in validation mode, and to calculate validation metrics, by default False
             If False, metrics will be empty
 
         Yields
         ------
-        Generator[tuple[torch.Tensor, dict, list], None, None]
+        Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]
             Loss value, metrics, and predictions (per step)
 
         Returns
@@ -276,7 +282,7 @@ class GraphForecaster(pl.LightningModule):
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss = checkpoint(self.loss, y_pred, y, use_reentrant=False)
+            loss = checkpoint(self.loss, y_pred, y, use_reentrant=False) if training_mode else None
 
             x = self.advance_input(x, y_pred, batch, rollout_step)
 
@@ -303,6 +309,7 @@ class GraphForecaster(pl.LightningModule):
         for loss_next, metrics_next, y_preds_next in self.rollout_step(
             batch,
             rollout=self.rollout,
+            training_mode=True,
             validation_mode=validation_mode,
         ):
             loss += loss_next
