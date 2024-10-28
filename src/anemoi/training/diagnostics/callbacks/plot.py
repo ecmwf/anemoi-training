@@ -388,8 +388,8 @@ class LongRolloutPlots(BasePlotCallback):
                         logger,
                         fig,
                         epoch=epoch,
-                        tag=f"gnn_pred_val_sample_rstep{rollout_step:03d}_batch{batch_idx:04d}_rank0",
-                        exp_log_tag=f"val_pred_sample_rstep{rollout_step:03d}_rank{local_rank:01d}",
+                        tag=f"gnn_pred_val_sample_rstep{rollout_step + 1:03d}_batch{batch_idx:04d}_rank0",
+                        exp_log_tag=f"val_pred_sample_rstep{rollout_step + 1:03d}_rank{local_rank:01d}",
                     )
         LOGGER.info(
             "Time taken to plot samples after longer rollout: %s seconds",
@@ -413,6 +413,9 @@ class LongRolloutPlots(BasePlotCallback):
             prec = trainer.precision
             dtype = precision_mapping.get(prec)
             context = torch.autocast(device_type=batch.device.type, dtype=dtype) if dtype is not None else nullcontext()
+
+            if self.config.diagnostics.plot.asynchronous:
+                LOGGER.warning("Asynchronous plotting not supported for long rollout plots.")
 
             with context:
                 # Issue with running asyncronously, so call the plot function directly
