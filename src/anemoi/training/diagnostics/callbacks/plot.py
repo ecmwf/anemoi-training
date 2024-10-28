@@ -415,7 +415,8 @@ class LongRolloutPlots(BasePlotCallback):
             context = torch.autocast(device_type=batch.device.type, dtype=dtype) if dtype is not None else nullcontext()
 
             with context:
-                self.plot(trainer, pl_module, output, batch, batch_idx, trainer.current_epoch)
+                # Issue with running asyncronously, so call the plot function directly
+                self._plot(trainer, pl_module, output, batch, batch_idx, trainer.current_epoch)
 
 
 class GraphNodeTrainableFeaturesPlot(BasePerEpochPlotCallback):
