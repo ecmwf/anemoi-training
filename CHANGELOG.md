@@ -10,6 +10,9 @@ Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.2...HEAD)
 
+### Changed
+- Increase the default MlFlow HTTP max retries and timeout [#111](https://github.com/ecmwf/anemoi-training/pull/111)
+
 ## [0.2.2 - Maintenance: pin python <3.13](https://github.com/ecmwf/anemoi-training/compare/0.2.1...0.2.2) - 2024-10-28
 
 ### Changed
