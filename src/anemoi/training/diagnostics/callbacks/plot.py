@@ -344,7 +344,8 @@ class LongRolloutPlots(BasePlotCallback):
         )
 
         # prepare input tensor for plotting
-        input_tensor_0 = pl_module.model.pre_processors(batch, in_place=False)[
+        input_batch = pl_module.model.pre_processors(batch, in_place=False)
+        input_tensor_0 = input_batch[
             self.sample_idx,
             pl_module.multi_step - 1,
             ...,
@@ -365,7 +366,7 @@ class LongRolloutPlots(BasePlotCallback):
 
                 if (rollout_step + 1) in self.rollout:
                     # prepare true output tensor for plotting
-                    input_tensor_rollout_step = batch[
+                    input_tensor_rollout_step = input_batch[
                         self.sample_idx,
                         pl_module.multi_step + rollout_step,  # (pl_module.multi_step - 1) + (rollout_step + 1)
                         ...,
