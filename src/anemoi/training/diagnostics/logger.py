@@ -55,8 +55,12 @@ def get_mlflow_logger(config: DictConfig) -> None:
         )
         log_hyperparams = False
 
-    os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = str(config.diagnostics.log.mlflow.get("http_max_retries", 50))
-    os.environ["MLFLOW_HTTP_REQUEST_TIMEOUT"] = str(config.diagnostics.log.mlflow.get("http_timeout", 1200))
+    http_max_retries = config.diagnostics.log.mlflow.get("http_max_retries", 15)
+    http_timeout = config.diagnostics.log.mlflow.get("http_timeout", 600)
+
+    os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = str(http_max_retries)
+    os.environ["_MLFLOW_HTTP_REQUEST_MAX_RETRIES_LIMIT"] = str(http_max_retries + 1)
+    os.environ["MLFLOW_HTTP_REQUEST_TIMEOUT"] = str(http_timeout)
 
     LOGGER.info("AnemoiMLFlow logging to %s", tracking_uri)
     logger = AnemoiMLflowLogger(
