@@ -340,7 +340,7 @@ class LongRolloutPlots(BasePlotCallback):
 
         assert batch.shape[1] >= max(self.rollout) + pl_module.multi_step, (
             "Batch length not sufficient for requested validation rollout length! "
-            f"Set `dataloader.validation_rollout` to at least {max(self.rollout) + pl_module.multi_step}"
+            f"Set `dataloader.validation_rollout` to at least {max(self.rollout)}"
         )
 
         # prepare input tensor for plotting
