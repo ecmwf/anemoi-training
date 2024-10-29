@@ -19,6 +19,6 @@
         steps:
           - uses: docker://agilepathway/pull-request-label-checker:latest
             with:
-              any_of: ATS approved, No approval needed
+              any_of: ATS approved,No approval needed
               none_of: invalid,wontfix,duplicate,question
               repo_token: ${{ secrets.GITHUB_TOKEN }}
