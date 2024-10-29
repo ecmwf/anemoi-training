@@ -84,7 +84,7 @@ that inherits from ``AnemoiTrainer`` where we just add new features and
 methods relevant to the generation of the reports and activation of the
 profiling mode. Similarly to how we do ``anemoi-trainining train`` to
 submit a new training job, we had added an new command to execute a
-profiler job, so we just need to do ``anemoi-training profile``.
+profiler job, so we just need to do ``anemoi-training profiler``.
 
 Following the same concept as we have with the train command, the
 profiler command is also controlled via the definition of a config. For
@@ -93,7 +93,7 @@ to the Config section. The full command to then execute the profiler is:
 
 .. code:: bash
 
-   anemoi-training profile --config-name=config.yaml
+   anemoi-training profiler --config-name=config.yaml
 
 The profiler requires certain new packages to be installed, and hence
 has a specific section in the\ ``pyproject.toml``
@@ -149,7 +149,7 @@ activated by setting ``profiler:True`` in the diagnostics config. **When
 using the benchmark profiler it's not necessary to set this flag**,
 since the benchmark profiler will automatically activate the
 PytorchProfiler when enabling the memory profiler. When running
-``anemoi-training profile`` it's then **recommended** to set
+``anemoi-training profiler`` it's then **recommended** to set
 ``profiler:False`` in the diagnostics config to avoid any conflicts.
 
 BenchmarkProfiler
@@ -436,7 +436,7 @@ a jupyter notebook and run:
        OmegaConf.resolve(cfg)
 
 
-   # Run anemoi-training profile to generate the traces and get the run_id
+   # Run anemoi-training profiler to generate the traces and get the run_id
    run_id = "b0cc5f6fa6c0476aa1264ad7aacafb4d/"
    tracepath = cfg.hardware.paths.profiler + run_id
    analyzer = TraceAnalysis(trace_dir=tracepath)

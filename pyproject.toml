@@ -92,7 +92,8 @@ urls.Issues = "https://github.com/ecmwf/anemoi-training/issues"
 urls.Repository = "https://github.com/ecmwf/anemoi-training/"
 # command for interactive DDP (not supposed to be used directly)
 # the dot is intentional, so it doesn't trigger autocomplete
-scripts.".anemoi-training-profile" = "anemoi.training.commands.profile:main"
+# Files need to be named profiler due to A005 Module `profile` is shadowing a Python builtin module
+scripts.".anemoi-training-profiler" = "anemoi.training.commands.profiler:main"
 scripts.".anemoi-training-train" = "anemoi.training.commands.train:main"
 # Add subcommand in the `commands` directory
 scripts.anemoi-training = "anemoi.training.__main__:main"
