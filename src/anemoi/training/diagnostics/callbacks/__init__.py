@@ -31,8 +31,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def nestedget(conf: DictConfig, key: str, default: Any) -> Any:
-    """
-    Get a nested key from a DictConfig object.
+    """Get a nested key from a DictConfig object.
 
     E.g.
     >>> nestedget(config, "diagnostics.log.wandb.enabled", False)
