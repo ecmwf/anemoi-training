@@ -14,6 +14,7 @@ Keep it human-readable, your future self will thank you!
 
 ### Added
 - Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
+- Added label checking workflow. Ensure's ATS approval on merge to develop.
 
 ### Changed
 
