@@ -83,7 +83,7 @@ hardware:
   files:
     dataset: aifs-ea-an-oper-0001-mars-o96-1979-2022-6h-v6.zarr
     dataset_lam: cerra-rr-an-oper-0001-mars-5p5km-1984-2008-6h-v1-smhi.zarr
-    graph: test-anemoi-training.pt
+    graph: test-anemoi-training_CERRA.pt
     warm_start: null #specific checkpoint to start from, defaults to last.ckpt
 
 data:
@@ -98,8 +98,12 @@ model:
     hidden2data: 0
     hidden2hidden: 0 # GNN and GraphTransformer Processor only
 
-graphs:
+graph:
   save_graph_plots: True
+  nodes:
+    hidden:
+      node_builder:
+        lam_resolution: 9
 
 training:
   run_id: 'e867b8dbbb5b463eb4ad38dde4009f08' #path to store the experiment in with output_base as root, null for random name, =fork_run_id to continue training in the same folder.
