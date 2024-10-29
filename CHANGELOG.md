@@ -16,6 +16,8 @@ Keep it human-readable, your future self will thank you!
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
 - Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
     - Enable longer validation rollout than training
+### Added
+- Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
 
 ### Changed
 
