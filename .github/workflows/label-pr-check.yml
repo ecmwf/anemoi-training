@@ -10,10 +10,10 @@
           - unlabeled
         branches:
           - develop
-
     jobs:
 
       check_labels:
+        if: github.event.pull_request.draft == false
         name: Check labels
         runs-on: ubuntu-latest
         steps:
