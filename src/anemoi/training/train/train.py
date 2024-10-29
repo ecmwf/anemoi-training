@@ -291,6 +291,14 @@ class AnemoiTrainer:
         LOGGER.debug("Effective learning rate: %.3e", total_number_of_model_instances * self.config.training.lr.rate)
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
+        if self.config.training.max_epochs is not None and not (self.config.training.max_steps in (None, -1)):
+            LOGGER.info(
+                f"Training limits: max_epochs={self.config.training.max_epochs}, max_steps={self.config.training.max_steps}. "
+                f"Training will stop when either limit is reached first. Learning rate scheduler will run for "
+                f"{self.config.training.lr.iterations} steps."
+            )
+
+
     def _update_paths(self) -> None:
         """Update the paths in the configuration."""
         if self.run_id:  # when using mlflow only rank0 will have a run_id except when resuming runs
