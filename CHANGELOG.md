@@ -14,6 +14,8 @@ Keep it human-readable, your future self will thank you!
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
 - Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
     - Enable longer validation rollout than training
+- Expand iterables in logging [#91](https://github.com/ecmwf/anemoi-training/pull/91)
+    - Save entire config in mlflow
 ### Added
 - Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
 
@@ -83,7 +85,6 @@ Keep it human-readable, your future self will thank you!
 - Show correct subcommand in MLFlow - Addresses [#39](https://github.com/ecmwf/anemoi-training/issues/39) in [#61](https://github.com/ecmwf/anemoi-training/pull/61)
 - Fix interactive multi-GPU training [#82](https://github.com/ecmwf/anemoi-training/pull/82)
 - Allow 500 characters in mlflow logging [#88](https://github.com/ecmwf/anemoi-training/pull/88)
-- Expand iterables in logging [#90](https://github.com/ecmwf/anemoi-training/pull/90)
 
 ### Changed
 
