@@ -105,7 +105,6 @@ class BasePlotCallback(Callback, ABC):
             )
 
             save_path.parent.mkdir(parents=True, exist_ok=True)
-
             fig.canvas.draw()
             image_array = np.array(fig.canvas.renderer.buffer_rgba())
             plt.imsave(save_path, image_array, dpi=100)
@@ -461,7 +460,7 @@ class GraphNodeTrainableFeaturesPlot(BasePerEpochPlotCallback):
         pl_module: pl.LightningModule,
         epoch: int,
     ) -> None:
-        _ = epoch
+        #_ = epoch
         model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
 
         fig = plot_graph_node_features(model, scatter=self.scatter_plotting)
@@ -472,7 +471,7 @@ class GraphNodeTrainableFeaturesPlot(BasePerEpochPlotCallback):
         self._output_figure(
             trainer.logger,
             fig,
-            epoch=trainer.current_epoch,
+            epoch=epoch,
             tag=tag,
             exp_log_tag=exp_log_tag,
         )
@@ -503,7 +502,7 @@ class GraphEdgeTrainableFeaturesPlot(BasePerEpochPlotCallback):
         pl_module: pl.LightningModule,
         epoch: int,
     ) -> None:
-        _ = epoch
+        #_ = epoch
 
         model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
         fig = plot_graph_edge_features(model)
@@ -514,7 +513,7 @@ class GraphEdgeTrainableFeaturesPlot(BasePerEpochPlotCallback):
         self._output_figure(
             trainer.logger,
             fig,
-            epoch=trainer.current_epoch,
+            epoch=epoch,
             tag=tag,
             exp_log_tag=exp_log_tag,
         )

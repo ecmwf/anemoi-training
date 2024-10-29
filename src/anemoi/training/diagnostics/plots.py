@@ -118,7 +118,7 @@ def plot_loss(
         ax.set_xticks(list(xticks.values()), list(xticks.keys()), rotation=60)
     if legend_patches:
         # legend outside and to the right of the plot
-        plt.legend(handles=legend_patches, bbox_to_anchor=(1.01, 1), loc="upper left")
+        ax.legend(handles=legend_patches, bbox_to_anchor=(1.01, 1), loc="upper left")
 
     return fig
 
