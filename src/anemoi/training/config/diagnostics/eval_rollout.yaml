@@ -14,8 +14,8 @@ sg_metrics:
     wmse_contribution: False
   metric_4: 
     name: loss_outside_lam_contribution
-    inside_lam: True
-    wmse_contribution: False    
+    inside_lam: False
+    wmse_contribution: True
 
 eval:
   enabled: False
