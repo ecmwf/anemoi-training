@@ -8,18 +8,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Please add your functional changes to the appropriate section in the PR.
 Keep it human-readable, your future self will thank you!
 
-## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.0...HEAD)
+## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.2...HEAD)
+
+### Fixed
+- Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
+- Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
+- Enable longer validation rollout than training
+### Added
+- Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
+- Sub-hour datasets [#63](https://github.com/ecmwf/anemoi-training/pull/63)
+
+### Changed
+- Modified training configuration to support max_steps and tied lr iterations to max_steps by default [#67](https://github.com/ecmwf/anemoi-training/pull/67)
+
+## [0.2.2 - Maintenance: pin python <3.13](https://github.com/ecmwf/anemoi-training/compare/0.2.1...0.2.2) - 2024-10-28
+
+
+### Changed
+
+- Lock python version <3.13 [#107](https://github.com/ecmwf/anemoi-training/pull/107)
+
+## [0.2.1 - Bugfix: resuming mlflow runs](https://github.com/ecmwf/anemoi-training/compare/0.2.0...0.2.1) - 2024-10-24
 
 ### Added
 
+- Mlflow-sync to include new tag for server to server syncing [#83](https://github.com/ecmwf/anemoi-training/pull/83)
+- Mlflow-sync to include functionality to resume and fork server2server runs [#83](https://github.com/ecmwf/anemoi-training/pull/83)
 - Rollout training for Limited Area Models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
 - Feature: New `Boolean1DMask` class. Enables rollout training for limited area models. [#79](https://github.com/ecmwf/anemoi-training/pulls/79)
 
 ### Fixed
 
 - Fix pre-commit regex
+- Mlflow-sync to handle creation of new experiments in the remote server [#83] (https://github.com/ecmwf/anemoi-training/pull/83)
+- Fix for multi-gpu when using mlflow due to refactoring of _get_mlflow_run_params function [#99] (https://github.com/ecmwf/anemoi-training/pull/99)
+- ci: fix pyshtools install error (#100) https://github.com/ecmwf/anemoi-training/pull/100
+- Mlflow-sync to handle creation of new experiments in the remote server [#83](https://github.com/ecmwf/anemoi-training/pull/83)
+- Fix for multi-gpu when using mlflow due to refactoring of _get_mlflow_run_params function [#99](https://github.com/ecmwf/anemoi-training/pull/99)
+- ci: fix pyshtools install error [#100](https://github.com/ecmwf/anemoi-training/pull/100)
+- Fix `__version__` import in init
 
 ### Changed
+
+- Update copyright notice
 
 ## [0.2.0 - Feature release](https://github.com/ecmwf/anemoi-training/compare/0.1.0...0.2.0) - 2024-10-16
 
@@ -30,6 +61,7 @@ Keep it human-readable, your future self will thank you!
 - Add anemoi-transform link to documentation
 - Codeowners file (#56)
 - Changelog merge strategy (#56)
+- Contributors file (#106)
 
 #### Miscellaneous
 
