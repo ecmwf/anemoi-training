@@ -72,9 +72,9 @@ rollout:
 
 max_epochs: 200
 lr:
-  rate: 0.625e-4 #local_lr
-  iterations: 300000
-  min: 3e-7 #Not scaled by #GPU
+  rate: 5e-4 #local_lr
+  iterations: 150000
+  min: 2.4e-6 #Not scaled by #GPU
 
 # Changes in per-gpu batch_size should come with a rescaling of the local_lr
 # in order to keep a constant global_lr
