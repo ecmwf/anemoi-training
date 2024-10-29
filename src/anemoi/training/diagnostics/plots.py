@@ -443,7 +443,7 @@ def plot_flat_sample(
 
     Parameters
     ----------
-    fig : _type_
+    fig : Figure
         Figure object handle
     ax : matplotlib.axes
         Axis object handle
@@ -508,6 +508,30 @@ def plot_flat_sample(
             title=f"{vname} pred err",
             scatter=scatter,
         )
+    elif vname == "mwd":
+        cyclic_colormap = "twilight"
+
+        def error_plot_in_degrees(array1: np.ndarray, array2: np.ndarray) -> np.ndarray:
+            """Calculate error between two arrays in degrees in range [-180, 180]."""
+            tmp = (array1 - array2) % 360
+            return np.where(tmp > 180, tmp - 360, tmp)
+
+        sample_shape = truth.shape
+        pred = np.maximum(np.zeros(sample_shape), np.minimum(360 * np.ones(sample_shape), (pred)))
+        single_plot(fig, ax[1], lon=lon, lat=lat, data=truth, cmap=cyclic_colormap, title=f"{vname} target",scatter=scatter)
+        single_plot(fig, ax[2], lon=lon, lat=lat, data=pred, cmap=cyclic_colormap, title=f"capped {vname} pred",scatter=scatter)
+        err_plot = error_plot_in_degrees(truth, pred)
+        single_plot(
+            fig,
+            ax[3],
+            lon=lon,
+            lat=lat,
+            data=err_plot,
+            cmap="bwr",
+            norm=TwoSlopeNorm(vcenter=0.0),
+            title=f"{vname} pred err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
+            scatter=scatter
+        )
     else:
         single_plot(fig, ax[1], lon, lat, truth, title=f"{vname} target", scatter=scatter)
         single_plot(fig, ax[2], lon, lat, pred, title=f"{vname} pred", scatter=scatter)
@@ -524,29 +548,56 @@ def plot_flat_sample(
         )
 
     if sum(input_) != 0:
-        single_plot(fig, ax[0], lon, lat, input_, title=f"{vname} input", scatter=scatter)
-        single_plot(
-            fig,
-            ax[4],
-            lon,
-            lat,
-            pred - input_,
-            cmap="bwr",
-            norm=TwoSlopeNorm(vcenter=0.0),
-            title=f"{vname} increment [pred - input]",
-            scatter=scatter,
-        )
-        single_plot(
-            fig,
-            ax[5],
-            lon,
-            lat,
-            truth - input_,
-            cmap="bwr",
-            norm=TwoSlopeNorm(vcenter=0.0),
-            title=f"{vname} persist err",
-            scatter=scatter,
-        )
+        if vname == "mwd":
+            single_plot(fig, ax[0], lon=lon, lat=lat, data=input_, cmap=cyclic_colormap, title=f"{vname} input",scatter=scatter)
+            err_plot = error_plot_in_degrees(pred, input_)
+            single_plot(
+                fig,
+                ax[4],
+                lon=lon,
+                lat=lat,
+                data=err_plot,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vcenter=0.0),
+                title=f"{vname} increment [pred - input] % 360",
+                scatter=scatter
+            )
+            err_plot = error_plot_in_degrees(truth, input_)
+            single_plot(
+                fig,
+                ax[5],
+                lon=lon,
+                lat=lat,
+                data=err_plot,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vcenter=0.0),
+                title=f"{vname} persist err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
+                scatter=scatter
+            )        
+        else:
+            single_plot(fig, ax[0], lon, lat, input_, title=f"{vname} input", scatter=scatter)
+            single_plot(
+                fig,
+                ax[4],
+                lon,
+                lat,
+                pred - input_,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vcenter=0.0),
+                title=f"{vname} increment [pred - input]",
+                scatter=scatter,
+            )
+            single_plot(
+                fig,
+                ax[5],
+                lon,
+                lat,
+                truth - input_,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vcenter=0.0),
+                title=f"{vname} persist err",
+                scatter=scatter,
+            )
     else:
         ax[0].axis("off")
         ax[4].axis("off")
@@ -554,7 +605,7 @@ def plot_flat_sample(
 
 
 def single_plot(
-    fig: plt.Figure,
+    fig: Figure,
     ax: plt.axes,
     lon: np.array,
     lat: np.array,
@@ -571,7 +622,7 @@ def single_plot(
 
     Parameters
     ----------
-    fig : _type_
+    fig : Figure
         Figure object handle
     ax : matplotlib.axes
         Axis object handle
@@ -579,7 +630,7 @@ def single_plot(
         longitude coordinates array, shape (lon,)
     lat : np.ndarray
         latitude coordinates array, shape (lat,)
-    data : _type_
+    data : np.ndarray
         Data to plot
     cmap : str, optional
         Colormap string from matplotlib, by default "viridis"
@@ -649,9 +700,9 @@ def edge_plot(
 
     Parameters
     ----------
-    fig : _type_
+    fig : Figure
         Figure object handle
-    ax : _type_
+    ax : matplotlib.axes
         Axis object handle
     src_coords : np.ndarray of shape (num_edges, 2)
         Source latitudes and longitudes.
