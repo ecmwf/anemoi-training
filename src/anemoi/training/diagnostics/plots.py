@@ -519,10 +519,24 @@ def plot_flat_sample(
         sample_shape = truth.shape
         pred = np.maximum(np.zeros(sample_shape), np.minimum(360 * np.ones(sample_shape), (pred)))
         single_plot(
-            fig, ax[1], lon=lon, lat=lat, data=truth, cmap=cyclic_colormap, title=f"{vname} target", scatter=scatter,
+            fig,
+            ax[1],
+            lon=lon,
+            lat=lat,
+            data=truth,
+            cmap=cyclic_colormap,
+            title=f"{vname} target",
+            scatter=scatter,
         )
         single_plot(
-            fig, ax[2], lon=lon, lat=lat, data=pred, cmap=cyclic_colormap, title=f"capped {vname} pred", scatter=scatter,
+            fig,
+            ax[2],
+            lon=lon,
+            lat=lat,
+            data=pred,
+            cmap=cyclic_colormap,
+            title=f"capped {vname} pred",
+            scatter=scatter,
         )
         err_plot = error_plot_in_degrees(truth, pred)
         single_plot(
@@ -554,7 +568,14 @@ def plot_flat_sample(
     if sum(input_) != 0:
         if vname == "mwd":
             single_plot(
-                fig, ax[0], lon=lon, lat=lat, data=input_, cmap=cyclic_colormap, title=f"{vname} input", scatter=scatter,
+                fig,
+                ax[0],
+                lon=lon,
+                lat=lat,
+                data=input_,
+                cmap=cyclic_colormap,
+                title=f"{vname} input",
+                scatter=scatter,
             )
             err_plot = error_plot_in_degrees(pred, input_)
             single_plot(

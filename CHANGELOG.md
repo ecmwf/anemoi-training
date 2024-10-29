@@ -86,6 +86,7 @@ Keep it human-readable, your future self will thank you!
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
 - Remove credential prompt from mlflow login, replace with seed refresh token via web - [#78](https://github.com/ecmwf/anemoi-training/pull/78)
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
+- Modified training configuration to support max_steps and tied lr iterations to max_steps by default [#67](https://github.com/ecmwf/anemoi-training/pull/67)
 - Remove credential prompt from mlflow login, replace with seed refresh token via web - [#78](https://github.com/ecmwf/anemoi-training/pull/78)
 - Update CODEOWNERS
 
