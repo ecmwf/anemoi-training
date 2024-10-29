@@ -44,6 +44,7 @@ from anemoi.training.diagnostics.plots import plot_histogram
 from anemoi.training.diagnostics.plots import plot_loss
 from anemoi.training.diagnostics.plots import plot_power_spectrum
 from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
+from anemoi.training.losses.weightedloss import BaseWeightedLoss
 
 if TYPE_CHECKING:
     import pytorch_lightning as pl
@@ -138,6 +139,13 @@ class BasePlotCallback(Callback, ABC):
         del trainer, pl_module, stage  # unused
         if self._executor is not None:
             self._executor.shutdown(wait=True)
+
+    def apply_output_mask(self, pl_module: pl.LightningModule, data: torch.Tensor) -> torch.Tensor:
+        if hasattr(pl_module, "output_mask") and pl_module.output_mask is not None:
+            # Fill with NaNs values where the mask is False
+            data[:, :, ~pl_module.output_mask, :] = np.nan
+
+        return data
 
     @abstractmethod
     @rank_zero_only
@@ -598,6 +606,11 @@ class PlotLoss(BasePlotCallback):
         # reorder parameter_names by position
         self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
 
+        if not isinstance(pl_module.loss, BaseWeightedLoss):
+            logging.warning(
+                "Loss function must be a subclass of BaseWeightedLoss, or provide `squash`.", RuntimeWarning
+            )
+
         batch = pl_module.model.pre_processors(batch, in_place=False)
         for rollout_step in range(pl_module.rollout):
             y_hat = outputs[1][rollout_step]
@@ -682,12 +695,16 @@ class PlotSample(BasePlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors(input_tensor)
 
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
+
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy()
 
         for rollout_step in range(pl_module.rollout):
             fig = plot_predicted_multilevel_flat_sample(
@@ -776,11 +793,15 @@ class PlotAdditionalMetrics(BasePlotCallback):
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor).numpy()
+        data = self.post_processors(input_tensor)
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
-        ).numpy()
+        )
+
+        output_tensor = pl_module.output_mask.apply(output_tensor, dim=2, fill_value=np.nan).numpy()
+        data[1:, ...] = pl_module.output_mask.apply(data[1:, ...], dim=2, fill_value=np.nan)
+        data = data.numpy()
 
         for rollout_step in range(pl_module.rollout):
             if self.config.diagnostics.plot.parameters_histogram is not None:
