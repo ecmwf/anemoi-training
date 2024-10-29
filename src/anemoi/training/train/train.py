@@ -304,9 +304,12 @@ class AnemoiTrainer:
 
         if self.config.training.max_epochs is not None and self.config.training.max_steps not in (None, -1):
             LOGGER.info(
-                f"Training limits: max_epochs={self.config.training.max_epochs}, max_steps={self.config.training.max_steps}. "
-                f"Training will stop when either limit is reached first. Learning rate scheduler will run for "
-                f"{self.config.training.lr.iterations} steps.",
+                "Training limits: max_epochs=%d, max_steps=%d. "
+                "Training will stop when either limit is reached first. "
+                "Learning rate scheduler will run for %d steps.",
+                self.config.training.max_epochs,
+                self.config.training.max_steps,
+                self.config.training.lr.iterations,
             )
 
     def _get_server2server_lineage(self) -> None:
