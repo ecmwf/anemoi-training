@@ -8,11 +8,8 @@ nodes:
   # Data nodes
   data:
     node_builder:
-      _target_: anemoi.graphs.nodes.CutOutZarrDatasetNodes
-      lam_dataset: ${hardware.paths.data}/${hardware.files.dataset}
-      forcing_dataset: ${hardware.paths.data}/${hardware.files.forcing_dataset}
-      thinning: 25
-      forcing_area: ??? # (north, west, south, east). It only works with feature/support-forcing-area-in-cutout
+      _target_: anemoi.graphs.nodes.ZarrDatasetNodes
+      dataset: ${dataloader.dataset}
     attributes: ${graph.attributes.nodes}
   # Hidden nodes
   hidden:
@@ -51,7 +48,9 @@ attributes:
   nodes:
     area_weight:
       _target_: anemoi.graphs.nodes.attributes.AreaWeights # options: Area, Uniform
-      #norm: unit-max # options: l1, l2, unit-max, unit-sum, unit-std
+      norm: unit-max # options: l1, l2, unit-max, unit-sum, unit-std
+    cutout:
+      _target_: anemoi.graphs.nodes.attributes.CutOutMask
   edges:
     edge_length:
       _target_: anemoi.graphs.edges.attributes.EdgeLength

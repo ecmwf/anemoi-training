@@ -40,9 +40,8 @@ dataloader:
   dataset:
     cutout:
       - dataset: ${hardware.paths.data}/${hardware.files.dataset}
-        thinning: ${graph.nodes.data.node_builder.thinning}
+        thinning: ???
       - dataset: ${hardware.paths.data}/${hardware.files.forcing_dataset}
-        area: ${graph.nodes.data.node_builder.forcing_area} # Only supported with feature/support-forcing-area-in-cutout
     adjust: all
   limit_batches:
     training: 100

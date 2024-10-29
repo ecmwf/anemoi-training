@@ -40,7 +40,7 @@ dataloader:
   dataset:
     cutout:
       - dataset: ${hardware.paths.data}/${hardware.files.dataset}
-        thinning: ${graph.nodes.data.node_builder.thinning}
+        thinning: ???
       - dataset: ${hardware.paths.data}/${hardware.files.forcing_dataset}
     adjust: all
   limit_batches:
