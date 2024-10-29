@@ -1,5 +1,4 @@
 asynchronous: True # Whether to plot asynchronously
-scatter: False # Choose which technique to use for plotting
 frequency: # Frequency of the plotting
   batch: 750
   epoch: 5
@@ -61,3 +60,9 @@ callbacks:
     - 2t
     - 10u
     - 10v
+  - _target_:  anemoi.training.diagnostics.callbacks.plot.LongRolloutPlots
+    rollout:
+      - ${dataloader.validation_rollout}
+    epoch_frequency: 20
+    sample_idx: ${diagnostics.plot.sample_idx}
+    parameters: ${diagnostics.plot.parameters}

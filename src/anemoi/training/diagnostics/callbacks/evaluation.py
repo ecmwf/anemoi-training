@@ -61,11 +61,16 @@ class RolloutEval(Callback):
 
         assert batch.shape[1] >= self.rollout + pl_module.multi_step, (
             "Batch length not sufficient for requested validation rollout length! "
-            f"Set `dataloader.validation_rollout` to at least {self.rollout + pl_module.multi_step}"
+            f"Set `dataloader.validation_rollout` to at least {max(self.rollout)}"
         )
 
         with torch.no_grad():
-            for loss_next, metrics_next, _ in pl_module.rollout_step(batch, rollout=self.rollout, validation_mode=True):
+            for loss_next, metrics_next, _ in pl_module.rollout_step(
+                batch,
+                rollout=self.rollout,
+                validation_mode=True,
+                training_mode=True,
+            ):
                 loss += loss_next
                 metrics.update(metrics_next)
 

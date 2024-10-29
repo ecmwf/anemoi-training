@@ -16,6 +16,12 @@ defaults:
 # hardware:
 #   num_gpus_per_node: 1
 
+diagnostics:
+  plot:
+    callbacks: []
+hardware:
+  files:
+    graph: ???
 model:
   num_channels: 128
 dataloader:
