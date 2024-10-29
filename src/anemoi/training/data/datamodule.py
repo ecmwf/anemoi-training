@@ -118,9 +118,10 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             msg = f"Error in timestep, {self.config.data.timestep}"
             raise ValueError(msg) from e
 
-        assert (
-            timestep % frequency == 0
-        ), f"Timestep isn't a multiple of data frequency, {timestep}, or data frequency, {frequency}"
+        assert timestep % frequency == 0, (
+            f"Timestep ({self.config.data.timestep} == {timestep}) isn't a "
+            f"multiple of data frequency ({self.config.data.frequency} == {frequency})."
+        )
 
         LOGGER.info(
             "Timeincrement set to %s for data with frequency, %s, and timestep, %s",
