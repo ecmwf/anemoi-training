@@ -460,7 +460,6 @@ class GraphNodeTrainableFeaturesPlot(BasePerEpochPlotCallback):
         pl_module: pl.LightningModule,
         epoch: int,
     ) -> None:
-        #_ = epoch
         model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
 
         fig = plot_graph_node_features(model, scatter=self.scatter_plotting)
@@ -502,7 +501,6 @@ class GraphEdgeTrainableFeaturesPlot(BasePerEpochPlotCallback):
         pl_module: pl.LightningModule,
         epoch: int,
     ) -> None:
-        #_ = epoch
 
         model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
         fig = plot_graph_edge_features(model)
