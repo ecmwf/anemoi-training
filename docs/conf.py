@@ -1,3 +1,12 @@
+# (C) Copyright 2024 Anemoi contributors.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
@@ -16,7 +25,7 @@ import sys
 
 read_the_docs_build = os.environ.get("READTHEDOCS", None) == "True"
 
-sys.path.insert(0, os.path.join(os.path.abspath(".."), "src"))
+sys.path.insert(0, os.path.join(os.path.abspath(".."), "src"))  # noqa: PTH118, PTH100
 
 
 source_suffix = ".rst"
@@ -32,10 +41,10 @@ project = "Anemoi Training"
 
 author = "ECMWF"
 
-year = datetime.datetime.now().year
+year = datetime.datetime.now(tz="UTC").year
 years = "2024" if year == 2024 else f"2024-{year}"
 
-copyright = f"{years}, ECMWF"
+copyright = f"{years}, ECMWF"  # noqa: A001
 
 
 try:
@@ -64,7 +73,7 @@ extensions = [
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-# templates_path = ["_templates"]
+# templates_path = ["_templates"] # noqa: ERA001
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
