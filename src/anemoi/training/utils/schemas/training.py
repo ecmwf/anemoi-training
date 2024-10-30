@@ -11,6 +11,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import NonNegativeInt
+from pydantic import PositiveInt
+
+from .utils import HydraInstantiable
 
 
 class GradientClip(BaseModel):
@@ -26,14 +30,14 @@ class SWA(BaseModel):
 
 
 class Rollout(BaseModel):
-    start: int = 1
-    epoch_increment: int = 0
-    max: int = 1
+    start: PositiveInt = 1
+    epoch_increment: NonNegativeInt = 0
+    max: PositiveInt = 1
 
 
 class LR(BaseModel):
     rate: float = 0.625e-4
-    iterations: int = 300000
+    iterations: NonNegativeInt = 300000
     min: float = 3e-7
 
 
@@ -61,7 +65,7 @@ class LossScaling(BaseModel):
     sfc: Surface = Field(default_factory=Surface)
 
 
-class PressureLevelScaler(BaseModel):
+class PressureLevelScaler(HydraInstantiable):
     _target_: str = "anemoi.training.data.scaling.ReluPressureLevelScaler"
     minimum: float = 0.2
     slope: float = 0.001
@@ -75,14 +79,14 @@ class TrainingConfig(BaseModel):
     load_weights_only: bool = False
     deterministic: bool = False
     precision: str = "16-mixed"
-    multistep_input: int = 4
-    accum_grad_batches: int = 1
+    multistep_input: PositiveInt = 4
+    accum_grad_batches: PositiveInt = 1
     gradient_clip: GradientClip = Field(default_factory=GradientClip)
     swa: SWA = Field(default_factory=SWA)
     zero_optimizer: bool = False
     loss_gradient_scaling: bool = False
     rollout: Rollout = Field(default_factory=Rollout)
-    max_epochs: int = 200
+    max_epochs: PositiveInt = 200
     lr: LR = Field(default_factory=LR)
     loss_scaling: LossScaling = Field(default_factory=LossScaling)
     metrics: list[str] = Field(default_factory=list)

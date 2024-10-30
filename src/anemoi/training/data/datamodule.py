@@ -22,6 +22,7 @@ from torch.utils.data import DataLoader
 
 from anemoi.training.data.dataset import NativeGridDataset
 from anemoi.training.data.dataset import worker_init_func
+from anemoi.training.utils.schemas.base_config import convert_to_omegaconf
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @cached_property
     def data_indices(self) -> IndexCollection:
-        return IndexCollection(self.config, self.ds_train.name_to_index)
+        return IndexCollection(convert_to_omegaconf(self.config), self.ds_train.name_to_index)
 
     @cached_property
     def timeincrement(self) -> int:

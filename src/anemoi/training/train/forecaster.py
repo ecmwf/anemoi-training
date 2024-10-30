@@ -20,7 +20,6 @@ import pytorch_lightning as pl
 import torch
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.interface import AnemoiModelInterface
-from anemoi.utils.config import DotDict
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
@@ -32,7 +31,7 @@ from torch_geometric.data import HeteroData
 
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
-from anemoi.training.utils.jsonify import map_config_to_primitives
+from anemoi.training.utils.schemas.base_config import convert_to_omegaconf
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
 
@@ -76,7 +75,7 @@ class GraphForecaster(pl.LightningModule):
             data_indices=data_indices,
             metadata=metadata,
             graph_data=graph_data,
-            config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
+            config=convert_to_omegaconf(config),
         )
 
         self.data_indices = data_indices
@@ -94,9 +93,9 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        variable_scaling = self.get_variable_scaling(config, data_indices)
+        variable_scaling = self.get_variable_scaling(convert_to_omegaconf(config), data_indices)
 
-        _, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
+        _, self.val_metric_ranges = self.get_val_metric_ranges(convert_to_omegaconf(config), data_indices)
 
         # Kwargs to pass to the loss function
         loss_kwargs = {"node_weights": self.node_weights}
@@ -191,7 +190,7 @@ class GraphForecaster(pl.LightningModule):
         ValueError
             If scalar is not found in valid scalars
         """
-        config_container = OmegaConf.to_container(config, resolve=False)
+        config_container = OmegaConf.to_container(convert_to_omegaconf(config), resolve=False)
         if isinstance(config_container, list):
             return torch.nn.ModuleList(
                 [
@@ -204,7 +203,7 @@ class GraphForecaster(pl.LightningModule):
                 ],
             )
 
-        loss_config = OmegaConf.to_container(config, resolve=True)
+        loss_config = OmegaConf.to_container(convert_to_omegaconf(config), resolve=True)
         scalars_to_include = loss_config.pop("scalars", [])
 
         # Instantiate the loss function with the loss_init_config

@@ -9,7 +9,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path  # noqa: TCH003
+
 from pydantic import BaseModel
+from pydantic import NonNegativeInt
+from pydantic import field_validator
+from pydantic import model_validator
 
 
 class Checkpoint(BaseModel):
@@ -19,17 +24,17 @@ class Checkpoint(BaseModel):
 
 
 class FilesConfig(BaseModel):
-    dataset: str
-    graph: str
+    dataset: Path
+    graph: Path
     checkpoint: dict[str, str]
     warm_start: str | None
 
 
 class Logs(BaseModel):
-    base: str
-    wandb: str
-    mlflow: str
-    tensorboard: str
+    base: str | None = None
+    wandb: str | None = None
+    mlflow: str | None = None
+    tensorboard: str | None = None
 
 
 class PathsConfig(BaseModel):
@@ -45,8 +50,22 @@ class PathsConfig(BaseModel):
 
 class HardwareConfig(BaseModel):
     accelerator: str
-    num_gpus_per_node: int
-    num_nodes: int
-    num_gpus_per_model: int
+    num_gpus_per_node: NonNegativeInt
+    num_nodes: NonNegativeInt
+    num_gpus_per_model: NonNegativeInt
     files: FilesConfig
     paths: PathsConfig
+
+    @field_validator("num_gpus_per_node")
+    @classmethod
+    def check_valid_num_gpus_per_node(cls, num_gpus_per_node: int) -> int:
+        assert num_gpus_per_node <= 8, "num_gpus_per_node must be less than 8"
+        return num_gpus_per_node
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_valid_num_gpus_per_model(cls, data: dict) -> dict:
+        assert (
+            data["num_gpus_per_model"] <= data["num_gpus_per_node"]
+        ), "num_gpus_per_model must be less than num_gpus_per_node"
+        return data
