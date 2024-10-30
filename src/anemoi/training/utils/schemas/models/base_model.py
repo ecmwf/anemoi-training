@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import NonNegativeInt
 from pydantic import field_validator
 
 from anemoi.training.utils.schemas.utils import HydraInstantiable
@@ -18,18 +19,12 @@ from anemoi.training.utils.schemas.utils import HydraInstantiable
 _allowed_models = ["anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"]
 
 
-class ModelComponent(HydraInstantiable):
-    activation: str = "${model.activation}"
-    trainable_size: int = 8
-    num_chunks: int = 1
-
-
 class TrainableParameters(BaseModel):
-    data: int = 8
-    hidden: int = 8
-    data2hidden: int = 8
-    hidden2data: int = 8
-    hidden2hidden: int | None = None
+    data: NonNegativeInt = 8
+    hidden: NonNegativeInt = 8
+    data2hidden: NonNegativeInt = 8
+    hidden2data: NonNegativeInt = 8
+    hidden2hidden: NonNegativeInt | None = None
 
 
 class Attributes(BaseModel):
@@ -39,7 +34,7 @@ class Attributes(BaseModel):
 
 class BaseModelConfig(BaseModel):
     activation: str = "GELU"
-    num_channels: int = 512
+    num_channels: NonNegativeInt = 512
     model: HydraInstantiable = Field(default_factory=HydraInstantiable)
     trainable_parameters: TrainableParameters = Field(default_factory=TrainableParameters)
     attributes: Attributes = Field(default_factory=Attributes)

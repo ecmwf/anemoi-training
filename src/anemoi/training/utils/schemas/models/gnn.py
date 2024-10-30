@@ -12,11 +12,14 @@ from pydantic import Field
 from pydantic import NonNegativeInt
 from pydantic import field_validator
 
+from anemoi.training.utils.schemas.utils import HydraInstantiable
+
 from .base_model import BaseModelConfig
-from .base_model import ModelComponent
 
 
-class GNNModelComponent(ModelComponent):
+class GNNModelComponent(HydraInstantiable):
+    activation: str = "GELU"
+    trainable_size: NonNegativeInt = 8
     sub_graph_edge_attributes: list = Field(default_factory=list)
     mlp_extra_layers: int = 0
     num_chunks: NonNegativeInt = 1
