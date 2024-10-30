@@ -25,7 +25,6 @@ class Profiler(TrainBase):
     accept_unknown_args = True
 
     def run(self, args: list[str], unknown_args: list[str] | None = None) -> None:
-        # This will be picked up by the logger
         os.environ["ANEMOI_TRAINING_CMD"] = f"{sys.argv[0]} {args.command}"
         # Merge the known subcommands with a non-whitespace character for hydra
         new_sysargv = self._merge_sysargv(args)
