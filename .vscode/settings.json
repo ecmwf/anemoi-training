@@ -1,0 +1,11 @@
+{
+    "python.testing.pytestArgs": [
+        ".",
+        // "-n", "1",
+        "--maxfail=60",
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "python.envFile": "${workspaceFolder}/.env",
+
+} 

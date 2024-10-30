@@ -5,7 +5,6 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-#
 
 from __future__ import annotations
 
@@ -27,7 +26,7 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
-from anemoi.training.diagnostics.callbacks import get_callbacks
+
 from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
@@ -221,8 +220,10 @@ class AnemoiTrainer:
 
     @cached_property
     def callbacks(self) -> list[pl.callbacks.Callback]:
-
-        return get_callbacks(self.config, self.monitored_metrics)
+        
+        # Need to add code that essentially devides shard size by validation batch size (make a validaiton_steops func versino of trainign setsp)
+        return hydra.utils.get_class(self.config.training.lightning_module).get_callbacks(self.monitored_metrics, self.lightning_module.validation_steps_per_epoch)
+        
 
     @cached_property
     def metadata(self) -> dict:
@@ -298,19 +299,19 @@ class AnemoiTrainer:
 
         # Log learning rate multiplier when running single-node, multi-GPU and/or multi-node
         if self.config.training.optimizer.scale_by_gpus:
-            total_number_of_model_instances = (
+            lr_scaling_factor = (
                 self.config.hardware.num_nodes
                 * self.config.hardware.num_gpus_per_node
                 / self.config.hardware.num_gpus_per_model
             )
             LOGGER.debug(
                 "Total GPU count / model group size: %d - NB: the learning rate will be scaled by this factor!",
-                total_number_of_model_instances,
+                lr_scaling_factor,
             )
         else:
-            total_number_of_model_instances = 1
+            lr_scaling_factor = 1
 
-        LOGGER.debug("Effective learning rate: %.3e", total_number_of_model_instances * self.config.training.lr.rate)
+        LOGGER.debug("Effective learning rate: %.3e", lr_scaling_factor * self.config.training.lr.rate)
 
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 

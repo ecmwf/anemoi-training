@@ -10,7 +10,7 @@
         "isDefault": true
       },
       "problemMatcher": {
-        "owner": "python",
+        "owner": "rufflint",
         "fileLocation": ["relative", "${workspaceFolder}"],
         "pattern": [
           {
@@ -23,6 +23,29 @@
         ]
       },
       "detail": "Lint all Python files in the workspace using Ruff."
+    },
+    {
+      "label": "Empty Ruff linting Problems",
+      "type": "shell",
+      "command": "ruff -h",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": {
+        "owner": "rufflint",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": [
+          {
+            "regexp": "^(.+):(\\d+):(\\d+):\\s+(.+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        ]
+      },
+      "detail": "Clear the Problems Tab."
     },
     {
       "label": "Ruff: Safe fixes",
@@ -60,6 +83,20 @@
           "panel": "new"
       },
       "group": "build"
-  }
+  },
+  {
+    "label": "Open All Files Recursively",
+    "type": "shell",
+    "command": "bash",
+    "args": [
+        "-c",
+        "find . -type f -name '*.py' -exec cursor {} \\;"
+    ],
+    "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+    },
+    "problemMatcher": []
+}
   ]
 }

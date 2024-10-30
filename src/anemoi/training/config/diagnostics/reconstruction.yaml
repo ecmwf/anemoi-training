@@ -139,9 +139,9 @@ log:
   mlflow:
     enabled: True
     offline: True
-    authentication: False
+    authentication: True
     log_model: False
-    tracking_uri: 'tracking_uri'
+    tracking_uri: blargghh
     experiment_name: 'reconstruction'
     project_name: 'Anemoi'
     system: True

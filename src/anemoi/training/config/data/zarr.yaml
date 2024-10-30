@@ -85,13 +85,13 @@ processors:
   #   config: ${data.remapper}
   state:
     normalizer:
-      _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
+      _target_: anemoi.models.preprocessing.normalizer.InputNormalizerr.InputNormalizer
       _convert_: all
       config: ${data.normalizers.state}
 
   tendency:
     normalizer:
-      _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
+      _target_: anemoi.models.preprocessing.normalizer.InputNormalizerr.InputNormalizer
       _convert_: all
       config: ${data.normalizers.tendency}
 

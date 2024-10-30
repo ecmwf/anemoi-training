@@ -31,51 +31,38 @@ from omegaconf import OmegaConf
 from PIL import Image
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from pytorch_lightning.utilities.rank_zero import rank_zero_info
 
-from anemoi.training.diagnostics.callbacks import AnemoiCheckpoint
-from anemoi.training.diagnostics.callbacks import ParentUUIDCallback
 
 from anemoi.training.diagnostics.metrics import SpreadSkill
 
-from anemoi.training.diagnostics.plots.plots import init_plot_settings
-from anemoi.training.diagnostics.plots.plots import plot_graph_features
-from anemoi.training.diagnostics.plots.plots_ensemble import plot_histogram
-from anemoi.training.diagnostics.plots.plots import plot_loss
+
+
+
 from anemoi.training.diagnostics.plots.plots_ensemble import plot_power_spectrum
-from anemoi.training.diagnostics.plots.plots import plot_predicted_multilevel_flat_sample
-from anemoi.training.diagnostics.callbacks import MemCleanUpCallback
 
 # function should take
 from functools import lru_cache
 from functools import wraps
 from anemoi.training.losses.utils import get_monitored_metric_name
 from torch import Tensor
-from pytorch_lightning.callbacks import LearningRateMonitor
 from anemoi.training.diagnostics.callbacks import (
-    GraphTrainableFeaturesPlot,
     BasePlotCallback,
-    BaseLossMapPlot,
 )
 from anemoi.training.diagnostics.callbacks.forecast import (
-    EarlyStoppingRollout,
     ForecastingLossBarPlot,
     ForecastingLossMapPlot,
-    AnemoiCheckpointRollout,
     PlotPowerSpectrum,
     PlotSample,
 )
+from anemoi.training.diagnostics.callbacks.common_callbacks import get_common_callbacks
 
-from anemoi.training.diagnostics import safe_cast_to_numpy, get_time_step
+from anemoi.training.diagnostics.callbacks import safe_cast_to_numpy, get_time_step
 
 from anemoi.training.diagnostics.plots.plots_ensemble import plot_predicted_ensemble
 from anemoi.training.diagnostics.plots.plots_ensemble import plot_rank_histograms
 from anemoi.training.diagnostics.plots.plots_ensemble import plot_spread_skill
 from anemoi.training.diagnostics.plots.plots_ensemble import plot_spread_skill_bins
 
-from anemoi.training.diagnostics.callbacks import WeightGradOutputLoggerCallback
 import logging
 from anemoi.models.distributed.graph import gather_tensor
 
@@ -83,10 +70,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class RolloutEvalEns(Callback):
-    def __init__(
-        self, config, val_dset_len, callbacks_validation_batch_end: list, 
-        callbacks_validation_epoch_end: list
-    ) -> None:
+    def __init__(self, config, val_dset_len, callbacks: list[Callback]) -> None:
         super().__init__()
         self.rollout = config.diagnostics.metrics.rollout_eval.rollout
         self.frequency = config.diagnostics.eval.frequency
@@ -94,8 +78,15 @@ class RolloutEvalEns(Callback):
             self, config.diagnostics.metrics.rollout_eval.frequency, val_dset_len
         )
         self.lead_time_to_eval = config.diagnostics.eval.lead_time_to_eval
-        self.callbacks_validation_batch_end = callbacks_validation_batch_end
-        self.callbacks_validation_epoch_end = callbacks_validation_epoch_end
+        
+        self.callbacks_validation_batch_end = [
+            cb for cb in callbacks 
+            if 'on_validation_batch_end' in cb.__class__.__dict__
+        ]
+        self.callbacks_validation_epoch_end = [
+            cb for cb in callbacks 
+            if 'on_validation_epoch_end' in cb.__class__.__dict__
+        ]
 
     def on_validation_batch_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule, outputs: Any, batch: torch.Tensor, batch_idx: int
@@ -171,7 +162,6 @@ class RolloutEvalEns(Callback):
             if pcallback.op_on_this_batch(batch_idx)
         ]
         return (((batch_idx + 1) % self.eval_frequency) == 0) or len(callbacks_idx_to_run) > 0
-
 
 class SpreadSkillPlot(BasePlotCallback):
     def __init__(self, config, val_dset_len, **kwargs):
@@ -347,178 +337,209 @@ class PlotEnsPowerSpectrum(PlotPowerSpectrum):
                 
                 self._output_figure(trainer.logger, fig, tag=f"gnn_pred_val_spec_rstep_{rollout_step:02d}_epoch_{epoch:03d}_batch{batch_idx:04d}_rank0", exp_log_tag=f"val_pred_spec_rstep_{rollout_step:02d}_rank{pl_module.local_rank:01d}")
 
+def setup_rollout_eval_callbacks(config, val_dset_len):
+    """Create and return rollout evaluation callbacks."""
+    callbacks = []
 
-def get_ens_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
-    """Setup callbacks for PyTorch Lightning trainer with ensemble-specific modifications.
+    if config.diagnostics.plot.loss_map:
+        callbacks.append(ForecastingLossMapPlot(config, val_dset_len))
 
-    Parameters
-    ----------
-    config : DictConfig
-        Configuration object.
-    monitored_metrics : list
-        List of monitored metrics to track during training
-    val_dset_len : int
-        Length of the validation dataset.
+    if config.diagnostics.plot.loss_bar:
+        callbacks.append(ForecastingLossBarPlot(config, val_dset_len))
 
-    Returns
-    -------
-    list
-        A list of PyTorch Lightning callbacks
-    """
-    trainer_callbacks = []
+    if config.diagnostics.plot.plot_spectral_loss:
+        callbacks.append(PlotEnsPowerSpectrum(config, val_dset_len))
 
-    def setup_checkpoint_callbacks():
-        """Create and return checkpoint-related callbacks."""
-        ckpt_callbacks = []
-        if config.diagnostics.profiler:
-            LOGGER.warning("Profiling is enabled - no checkpoints will be written!")
-            return []
+    if config.diagnostics.plot.ens_sample:
+        callbacks.append(PlotEnsSample(config))
 
-        checkpoint_configs = config.diagnostics.checkpoints
+    if config.diagnostics.plot.rank_histogram:
+        callbacks.append(RankHistogramPlot(config, ranks=None))
 
-        for ckpt_cfg in checkpoint_configs:
-            filename, mode, dirpath = None, "max", None
+    if config.diagnostics.plot.spread_skill_plot:
+        callbacks.append(SpreadSkillPlot(config, val_dset_len))
 
-            if ckpt_cfg.type == 'interval':
-                dirpath = os.path.join(
-                    config.hardware.paths.checkpoints,
-                    next(k for k in ("every_n_train_steps", "train_time_interval", "every_n_epochs") if ckpt_cfg.get(k)),
-                )
+    if config.diagnostics.plot.ensemble_initial_conditions:
+        callbacks.append(PlotEnsembleInitialConditions(config))
 
-            elif ckpt_cfg.type == "performance":
-                OmegaConf.set_readonly(ckpt_cfg, False)
-                ckpt_cfg.kwargs['monitor'] = get_monitored_metric_name(monitored_metrics, ckpt_cfg['monitor'])
-                OmegaConf.set_readonly(ckpt_cfg, True)
-                monitor_name = f"perf_{ckpt_cfg.kwargs['monitor'].replace('/', '_')}"
-                dirpath = os.path.join(config.hardware.paths.checkpoints, f"perf_{monitor_name}")
-                filename = f"epoch={{epoch}}-step={{step}}-{monitor_name}-{{{ckpt_cfg.kwargs['monitor']}}:.5f}"
+    rollout_eval = RolloutEvalEns(
+        config=config,
+        val_dset_len=val_dset_len,
+        callbacks=callbacks
+    )
+    return rollout_eval
 
-            ckpt_callbacks.append(
-                AnemoiCheckpointRollout(
-                    config=config,
-                    filename=filename,
-                    mode=mode,
-                    dirpath=dirpath,
-                    **ckpt_cfg.kwargs,
-                    save_last=False,
-                    save_weights_only=False,
-                    save_on_train_epoch_end=False,
-                    enable_version_counter=False,
-                    auto_insert_metric_name=False,
-                    verbose=False,
-                )
-            )
-        return ckpt_callbacks
-
-    def setup_early_stopping_callbacks():
-        """Create and return early stopping callbacks."""
-        es_callbacks = []
-        for es_config in config.diagnostics.early_stoppings:
-            OmegaConf.set_readonly(es_config, False)
-            es_config['monitor'] = get_monitored_metric_name(monitored_metrics, es_config.monitor)
-            OmegaConf.set_readonly(es_config, True)
-
-            es_callbacks.append(
-                EarlyStoppingRollout(
-                    **es_config,
-                    check_finite=True,
-                    verbose=True,
-                    strict=True,
-                    log_rank_zero_only=True,
-                    timestep=config.data.timestep,
-                )
-            )
-        return es_callbacks
-
-    def setup_rollout_eval_callbacks():
-        """Create and return rollout evaluation callbacks."""
-        validation_batch_end_callbacks = []
-        validation_epoch_end_callbacks = []
-
-        # TODO (rilwan-ade): think of better way to implement this??
-        if config.diagnostics.plot.loss_map:
-            loss_map_plot = ForecastingLossMapPlot(config, val_dset_len)
-            validation_batch_end_callbacks.append(loss_map_plot)
-            validation_epoch_end_callbacks.append(loss_map_plot)
-
-        if config.diagnostics.plot.loss_bar:
-            loss_bar_plot = ForecastingLossBarPlot(config, val_dset_len)
-            validation_batch_end_callbacks.append(loss_bar_plot)
-            validation_epoch_end_callbacks.append(loss_bar_plot)
-
-        if config.diagnostics.plot.plot_spectral_loss:
-            validation_batch_end_callbacks.append(PlotEnsPowerSpectrum(config, val_dset_len))
-
-        # Add ensemble-specific callbacks
-        if config.diagnostics.plot.ens_sample:
-            validation_batch_end_callbacks.append(PlotEnsSample(config))
-
-        if config.diagnostics.plot.rank_histogram:
-            validation_epoch_end_callbacks.append(RankHistogramPlot(config, ranks=None))  # You'll need to pass the appropriate ranks object
-
-        if config.diagnostics.plot.spread_skill_plot:
-            validation_batch_end_callbacks.append(SpreadSkillPlot(config, val_dset_len))
-
-        if config.diagnostics.plot.ensemble_initial_conditions:
-            validation_batch_end_callbacks.append(PlotEnsembleInitialConditions(config))
-
-        rollout_eval = RolloutEvalEns(
-            config=config,
-            val_dset_len=val_dset_len,
-            callbacks_validation_batch_end=validation_batch_end_callbacks,
-            callbacks_validation_epoch_end=validation_epoch_end_callbacks,
-        )
-        return rollout_eval
-
-    def setup_convergence_monitoring_callbacks():
-        cm_callbacks = []
-
-        if any([config.diagnostics.log.wandb.enabled, config.diagnostics.log.mlflow.enabled]):
-            from pytorch_lightning.callbacks import LearningRateMonitor
-            cm_callbacks.append(LearningRateMonitor(logging_interval="step"))
-
-        return cm_callbacks
-
-    def setup_model_averaging_callbacks():
-        ma_callbacks = []
-        if config.training.swa.enabled:
-            from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
-            ma_callbacks.append(
-                StochasticWeightAveraging(
-                    swa_lrs=config.training.swa.lr,
-                    swa_epoch_start=min(int(0.75 * config.training.max_epochs), config.training.max_epochs - 1),
-                    annealing_epochs=max(int(0.25 * config.training.max_epochs), 1),
-                    annealing_strategy="cos",
-                )
-            )
-        return ma_callbacks
-
-    # Add all checkpoint-related callbacks
-    trainer_callbacks.extend(setup_checkpoint_callbacks())
-
-    # Add early stopping callbacks
-    trainer_callbacks.extend(setup_early_stopping_callbacks())
-
-    # Add rollout evaluation callbacks
-    trainer_callbacks.append(setup_rollout_eval_callbacks())
-
-    # Add convergence monitoring callbacks
-    trainer_callbacks.extend(setup_convergence_monitoring_callbacks())
-
-    # Add model averaging callbacks
-    trainer_callbacks.extend(setup_model_averaging_callbacks())
-
-    # Add other miscellaneous callbacks
-    trainer_callbacks.append(MemCleanUpCallback())
-
-    # Add weight grad output logger callback
-    trainer_callbacks.append(WeightGradOutputLoggerCallback())
-
-    # Add parent UUID callback
-    trainer_callbacks.append(ParentUUIDCallback(config))
-
-    if config.diagnostics.plot.learned_features:
-        LOGGER.debug("Setting up a callback to plot the trainable graph node features ...")
-        trainer_callbacks.append(GraphTrainableFeaturesPlot(config))
-
+def get_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
+    trainer_callbacks = get_common_callbacks(config, monitored_metrics)
+    
+    # Add forecast-specific callbacks
+    rollout_eval = setup_rollout_eval_callbacks(config, val_dset_len)
+    trainer_callbacks.append(rollout_eval)
+    
     return trainer_callbacks
+# def get_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
+#     """Setup callbacks for PyTorch Lightning trainer with ensemble-specific modifications.
+
+#     Parameters
+#     ----------
+#     config : DictConfig
+#         Configuration object.
+#     monitored_metrics : list
+#         List of monitored metrics to track during training
+#     val_dset_len : int
+#         Length of the validation dataset.
+
+#     Returns
+#     -------
+#     list
+#         A list of PyTorch Lightning callbacks
+#     """
+#     trainer_callbacks = []
+
+#     def setup_checkpoint_callbacks():
+#         """Create and return checkpoint-related callbacks."""
+#         ckpt_callbacks = []
+#         if config.diagnostics.profiler:
+#             LOGGER.warning("Profiling is enabled - no checkpoints will be written!")
+#             return []
+
+#         checkpoint_configs = config.diagnostics.checkpoints
+
+#         for ckpt_cfg in checkpoint_configs:
+#             filename, mode, dirpath = None, "max", None
+
+#             if ckpt_cfg.type == 'interval':
+#                 dirpath = os.path.join(
+#                     config.hardware.paths.checkpoints,
+#                     next(k for k in ("every_n_train_steps", "train_time_interval", "every_n_epochs") if ckpt_cfg.get(k)),
+#                 )
+
+#             elif ckpt_cfg.type == "performance":
+#                 OmegaConf.set_readonly(ckpt_cfg, False)
+#                 ckpt_cfg.kwargs['monitor'] = get_monitored_metric_name(monitored_metrics, ckpt_cfg['monitor'])
+#                 OmegaConf.set_readonly(ckpt_cfg, True)
+#                 monitor_name = f"perf_{ckpt_cfg.kwargs['monitor'].replace('/', '_')}"
+#                 dirpath = os.path.join(config.hardware.paths.checkpoints, f"perf_{monitor_name}")
+#                 filename = f"epoch={{epoch}}-step={{step}}-{monitor_name}-{{{ckpt_cfg.kwargs['monitor']}}:.5f}"
+
+#             ckpt_callbacks.append(
+#                 AnemoiCheckpointRollout(
+#                     config=config,
+#                     filename=filename,
+#                     mode=mode,
+#                     dirpath=dirpath,
+#                     **ckpt_cfg.kwargs,
+#                     save_last=False,
+#                     save_weights_only=False,
+#                     save_on_train_epoch_end=False,
+#                     enable_version_counter=False,
+#                     auto_insert_metric_name=False,
+#                     verbose=False,
+#                 )
+#             )
+#         return ckpt_callbacks
+
+#     def setup_early_stopping_callbacks():
+#         """Create and return early stopping callbacks."""
+#         es_callbacks = []
+#         for es_config in config.diagnostics.early_stoppings:
+#             OmegaConf.set_readonly(es_config, False)
+#             es_config['monitor'] = get_monitored_metric_name(monitored_metrics, es_config.monitor)
+#             OmegaConf.set_readonly(es_config, True)
+
+#             es_callbacks.append(
+#                 EarlyStoppingRollout(
+#                     **es_config,
+#                     check_finite=True,
+#                     verbose=True,
+#                     strict=True,
+#                     log_rank_zero_only=True,
+#                     timestep=config.data.timestep,
+#                 )
+#             )
+#         return es_callbacks
+
+#     def setup_rollout_eval_callbacks():
+#         """Create and return rollout evaluation callbacks."""
+#         callbacks = []
+
+#         if config.diagnostics.plot.loss_map:
+#             callbacks.append(ForecastingLossMapPlot(config, val_dset_len))
+
+#         if config.diagnostics.plot.loss_bar:
+#             callbacks.append(ForecastingLossBarPlot(config, val_dset_len))
+
+#         if config.diagnostics.plot.plot_spectral_loss:
+#             callbacks.append(PlotEnsPowerSpectrum(config, val_dset_len))
+
+#         if config.diagnostics.plot.ens_sample:
+#             callbacks.append(PlotEnsSample(config))
+
+#         if config.diagnostics.plot.rank_histogram:
+#             callbacks.append(RankHistogramPlot(config, ranks=None))
+
+#         if config.diagnostics.plot.spread_skill_plot:
+#             callbacks.append(SpreadSkillPlot(config, val_dset_len))
+
+#         if config.diagnostics.plot.ensemble_initial_conditions:
+#             callbacks.append(PlotEnsembleInitialConditions(config))
+
+#         rollout_eval = RolloutEvalEns(
+#             config=config,
+#             val_dset_len=val_dset_len,
+#             callbacks=callbacks
+#         )
+#         return rollout_eval
+
+#     def setup_convergence_monitoring_callbacks():
+#         cm_callbacks = []
+
+#         if any([config.diagnostics.log.wandb.enabled, config.diagnostics.log.mlflow.enabled]):
+#             from pytorch_lightning.callbacks import LearningRateMonitor
+#             cm_callbacks.append(LearningRateMonitor(logging_interval="step"))
+
+#         return cm_callbacks
+
+#     def setup_model_averaging_callbacks():
+#         ma_callbacks = []
+#         if config.training.swa.enabled:
+#             from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
+#             ma_callbacks.append(
+#                 StochasticWeightAveraging(
+#                     swa_lrs=config.training.swa.lr,
+#                     swa_epoch_start=min(int(0.75 * config.training.max_epochs), config.training.max_epochs - 1),
+#                     annealing_epochs=max(int(0.25 * config.training.max_epochs), 1),
+#                     annealing_strategy="cos",
+#                 )
+#             )
+#         return ma_callbacks
+
+#     # Add all checkpoint-related callbacks
+#     trainer_callbacks.extend(setup_checkpoint_callbacks())
+
+#     # Add early stopping callbacks
+#     trainer_callbacks.extend(setup_early_stopping_callbacks())
+
+#     # Add rollout evaluation callbacks
+#     trainer_callbacks.append(setup_rollout_eval_callbacks())
+
+#     # Add convergence monitoring callbacks
+#     trainer_callbacks.extend(setup_convergence_monitoring_callbacks())
+
+#     # Add model averaging callbacks
+#     trainer_callbacks.extend(setup_model_averaging_callbacks())
+
+#     # Add other miscellaneous callbacks
+#     trainer_callbacks.append(MemCleanUpCallback())
+
+#     # Add weight grad output logger callback
+#     trainer_callbacks.append(WeightGradOutputLoggerCallback())
+
+#     # Add parent UUID callback
+#     trainer_callbacks.append(ParentUUIDCallback(config))
+
+#     if config.diagnostics.plot.learned_features:
+#         LOGGER.debug("Setting up a callback to plot the trainable graph node features ...")
+#         trainer_callbacks.append(GraphTrainableFeaturesPlot(config))
+
+#     return trainer_callbacks

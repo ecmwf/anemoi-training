@@ -27,7 +27,7 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from anemoi.training.diagnostics.callbacks import BasePlotCallback, GraphTrainableFeaturesPlot, ParentUUIDCallback, WeightGradOutputLoggerCallback
 from torch.utils.checkpoint import checkpoint
-from anemoi.training.diagnostics.callbacks import LossBarPlot
+from anemoi.training.diagnostics.callbacks import BaseLossBarPlot
 from anemoi.training.diagnostics.callbacks import AnemoiCheckpoint
 from anemoi.training.diagnostics.callbacks import MemCleanUpCallback
 from anemoi.training.diagnostics.plots.plots import plot_reconstructed_multilevel_sample
@@ -37,17 +37,15 @@ from anemoi.training.diagnostics.plots.plots import plot_power_spectrum
 from anemoi.training.diagnostics.callbacks import MemCleanUpCallback
 
 from anemoi.training.diagnostics.callbacks import BasePlotCallback, BaseLossMapPlot
-from anemoi.training.diagnostics import safe_cast_to_numpy
-
+from anemoi.training.diagnostics.callbacks import safe_cast_to_numpy
+from anemoi.training.diagnostics.callbacks.common_callbacks import get_common_callbacks
 import logging
 
-from anemoi.training.losses.utils import get_monitored_metric_name
+from anemoi.training.diagnostics.callbacks import get_time_step, increment_to_hours, generate_time_steps
 
 LOGGER = logging.getLogger(__name__)
 
-from anemoi.training.diagnostics import get_time_step, increment_to_hours, generate_time_steps
-
-class ReconstructionLossBarPlot(LossBarPlot):
+class ReconstructionLossBarPlot(BaseLossBarPlot):
     """Plots the reconstruction loss accumulated over validation batches and printed once per validation epoch."""
 
     def __init__(self, config, **kwargs):
@@ -96,7 +94,7 @@ class ReconstructionLossBarPlot(LossBarPlot):
 
     def _plot(self,
         trainer: pl.Trainer,
-        pl_module: pl.Lightning_module,
+        pl_module: pl.LightningModule,
         outputs: list[torch.Tensor],
         batch: torch.Tensor,
         batch_idx: int,
@@ -296,18 +294,18 @@ class SpectralAnalysisPlot(BasePlotCallback):
 
         diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
 
-        if self.flag_rollout:
+        if self.flag_reconstruction:
             plot_parameters_dict_spectrum = {
                 pl_module.data_indices.model.output.name_to_index[name]: (name, name not in diagnostics)
                 for name in self.eval_plot_parameters
             }
 
-            # This branch for forecasting training in general
-            rollout_steps = len(outputs["preds"])
+            # This branch for reconstruction training in general
+            multi_step = pl_module.multi_step
 
             _ = batch[0][
                 self.sample_idx,
-                pl_module.multi_step - 1 : pl_module.multi_step + rollout_steps + 1,
+                :multi_step,
                 ...,
             ]
             input_ = safe_cast_to_numpy(
@@ -316,78 +314,28 @@ class SpectralAnalysisPlot(BasePlotCallback):
 
             preds_ = torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...] for x in outputs["preds_denorm"])).to("cpu")
 
-            rollout_steps = len(preds_)
-            for rollout_step in range(rollout_steps):
-                if self.log_rstep is True or (
-                    (isinstance(self.log_rstep, list) or isinstance(self.log_rstep, ListConfig))
-                    and rollout_step + 1 in self.log_rstep
+            for step in range(multi_step):
+                if self.log_step is True or (
+                    (isinstance(self.log_step, list) or isinstance(self.log_step, ListConfig))
+                    and step + 1 in self.log_step
                 ):
                     x = input_[0, ...].squeeze()
-                    target = input_[rollout_step + 1, ...].squeeze()
-                    y_hat = preds_[rollout_step, ...].mean(0)
+                    target = input_[step, ...].squeeze()
+                    y_hat = preds_[step, ...].mean(0)
 
                     # Calculate based on the mean of the ensembles
                     fig, self.inner_subplots_kwargs = plot_power_spectrum(
                         plot_parameters_dict_spectrum, self.latlons, x, target, y_hat
                     )
 
-                    rollout_step_str = get_time_step(self.config.data.timestep, rollout_step + 1)
+                    step_str = get_time_step(self.config.data.timestep, step + 1)
 
                     self._output_figure(
                         trainer,
                         fig,
-                        tag=f"pred_val_spec_r{rollout_step_str}_epoch_{epoch:03d}_batch{batch_idx:04d}",
-                        exp_log_tag=f"val_pred_spec_rollout_{rollout_step_str}",
+                        tag=f"pred_val_spec_s{step_str}_epoch_{epoch:03d}_batch{batch_idx:04d}",
+                        exp_log_tag=f"val_pred_spec_step_{step_str}",
                     )
-
-        if self.flag_reconstruction:
-            plot_parameters_dict_spectrum = {
-                pl_module.data_indices.model.output.name_to_index[name]: (name, False) for name in self.eval_plot_parameters
-            }
-
-            x_input = outputs[1]["x_inp"]
-            x_rec = outputs[1]["x_rec"]
-            x_target = outputs[1]["x_target"]
-
-            x_input = x_input[self.sample_idx, 0, ..., pl_module.data_indices.data.output.full]
-            x_input = self.normalizer.denormalize(
-                x_input,
-                in_place=False,
-                data_index=pl_module.data_indices.data.output.full,
-            )
-
-            x_rec = x_rec[self.sample_idx, ...]
-            # reduce in ensemble dimension by taking mean
-
-            x_rec = torch.mean(x_rec, dim=0)
-
-            x_rec = self.normalizer.denormalize(
-                x_rec,
-                in_place=False,
-                data_index=pl_module.data_indices.data.output.full,
-            )
-
-            x_target = x_target[self.sample_idx, ...]
-            x_target = self.normalizer.denormalize(
-                x_target,
-                in_place=False,
-                data_index=pl_module.data_indices.data.output.full,
-            )
-
-            # TODO: to work with ensembles this will have to change to do mean over ensemble dimension
-            x = safe_cast_to_numpy(x_input.squeeze())
-            target = safe_cast_to_numpy(x_target.squeeze())
-            y_hat = safe_cast_to_numpy(x_rec.squeeze())
-
-            fig, self.inner_subplots_kwargs = plot_power_spectrum(plot_parameters_dict_spectrum, self.latlons, x, target, y_hat)
-
-            self._output_figure(
-                trainer,
-                fig,
-                epoch=pl_module.validation_epoch,
-                tag=f"pred_val_spec_epoch_{epoch:03d}_batch{batch_idx:04d}",
-                exp_log_tag="val_pred_spec",
-            )
 
 class PlotReconstructionPowerSpectrum(BasePlotCallback):
     """Plots power spectrum metrics comparing target and prediction."""
@@ -431,10 +379,9 @@ class PlotReconstructionPowerSpectrum(BasePlotCallback):
         x_inp_postprocessed = outputs["x_inp_postprocessed"]
         x_target_postprocessed = outputs["x_target_postprocessed"]
         x_rec_postprocessed = outputs["x_rec_postprocessed"]
-        timesteps = x_inp_postprocessed.shape[1]
+        multi_step = x_inp_postprocessed.shape[1]
         
-        for t in range(timesteps):
-
+        for t in range(multi_step):
             diagnostics = [] if self.config.data.diagnostic is None else self.config.data.diagnostic
 
             plot_parameters_dict_spectrum = {
@@ -450,12 +397,12 @@ class PlotReconstructionPowerSpectrum(BasePlotCallback):
                 x_rec_postprocessed[self.sample_idx, t, ...],
             )
 
-            #TODO: (rilwan-adewoyin): replace the t with the time name 
+            step_str = get_time_step(self.config.data.timestep, t + 1)
             self._output_figure(
                 logger,
                 fig,
-                tag=f"power_spectrum_t{t:02d}_epoch_{epoch:03d}_batch{batch_idx:04d}_rank0",
-                exp_log_tag=f"power_spectrum_t{t:02d}_rank{pl_module.local_rank:01d}_rank0",
+                tag=f"power_spectrum_s{step_str}_epoch_{epoch:03d}_batch{batch_idx:04d}_rank0",
+                exp_log_tag=f"power_spectrum_step_{step_str}_rank{pl_module.local_rank:01d}_rank0",
             )
 
     def on_validation_batch_end(
@@ -469,8 +416,92 @@ class PlotReconstructionPowerSpectrum(BasePlotCallback):
         if self.op_on_this_batch(batch_idx):
             self._plot_spectrum(trainer, pl_module, outputs, batch, batch_idx, epoch=trainer.current_epoch)
 
+class ReconstructEval(Callback):
+    def __init__(self, config, val_dset_len, callbacks: list[Callback]) -> None:
+        super().__init__()
+        self.frequency = config.diagnostics.eval.frequency
+        self.eval_frequency = BasePlotCallback.get_eval_frequency(
+            self, config.diagnostics.metrics.rollout_eval.frequency, val_dset_len
+        )
+        
+        self.callbacks_validation_batch_end = [
+            cb for cb in callbacks 
+            if 'on_validation_batch_end' in cb.__class__.__dict__
+        ]
+        self.callbacks_validation_epoch_end = [
+            cb for cb in callbacks 
+            if 'on_validation_epoch_end' in cb.__class__.__dict__
+        ]
 
-def get_reconstruction_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
+    def on_validation_batch_end(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule, outputs: Any, batch: torch.Tensor, batch_idx: int
+    ) -> None:
+        if self.op_on_this_batch(batch_idx):
+            with torch.no_grad():
+                outputs = self._eval(pl_module, batch[0], batch_idx)
+                for cb in self.callbacks_validation_batch_end:
+                    cb.on_validation_batch_end(trainer, pl_module, outputs, batch, batch_idx)
+
+    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+        for callback in self.callbacks_validation_epoch_end:
+            callback.on_validation_epoch_end(trainer, pl_module)
+
+    def op_on_this_batch(self, batch_idx):
+        callbacks_idx_to_run = [
+            idx
+            for idx, pcallback in enumerate(self.callbacks_validation_batch_end)
+            if pcallback.op_on_this_batch(batch_idx)
+        ]
+        return (((batch_idx + 1) % self.eval_frequency) == 0) or len(callbacks_idx_to_run) > 0
+    
+    def _eval(self, pl_module: pl.LightningModule, batch: torch.Tensor, batch_idx: int) -> None:
+        loss, metrics, outputs = pl_module._step(
+            batch, validation_mode=True, batch_idx=batch_idx, 
+            lead_time_to_eval=self.lead_time_to_eval
+        )
+        self._log(pl_module, loss, metrics, batch.shape[0])
+        
+        return outputs
+    def _log(self, pl_module: pl.LightningModule, loss: torch.Tensor, metrics: dict, bs: int) -> None:
+        train_loss_name = pl_module.loss.name
+        pl_module.log("rval/loss/{pl_module.loss.name}", loss, on_epoch=True, on_step=False, prog_bar=False, logger=pl_module.logger_enabled, batch_size=bs, sync_dist=True, rank_zero_only=True)
+        for mname, mvalue in metrics.items():
+            pl_module.log(f"rval/{mname}", mvalue, on_epoch=True, on_step=False, prog_bar=False, logger=pl_module.logger_enabled, batch_size=bs, sync_dist=True, rank_zero_only=True)
+        
+
+def setup_reconstruction_eval_callbacks(config, val_dset_len):
+    """Create and return reconstruction evaluation callbacks."""
+    callbacks = []
+
+    if config.diagnostics.plot.loss_map:
+        callbacks.append(ReconstructionLossMapPlot(config, val_dset_len))
+
+    if config.diagnostics.plot.loss_bar:
+        callbacks.append(ReconstructionLossBarPlot(config, val_dset_len))
+
+    if config.diagnostics.plot.plot_spectral_loss:
+        callbacks.append(SpectralAnalysisPlot(config, val_dset_len))
+
+    if config.diagnostics.plot.plot_reconstructed_sample:
+        callbacks.append(PlotReconstructedSample(config, val_dset_len))
+
+    reconstruct_eval = ReconstructEval(
+        config=config,
+        val_dset_len=val_dset_len,
+        callbacks=callbacks
+    )
+    return reconstruct_eval
+
+def get_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
+    trainer_callbacks = get_common_callbacks(config, monitored_metrics)
+    
+    # Add reconstruction-specific callbacks
+    reconstruct_eval = setup_reconstruction_eval_callbacks(config, val_dset_len)
+    trainer_callbacks.append(reconstruct_eval)
+    
+    return trainer_callbacks
+
+# def get_callbacks(config: DictConfig, monitored_metrics, val_dset_len) -> list:
     """Setup callbacks for PyTorch Lightning trainer for reconstruction tasks.
 
     Parameters
@@ -510,7 +541,7 @@ def get_reconstruction_callbacks(config: DictConfig, monitored_metrics, val_dset
                 OmegaConf.set_readonly(ckpt_cfg, True)
                 monitor_name = f"perf_{ckpt_cfg.kwargs['monitor'].replace('/', '_')}"
                 dirpath = Path(config.hardware.paths.checkpoints) / f"perf_{monitor_name}"
-                filename = f"epoch={{epoch}}-step={{step}}-{monitor_name}-{{{ckpt_cfg.kwargs['monitor']}}:.5f}"
+                filename = "epoch={epoch:03d}-step={step:05d}-" + monitor_name + "-{" + ckpt_cfg.kwargs['monitor'] + ":.5f}"
 
             ckpt_callbacks.append(
                 AnemoiCheckpoint(
@@ -550,26 +581,26 @@ def get_reconstruction_callbacks(config: DictConfig, monitored_metrics, val_dset
 
     def setup_reconstruction_eval_callbacks():
         """Create and return reconstruction evaluation callbacks."""
-        validation_batch_end_callbacks = []
-        validation_epoch_end_callbacks = []
+        callbacks = []
 
         if config.diagnostics.plot.loss_map:
-            loss_map_plot = ReconstructionLossMapPlot(config, val_dset_len)
-            validation_batch_end_callbacks.append(loss_map_plot)
-            validation_epoch_end_callbacks.append(loss_map_plot)
+            callbacks.append(ReconstructionLossMapPlot(config, val_dset_len))
 
         if config.diagnostics.plot.loss_bar:
-            loss_bar_plot = ReconstructionLossBarPlot(config, val_dset_len)
-            validation_batch_end_callbacks.append(loss_bar_plot)
-            validation_epoch_end_callbacks.append(loss_bar_plot)
+            callbacks.append(ReconstructionLossBarPlot(config, val_dset_len))
 
         if config.diagnostics.plot.plot_spectral_loss:
-            validation_batch_end_callbacks.append(SpectralAnalysisPlot(config, val_dset_len))
+            callbacks.append(SpectralAnalysisPlot(config, val_dset_len))
 
         if config.diagnostics.plot.plot_reconstructed_sample:
-            validation_batch_end_callbacks.append(PlotReconstructedSample(config, val_dset_len))
+            callbacks.append(PlotReconstructedSample(config, val_dset_len))
 
-        return validation_batch_end_callbacks, validation_epoch_end_callbacks
+        reconstruct_eval = ReconstructEval(
+            config=config,
+            val_dset_len=val_dset_len,
+            callbacks=callbacks
+        )
+        return reconstruct_eval
 
     def setup_convergence_monitoring_callbacks():
         cm_callbacks = []
@@ -601,9 +632,8 @@ def get_reconstruction_callbacks(config: DictConfig, monitored_metrics, val_dset
     trainer_callbacks.extend(setup_early_stopping_callbacks())
 
     # Add reconstruction evaluation callbacks
-    validation_batch_end_callbacks, validation_epoch_end_callbacks = setup_reconstruction_eval_callbacks()
-    trainer_callbacks.extend(validation_batch_end_callbacks)
-    trainer_callbacks.extend(validation_epoch_end_callbacks)
+    reconstruct_eval = setup_reconstruction_eval_callbacks()
+    trainer_callbacks.append(reconstruct_eval)
 
     # Add convergence monitoring callbacks
     trainer_callbacks.extend(setup_convergence_monitoring_callbacks())

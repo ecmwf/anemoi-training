@@ -8,27 +8,25 @@ from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 from anemoi.training.losses.utils import process_file
-from typing import TYPE_CHECKING
 import einops
 from omegaconf.dictconfig import DictConfig
 import logging
-LOGGER = logging.getLogger(__name__)
 from typing import Union
-
-class kCRPS(nn.Module): 
+LOGGER = logging.getLogger(__name__)
+class KernelCRPS(nn.Module): 
     """Area-weighted kernel CRPS loss.
     
-    A class to compute the Kernel Continuous Ranked Probability Score (KCRPS) for evaluating 
+    A class to compute the Kernel Continuous Ranked Probability Score (KernelCRPS) for evaluating 
     univariate or marginal distributions.
 
-    The **Kernel CRPS (KCRPS)** is a proper scoring rule that compares probabilistic forecasts 
+    The **Kernel CRPS (KernelCRPS)** is a proper scoring rule that compares probabilistic forecasts 
     with observed values, typically using kernel density methods.
 
     The formula for the Kernel CRPS is:
 
     .. math::
 
-        \text{KCRPS}(F, G) = \frac{1}{n^2} \sum_{i=1}^{n} \sum_{j=1}^{n} k(x_i, x_j) 
+        \text{KernelCRPS}(F, G) = \frac{1}{n^2} \sum_{i=1}^{n} \sum_{j=1}^{n} k(x_i, x_j) 
                              - \frac{2}{nm} \sum_{i=1}^{n} \sum_{j=1}^{m} k(x_i, y_j)
 
     where:
@@ -100,7 +98,7 @@ class kCRPS(nn.Module):
         ens_input = preds.shape[1]
         ens_target = targets.shape[1]
         # error = torch.mean(torch.abs(targets.unsqueeze(1) - preds), dim=1)
-        # ensure that kCRPS using self.p_norm when doing the norm difference but not in a multivariate way 
+        # ensure that KernelCRPS using self.p_norm when doing the norm difference but not in a multivariate way 
         # e.g. do not do L1 norm just mae or do not do L2 just mse
         # error = torch.mean( torch.abs(targets - preds)**self.p_norm, dim=1 )
 
@@ -191,16 +189,16 @@ class kCRPS(nn.Module):
                 target = target * self.feature_weights[..., feature_indices] / self.feature_weights.numel()
 
         # Calculate kernel CRPS
-        kcrps = self._kernel_crps(pred, target)
+        KernelCRPS = self._kernel_crps(pred, target)
 
         # Apply node (spatial) weights
-        kcrps *= (self.node_weights / self.sum_function(self.node_weights))
+        KernelCRPS *= (self.node_weights / self.sum_function(self.node_weights))
 
         # Squash (reduce spatial and feature dimensions)
         if squash:
-            kcrps = self.sum_function(kcrps, dim=squash if isinstance(squash, tuple) else (-3, -2, -1)) 
+            KernelCRPS = self.sum_function(KernelCRPS, dim=squash if isinstance(squash, tuple) else (-3, -2, -1)) 
 
-        return kcrps.mean(dim=0)  # (timestep) or (timestep, latlon, nvar)
+        return KernelCRPS.mean(dim=0)  # (timestep) or (timestep, latlon, nvar)
 
     def name(self) -> str:
         """Generate a log name based on parameters."""
@@ -208,9 +206,9 @@ class kCRPS(nn.Module):
 
         kernel_str  = f"pnorm_{self.p_norm}"
 
-        return f"{fair_str}kcrps_{kernel_str}"
+        return f"{fair_str}KernelCRPS_{kernel_str}"
 
-class MultivariatekCRPS(nn.Module):
+class MultivariateKernelCRPS(nn.Module):
     """Multivariate kernel CRPS using vector norms across variables.
 
     NOTE: This is just kernel CRPS but here the kernel is L1 norm / the multivariate version of error CRPS
@@ -224,12 +222,12 @@ class MultivariatekCRPS(nn.Module):
     def __init__(self, node_weights: torch.Tensor, feature_weights: Optional[torch.Tensor] = None, fair: bool = True, p_norm: int = 1.5, beta: float = 1.0, implementation: str = "vectorized", ignore_nans: Optional[bool] = False, group_on_dim: int = -1, **kwargs) -> None:
         """
         Args:
-            node_weights: Tensor of area weights for the MutlivariatekCRPS score computation.
-            feature_weights: Tensor of feature weights for the MutlivariatekCRPS score computation.
+            node_weights: Tensor of area weights for the MutlivariateKernelCRPS score computation.
+            feature_weights: Tensor of feature weights for the MutlivariateKernelCRPS score computation.
             fair: Calculate a "fair" (unbiased) score - ensemble variance component weighted by (ens-size-1)^-1
-            p_norm: p-norm to use for the MutlivariatekCRPS score computation. Defaults to 1.5.
-            beta: beta parameter for the MutlivariatekCRPS score computation. Defaults to 1.0.
-            implementation: Implementation of the MutlivariatekCRPS score computation. Defaults to "vectorized".
+            p_norm: p-norm to use for the MutlivariateKernelCRPS score computation. Defaults to 1.5.
+            beta: beta parameter for the MutlivariateKernelCRPS score computation. Defaults to 1.0.
+            implementation: Implementation of the MutlivariateKernelCRPS score computation. Defaults to "vectorized".
             ignore_nans: Ignore nans in the loss and apply methods ignoring nans for measuring the loss. Defaults to False.
         """
         super().__init__()
@@ -290,7 +288,7 @@ class MultivariatekCRPS(nn.Module):
     def _kernel_crps_low_mem(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """Multivariate Kernel CRPS with low memory usage.
 
-        This method computes the Kernel Continuous Ranked Probability Score (kCRPS) in a low-memory 
+        This method computes the Kernel Continuous Ranked Probability Score (KernelCRPS) in a low-memory 
         manner by iterating over ensemble members and calculating pairwise multivariate norms.
 
         Args:
@@ -390,7 +388,7 @@ class MultivariatekCRPS(nn.Module):
         feature_scale: bool = True,
         **kwargs,
     ) -> torch.Tensor:
-        """Forward pass for MutlivariatekCRPS score calculation.
+        """Forward pass for MutlivariateKernelCRPS score calculation.
         
         Args:
             preds: predicted ensemble, shape (batch_size, nens_input, timesteps, latlon, n_vars)
@@ -408,12 +406,12 @@ class MultivariatekCRPS(nn.Module):
         preds = preds * self.node_weights_normalized
         target = target * self.node_weights_normalized
 
-        kcrps = self._kernel_crps(preds, target)
+        KernelCRPS = self._kernel_crps(preds, target)
 
         if feature_scale:
-            kcrps = kcrps * self._scale_feature(feature_indices)
+            KernelCRPS = KernelCRPS * self._scale_feature(feature_indices)
 
-        return self._reduce_output(kcrps, squash)
+        return self._reduce_output(KernelCRPS, squash)
 
     def _forward_feature(self, preds: torch.Tensor, target: torch.Tensor, squash: bool, feature_indices: torch.Tensor | None, feature_scale: bool) -> torch.Tensor:
         """Forward pass for feature grouping (group_on_dim = -1)."""
@@ -421,39 +419,39 @@ class MultivariatekCRPS(nn.Module):
             feature_scale = self._scale_feature( feature_indices)
             preds, target = preds * feature_scale, target * feature_scale
 
-        kcrps = self._kernel_crps(preds, target)
+        KernelCRPS = self._kernel_crps(preds, target)
 
-        kcrps = kcrps * self.node_weights_normalized
+        KernelCRPS = KernelCRPS * self.node_weights_normalized
 
-        return self._reduce_output(kcrps, squash)
+        return self._reduce_output(KernelCRPS, squash)
 
     def _forward_temporal(self, preds: torch.Tensor, target: torch.Tensor, squash: bool, feature_indices: torch.Tensor | None, feature_scale: bool) -> torch.Tensor:
         """Forward pass for temporal grouping (group_on_dim = -3)."""
         # No node weights applied since this is temporal
-        kcrps = self._kernel_crps(preds, target)
+        KernelCRPS = self._kernel_crps(preds, target)
 
-        kcrps = kcrps * self.node_weights_normalized
+        KernelCRPS = KernelCRPS * self.node_weights_normalized
         
         if feature_scale:
-            kcrps = kcrps * self._scale_feature(feature_indices)
+            KernelCRPS = KernelCRPS * self._scale_feature(feature_indices)
 
-        return self._reduce_output(kcrps, squash)
+        return self._reduce_output(KernelCRPS, squash)
 
     def _scale_feature(self, feature_indices: torch.Tensor | None) -> torch.Tensor:
         """Apply scaling for feature dimensions."""
         return self.feature_weights_normalized if feature_indices is None else self.feature_weights_normalized[..., feature_indices]
 
     #TODO (Rilwan-ade): this _squash function should be moved to a general Loss class
-    def _reduce_output(self, kcrps: torch.Tensor, squash: bool) -> torch.Tensor:
+    def _reduce_output(self, KernelCRPS: torch.Tensor, squash: bool|tuple) -> torch.Tensor:
         """Reduce the output to a single value or return the tensor."""
         if squash:
 
             # Since this loss removes a dim, we have to adjust the squash_dims appropriately considering where the removed dim was
-            dim = tuple( (dim if dim>self.group_on_dim else dim+1) for dim in dim if dim != self.group_on_dim ) if isinstance(squash, tuple) else (-2, -1)
+            dim = tuple( (dim if dim>self.group_on_dim else dim+1) for dim in squash if dim != self.group_on_dim ) if isinstance(squash, tuple) else (-2, -1)
             
-            kcrps = self.sum_function(kcrps, dim=dim)
+            KernelCRPS = self.sum_function(KernelCRPS, dim=dim)
 
-        return kcrps.mean(0)
+        return KernelCRPS.mean(0)
 
     def name(self) -> str:
         """Generate a log name based on parameters."""
@@ -461,12 +459,12 @@ class MultivariatekCRPS(nn.Module):
 
         kernel_str  = f"pnorm_{self.p_norm}"
 
-        return f"{fair_str}kcrps_{kernel_str}_b{self.beta.item()}"
+        return f"{fair_str}KernelCRPS_{kernel_str}_b{self.beta.item()}"
 
-class GroupedMultivariatekCRPS(MultivariatekCRPS):
-    """Grouped MutlivariatekCRPS Score 
+class GroupedMultivariateKernelCRPS(MultivariateKernelCRPS):
+    """Grouped MutlivariateKernelCRPS Score 
         Grouping strategies:
-            - Spatial: kCRPS patches
+            - Spatial: KernelCRPS patches
             - Feature: Grouping by variable, Grouping by pressure level
             - Temporal: ??
 
@@ -476,10 +474,10 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
 
     Attributes
     ----------
-        options(List[str]): List of available kCRPS patch options.
-        node_weights(Tensor): Tensor of area weights for the MutlivariatekCRPS score computation.
+        options(List[str]): List of available KernelCRPS patch options.
+        node_weights(Tensor): Tensor of area weights for the MutlivariateKernelCRPS score computation.
 
-        beta(Optional[Union[Tensor, float]]): beta parameter for the MutlivariatekCRPS score computation. Defaults to 1.0.False.
+        beta(Optional[Union[Tensor, float]]): beta parameter for the MutlivariateKernelCRPS score computation. Defaults to 1.0.False.
 
         op_batching(int): Number of operations to batch together for improved efficiency. Defaults to 1 to disable batching.
         num_patch_groups(int): Number of patch groups.
@@ -496,11 +494,11 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
         __init__(self, node_weights: Tensor, li_patch_set: List[dict[str, list[int]]], feature_weights: Optional[Tensor] = None,
                  beta: Optional[Union[Tensor, float]] = 1.0, random_patches: bool = False,
                  cuda_stream_count: int = 1, op_batching: int = 1, **kwargs) -> None:
-            Initializes the GroupedMutlivariatekCRPSScore_voronoi instance.
+            Initializes the GroupedMutlivariateKernelCRPSScore_voronoi instance.
 
         forward(self, preds: Tensor, target: Tensor, squash: Union[bool, tuple] = True, enum_feature_weight_scalenorm: int = 0,
                 enum_area_weight_scalenorm: int = 0, indices_adjusted=None) -> Tensor:
-            Forward pass of the Grouped MutlivariatekCRPS Score computation.
+            Forward pass of the Grouped MutlivariateKernelCRPS Score computation.
 
         name(self) -> str:
             Cached property to generate a log name based on the beta and group dimension.
@@ -733,7 +731,7 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
         feature_scale: bool = True,
         **kwargs,
     ) -> torch.Tensor:
-        """Forward pass for MutlivariatekCRPS score calculation.
+        """Forward pass for MutlivariateKernelCRPS score calculation.
 
         Args:
             preds: predicted ensemble, shape (batch_size, ens_size, timesteps, latlon, n_vars)
@@ -778,7 +776,7 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
         patch_set_len = len(patch_set)
         patches_set_values = list(patch_set.values())
 
-        total_kcrps = target.new_zeros(target.shape[:-1])
+        total_KernelCRPS = target.new_zeros(target.shape[:-1])
 
         if feature_scale:
             preds = (
@@ -795,17 +793,17 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
         # Looped Loss
         for idx in torch.arange(0, patch_set_len):
 
-            kcrps = self._kernel_crps(
+            KernelCRPS = self._kernel_crps(
                 preds[..., patches_set_values[idx]],
                 target[..., patches_set_values[idx]],
             )
-            total_kcrps = total_kcrps + kcrps
+            total_KernelCRPS = total_KernelCRPS + KernelCRPS
 
-        total_kcrps = total_kcrps 
+        total_KernelCRPS = total_KernelCRPS 
 
-        total_kcrps = total_kcrps * self.node_weights_normalized  # shape (bs, latlon)
+        total_KernelCRPS = total_KernelCRPS * self.node_weights_normalized  # shape (bs, latlon)
 
-        return self._reduce_output(total_kcrps, squash)
+        return self._reduce_output(total_KernelCRPS, squash)
 
     def _forward_spatial(
         self,
@@ -832,7 +830,7 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
         patch_set_len = len(patch_set)
         patches_set_values = list(patch_set.values())
 
-        total_kcrps = target.new_zeros((target.shape[0], target.shape[2]))  # shape (bs, n_vars)
+        total_KernelCRPS = target.new_zeros((target.shape[0], target.shape[2]))  # shape (bs, n_vars)
 
         # Logic: area scaled before operation, feature after operation
         preds = preds * self.node_weights_normalized
@@ -846,24 +844,24 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
                 stacked_preds = preds[..., patch, :].permute(2, 0, 1, 3, 4)  # (op_batch, bs, ens_size, patch_size, nvar)
                 stacked_target = target[..., patch, :].transpose(0, 1)  # (op_batch, bs, patch_size, nvar)
 
-                kcrps = self._kernel_crps(stacked_preds, stacked_target)  # shape (op_batch, bs, n_vars)
-                kcrps = kcrps.sum(dim=0)  # shape (bs, n_vars)
+                KernelCRPS = self._kernel_crps(stacked_preds, stacked_target)  # shape (op_batch, bs, n_vars)
+                KernelCRPS = KernelCRPS.sum(dim=0)  # shape (bs, n_vars)
 
             else:
-                kcrps = self._kernel_crps(preds[..., patch, :], target[..., patch, :])  # shape (bs, n_vars)
+                KernelCRPS = self._kernel_crps(preds[..., patch, :], target[..., patch, :])  # shape (bs, n_vars)
 
-            total_kcrps = total_kcrps + kcrps.sum(dim=0)
+            total_KernelCRPS = total_KernelCRPS + KernelCRPS.sum(dim=0)
 
-        total_kcrps = total_kcrps   # shape (bs, n_vars)
+        total_KernelCRPS = total_KernelCRPS   # shape (bs, n_vars)
 
         if feature_scale:
-            total_kcrps = (
-                total_kcrps * self.feature_weights_normalized
+            total_KernelCRPS = (
+                total_KernelCRPS * self.feature_weights_normalized
                 if feature_indices is None
-                else total_kcrps * self.feature_weights_normalized[..., feature_indices]
+                else total_KernelCRPS * self.feature_weights_normalized[..., feature_indices]
             )
 
-        return self._reduce_output(total_kcrps, squash)
+        return self._reduce_output(total_KernelCRPS, squash)
 
     @cached_property
     def name(self) -> str:
@@ -876,7 +874,7 @@ class GroupedMultivariatekCRPS(MultivariatekCRPS):
 
         
 
-        return f"{f_str}kcrps_{patch_method_name}_{beta_str}"
+        return f"{f_str}KernelCRPS_{patch_method_name}_{beta_str}"
 
     def is_calc_permissable(self, preds: torch.Tensor, target: torch.Tensor) -> bool:
         """Check if the calculation is permissible."""

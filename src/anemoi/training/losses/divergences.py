@@ -18,6 +18,7 @@ class KLDivergenceLoss(nn.Module):
         node_weights: torch.Tensor,
         feature_weights: Optional[torch.Tensor] = None,
         ignore_nans: bool | None = False,
+        **kwargs,
     ) -> None:
         """Latitude- and feature-weighted KL Divergence Loss.
 

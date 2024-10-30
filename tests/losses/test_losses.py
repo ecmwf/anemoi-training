@@ -6,26 +6,33 @@ import torch
 from omegaconf import OmegaConf
 from anemoi.training.losses import (
     EnergyScore, GroupedEnergyScore, KLDivergenceLoss, RenyiDivergenceLoss,
-    WeightedMSELoss, WeightedMAELoss, VAELoss, VariogramScore, SpectralEnergyLoss, kCRPS, IgnoranceScore,
-    CompositeLoss, SpreadLoss, SpreadSkillLoss, ZeroSpreadRateLoss
+    WeightedMSELoss, WeightedMAELoss, VAELoss, VariogramScore, SpectralEnergyLoss, KernelCRPS, CompositeLoss, SpreadLoss, SpreadSkillLoss, ZeroSpreadRateLoss
 )
 import torch_harmonics as th
-from scipy.stats import norm  # Add this import
 from numpy.fft import fftn  # Add this import
-import numpy as np
-from anemoi.training.losses import MultivariatekCRPS, GroupedMultivariatekCRPS
+from anemoi.training.losses import MultivariateKernelCRPS, GroupedMultivariateKernelCRPS
 import logging
 LOGGER = logging.getLogger(__name__)
 import copy
 import lovely_tensors as lt
 lt.monkey_patch()
 import typing as tp
-from lovely_numpy import lo
 if tp.TYPE_CHECKING:
     from scoringrules.core.typing import Array
 from omegaconf import DictConfig
-
+import pytest
+from hypothesis import given, strategies as st
 import hydra
+from hypothesis import settings, given
+
+# Define common strategies
+st_bs = st.integers(min_value=2, max_value=5)
+st_nens_pred = st.integers(min_value=2, max_value=8)
+st_nens_target = st.integers(min_value=2, max_value=8)
+st_timesteps = st.integers(min_value=2, max_value=8)
+st_latlon = st.integers(min_value=2, max_value=20)
+st_nvars = st.integers(min_value=2, max_value=8)
+
 
 class TestLosses:
     @classmethod
@@ -47,7 +54,7 @@ class TestLosses:
         LOGGER.info(f"Teardown {method.__name__}")
 
     @pytest.mark.parametrize(
-        "group_on_dim, nens_input, nens_output",
+        "group_on_dim, nens_pred, nens_target",
         [
             (-1, 4, 1 ),
             (-2, 4, 1),
@@ -57,11 +64,11 @@ class TestLosses:
             (-3, 4, 2),
         ],
     )
-    def test_energy_score_forward(self, group_on_dim: int, nens_input: int, nens_output: int) -> None:
+    def test_energy_score_forward(self, group_on_dim: int, nens_pred: int, nens_target: int) -> None:
         bs, timesteps, latlon, nvars = 2, 6, 40320, 80
         
-        preds = torch.randn(bs, nens_input, timesteps, latlon, nvars, dtype=torch.float32)
-        target = torch.randn(bs, nens_output, timesteps, latlon, nvars, dtype=torch.float32)
+        preds = torch.randn(bs, nens_pred, timesteps, latlon, nvars, dtype=torch.float32)
+        target = torch.randn(bs, nens_target, timesteps, latlon, nvars, dtype=torch.float32)
 
         node_weights = 0.5 + torch.rand(latlon, dtype=torch.float32)
         feature_weights = 0.5 + torch.rand(nvars, dtype=torch.float32)
@@ -212,7 +219,7 @@ class TestLosses:
         feature_weights = torch.rand(10)
         data_indices_model_output = OmegaConf.create(data_indices_model_output)
 
-        gmkcrps = GroupedMultivariatekCRPS(
+        gmKernelCRPS = GroupedMultivariateKernelCRPS(
             node_weights=node_weights,
             feature_weights=feature_weights,
             patch_method=patch_method,
@@ -224,7 +231,7 @@ class TestLosses:
             implementation="vectorized"
         )
 
-        patch_sets = gmkcrps._get_patch_sets(patch_method, data_indices_model_output)
+        patch_sets = gmKernelCRPS._get_patch_sets(patch_method, data_indices_model_output)
 
         expected_patch_sets = [{key: torch.tensor(val) for key, val in param_groups.items()}]
 
@@ -361,7 +368,7 @@ class TestLosses:
         LOGGER.info(f"Grouped Energy Score {patch_method} Test Passed")
 
     @pytest.mark.parametrize(
-        "group_on_dim, nens_input, nens_target, target_each_ens_indep",
+        "group_on_dim, nens_pred, nens_target, target_each_ens_indep",
         [
             (-1, 3, 1, False),
             (-2, 3, 3, False),
@@ -373,11 +380,11 @@ class TestLosses:
             (-3, 3, 3, True),
         ],
     )
-    def test_variogram(self, group_on_dim: int, nens_input: int, nens_target: int, target_each_ens_indep: bool) -> None:
+    def test_variogram(self, group_on_dim: int, nens_pred: int, nens_target: int, target_each_ens_indep: bool) -> None:
         
         bs, timesteps, latlon, nvars = 8, 2, 20, 10
 
-        preds = torch.randn(bs, nens_input, timesteps, latlon, nvars, dtype=torch.float32)
+        preds = torch.randn(bs, nens_pred, timesteps, latlon, nvars, dtype=torch.float32)
         target = torch.randn(bs, nens_target, timesteps, latlon, nvars, dtype=torch.float32)
         node_weights = 0.5 + torch.rand(latlon, dtype=torch.float32)
         feature_weights = 0.5 + torch.rand(nvars, dtype=torch.float32)
@@ -436,7 +443,7 @@ class TestLosses:
             forecasts = preds_np
             observations = target_np
 
-        if nens_target == 1 and nens_input > 1:
+        if nens_target == 1 and nens_pred > 1:
             forecasts, observations = sr.core.utils.multivariate_array_check(forecasts, observations.mean(1), 1, group_on_dim, backend="numpy")
             reference_score = sr.core.variogram._score.variogram_score(forecasts, observations, backend="numpy", p=beta_np.item())
 
@@ -474,9 +481,9 @@ class TestLosses:
             reference_score = ref_variogram_score_not_target_each_ens_indep(forecasts, observations, backend="numpy", p=beta_np.item())
 
         elif target_each_ens_indep:
-            assert nens_input == nens_target, "Ensemble sizes must be equal"
+            assert nens_pred == nens_target, "Ensemble sizes must be equal"
             ref_scores = [ ]
-            for i in range(nens_input):
+            for i in range(nens_pred):
                 forecasts_reshaped, observations_reshaped = sr.core.utils.multivariate_array_check( copy.deepcopy(forecasts[:, i:i+1]), copy.deepcopy(observations[:, i]) , 1, group_on_dim, backend="numpy")
                 _ = sr.core.variogram._score.variogram_score(forecasts_reshaped, observations_reshaped, backend="numpy", p=beta_np.item())
                 ref_scores.append(_)
@@ -499,7 +506,7 @@ class TestLosses:
         "implementation",
         ["vectorized", "low_mem"],
     )
-    def test_kcrps(self, implementation: str) -> None:
+    def test_KernelCRPS(self, implementation: str) -> None:
         bs, nens, timesteps, latlon, nvars = 10, 5, 4, 2, 3
 
         preds = torch.randn(bs, nens, timesteps, latlon, nvars, dtype=torch.float32)
@@ -522,14 +529,14 @@ class TestLosses:
             feature_weights.to(dtype),
         )
 
-        kcrps_score = kCRPS(
+        KernelCRPS_score = KernelCRPS(
             node_weights=node_weights_,
             feature_weights=feature_weights_,
             fair=True,
             implementation=implementation,
         )
 
-        score = kcrps_score.forward(
+        score = KernelCRPS_score.forward(
             preds_,
             target_,
             squash=False,
@@ -547,20 +554,29 @@ class TestLosses:
 
         np.testing.assert_allclose(score, reference_score, rtol=1e-1)
 
-    @pytest.mark.parametrize(
-        "losses_weights",
-        [
-            [0.4, 0.6, 0.2],
-            [0.6,0.4, 0.1],
-            [0.69, 0.3, 0.01],
-
-        ],
+        nens_pred=st_nens_pred,
+        nens_target=st_nens_target,
+        timesteps=st_timesteps,
+        latlon=st_latlon,
+        nvars=st_nvars
+    
+    @given(
+        nens_pred=st_nens_pred,
+        nens_target=st_nens_target,
+        timesteps=st_timesteps,
+        latlon=st_latlon,
+        nvars=st_nvars
     )
-    def test_composite_loss(self, losses_weights: list) -> None:
+    @settings(max_examples=1)
+    def test_composite_loss(self, nens_pred: int, nens_target: int, timesteps: int, latlon: int, nvars: int) -> None:
+        # Normalize weights to sum to 1
+        st_weights = st.lists(st.floats(min_value=0.01, max_value=1), min_size=3, max_size=3)
 
-        bs, nens_input, timesteps, latlon, nvars = 2, 8, 6, 7, 5
-        nens_target = 5
-        preds = torch.randn(bs, nens_input, timesteps, latlon, nvars)
+        total_weight = sum(st_weights)
+        losses_weights = [w / total_weight for w in losses_weights]
+
+        bs = 2  # We'll keep batch size fixed for simplicity
+        preds = torch.randn(bs, nens_pred, timesteps, latlon, nvars)
         target = torch.randn(bs, nens_target, timesteps, latlon, nvars)
         feature_weights = torch.ones(nvars)
         node_weights = torch.ones(latlon)
@@ -573,13 +589,11 @@ class TestLosses:
         feature_weights_np = feature_weights.numpy()
         beta_np = beta.numpy()
 
-
         losses = [
             DictConfig({"_target_": "anemoi.training.losses.ignorance.IgnoranceScore", "eps": self.eps}),
             DictConfig({"_target_": "anemoi.training.losses.mse.WeightedMSELoss", }),
             DictConfig({"_target_": "anemoi.training.losses.energy.EnergyScore", "group_on_dim": -1})
         ]
-
 
         composite_loss = CompositeLoss(
             losses=losses,
@@ -617,9 +631,11 @@ class TestLosses:
         np.testing.assert_allclose(score, expected_score.numpy(), rtol=1e-5)
 
         # Test that changing weights affects the score
+        different_weights = [w * 1.1 for w in losses_weights]
+        different_weights = [w / sum(different_weights) for w in different_weights]  # Normalize
         composite_loss_2 = CompositeLoss(
             losses=losses,
-            loss_weights=[0.5, 0.3, 0.2],  # Different weights
+            loss_weights=different_weights,
             node_weights=node_weights,
             feature_weights=feature_weights,
         )
@@ -634,13 +650,19 @@ class TestLosses:
 
         # Ensure the scores are different
         assert not np.allclose(score, score_2.numpy())
-
-
-    def test_mse_loss(self) -> None:
-        bs, nens, timesteps, latlon, nvars = 2, 4, 6, 3, 3
+    @given(
+        bs=st.integers(1, 5),
+        nens=st.integers(1, 5),
+        timesteps=st.integers(1, 10),
+        latlon=st.integers(1, 5),
+        nvars=st.integers(1, 5),
+    )
+    @settings(max_examples=1)
+    def test_mse_loss(self, bs, nens, timesteps, latlon, nvars):
+        # Generate test data
         preds = torch.randn(bs, nens, timesteps, latlon, nvars)
-        target = torch.randn(bs, timesteps, latlon, nvars)
-        node_weights = torch.rand(latlon)
+        target = torch.randn(bs, nens, timesteps, latlon, nvars)
+        node_weights = torch.rand(latlon) + 0.01
         feature_weights = torch.rand(nvars) + 0.01
 
         # Create NumPy versions of the tensors
@@ -649,21 +671,42 @@ class TestLosses:
         node_weights_np = node_weights.numpy()
         feature_weights_np = feature_weights.numpy()
 
+        # Test case 1: target_each_ens_indep = False (default behavior)
         mse_loss = WeightedMSELoss(node_weights=node_weights, feature_weights=feature_weights)
         loss = mse_loss(preds.clone(), target.clone(), squash=False)
 
-        # Reference calculation
-        mse = (preds_np.mean(1) - target_np) ** 2
-        weighted_mse = mse * (node_weights_np[:, None]/node_weights_np.sum()) * (feature_weights_np/feature_weights_np.size)
-        reference_loss = weighted_mse.mean(0) 
+        # Reference calculation for mean-based loss
+        mse = (preds_np.mean(1) - target_np.mean(1)) ** 2
+        weighted_mse = mse * (node_weights_np[:, None] / node_weights_np.sum()) * (feature_weights_np / feature_weights_np.size)
+        reference_loss = weighted_mse.mean(0)
 
-        np.testing.assert_allclose(loss, reference_loss, rtol=1e-5)
+        np.testing.assert_allclose(loss.numpy(), reference_loss, rtol=1e-5)
 
-    def test_mae_loss(self) -> None:
-        bs, nens, timesteps, latlon, nvars = 2, 4, 6, 3 , 3
+        # Test case 2: target_each_ens_indep = True
+        mse_loss_indep = WeightedMSELoss(node_weights=node_weights, feature_weights=feature_weights)
+        mse_loss_indep.target_each_ens_indep = True
+        loss_indep = mse_loss_indep(preds.clone(), target.clone(), squash=False)
+
+        # Reference calculation for ensemble-independent loss
+        mse_indep = (preds_np - target_np) ** 2
+        weighted_mse_indep = mse_indep * (node_weights_np[None, None, :, None] / node_weights_np.sum()) * (feature_weights_np / feature_weights_np.size)
+        reference_loss_indep = weighted_mse_indep.mean((0, 1))
+
+        np.testing.assert_allclose(loss_indep.numpy(), reference_loss_indep, rtol=1e-5)
+
+    @given(
+        bs=st.integers(1, 5),
+        nens=st.integers(1, 5),
+        timesteps=st.integers(1, 10),
+        latlon=st.integers(1, 5),
+        nvars=st.integers(1, 5),
+    )
+    @settings(max_examples=1)
+    def test_mae_loss(self, bs, nens, timesteps, latlon, nvars):
+        # Generate test data
         preds = torch.randn(bs, nens, timesteps, latlon, nvars)
-        target = torch.randn(bs, timesteps, latlon, nvars)
-        node_weights = torch.rand(latlon)
+        target = torch.randn(bs, nens, timesteps, latlon, nvars)
+        node_weights = torch.rand(latlon) + 0.01
         feature_weights = torch.rand(nvars) + 0.01
 
         # Create NumPy versions of the tensors
@@ -672,20 +715,33 @@ class TestLosses:
         node_weights_np = node_weights.numpy()
         feature_weights_np = feature_weights.numpy()
 
+        # Test case 1: target_each_ens_indep = False (default behavior)
         mae_loss = WeightedMAELoss(node_weights=node_weights, feature_weights=feature_weights)
         loss = mae_loss(preds.clone(), target.clone(), squash=False)
 
-        # Reference calculation
-        mae = np.abs(preds_np.mean(1) - target_np)
-        weighted_mae = mae * (node_weights_np[:, None]/node_weights_np.sum()) * (feature_weights_np/feature_weights_np.size)
+        # Reference calculation for mean-based loss
+        mae = np.abs(preds_np.mean(1) - target_np.mean(1))
+        weighted_mae = mae * (node_weights_np[:, None] / node_weights_np.sum()) * (feature_weights_np / feature_weights_np.size)
         reference_loss = weighted_mae.mean(0)
 
-        np.testing.assert_allclose(loss, reference_loss, rtol=1e-5)
+        np.testing.assert_allclose(loss.numpy(), reference_loss, rtol=1e-5)
+
+        # Test case 2: target_each_ens_indep = True
+        mae_loss_indep = WeightedMAELoss(node_weights=node_weights, feature_weights=feature_weights)
+        mae_loss_indep.target_each_ens_indep = True
+        loss_indep = mae_loss_indep(preds.clone(), target.clone(), squash=False)
+
+        # Reference calculation for ensemble-independent loss
+        mae_indep = np.abs(preds_np - target_np)
+        weighted_mae_indep = mae_indep * (node_weights_np[None, None, :, None] / node_weights_np.sum()) * (feature_weights_np / feature_weights_np.size)
+        reference_loss_indep = weighted_mae_indep.mean((0, 1))
+
+        np.testing.assert_allclose(loss_indep.numpy(), reference_loss_indep, rtol=1e-5)
 
     def test_vae_loss(self) -> None:
         #TODO(rilwan-ade): Add a test for unsquashed VAE loss e.g
         bs, inp_ens_size, timesteps, latlon, nvars = 2, 6, 3, 4, 5
-        timesteps_latent, latlon_latent, latent_dim = 7, 5, 5
+        latlon_latent, latent_dim = 5, 5
         x_rec = torch.randn(bs, inp_ens_size, timesteps, latlon, nvars)
         x_target = x_rec + torch.randn(bs, inp_ens_size, timesteps, latlon, nvars) * 0.05  # Add small noise
 
@@ -843,15 +899,15 @@ class TestLosses:
         (-2, "vectorized"),
         (-3, "vectorized")
     ])
-    def test_multivariate_kcrps(self, group_on_dim: int, implementation: str):
+    def test_multivariate_KernelCRPS(self, group_on_dim: int, implementation: str):
         bs, nens, timesteps, latlon, nvars = 2, 4, 3, 6, 3
         preds = torch.randn(bs, nens, timesteps, latlon, nvars)
         target = torch.randn(bs, timesteps, latlon, nvars)
         node_weights = torch.rand(latlon)
         feature_weights = torch.rand(nvars)
 
-        # Create MultivariatekCRPS instance
-        mkcrps = MultivariatekCRPS(
+        # Create MultivariateKernelCRPS instance
+        mKernelCRPS = MultivariateKernelCRPS(
             node_weights=node_weights,
             feature_weights=feature_weights,
             group_on_dim=group_on_dim,
@@ -862,7 +918,7 @@ class TestLosses:
         )
 
         # Calculate loss
-        loss = mkcrps(preds, target)
+        loss = mKernelCRPS(preds, target)
 
         # Basic checks
         assert isinstance(loss, torch.Tensor)
@@ -871,7 +927,7 @@ class TestLosses:
         assert not torch.isinf(loss)
 
         # Check if loss changes with different inputs
-        loss2 = mkcrps(preds * 1.1, target)
+        loss2 = mKernelCRPS(preds * 1.1, target)
         assert loss != loss2
 
         # Check if loss is non-negative
@@ -946,7 +1002,7 @@ class TestLosses:
             ),
         ],
     )  
-    def test_grouped_multivariate_kcrps(self, patch_method, group_on_dim, param_groups, data_indices_model_output) -> None:
+    def test_grouped_multivariate_KernelCRPS(self, patch_method, group_on_dim, param_groups, data_indices_model_output) -> None:
         bs, nens, timesteps, latlon, nvars = 2, 4, 3, 6, len(data_indices_model_output["full_idxs"])
         preds = torch.randn(bs, nens, timesteps, latlon, nvars)
         target = torch.randn(bs, timesteps, latlon, nvars)
@@ -962,8 +1018,8 @@ class TestLosses:
         beta_np = np.asarray(beta)
 
         data_indices_model_output = OmegaConf.create(data_indices_model_output)
-        # Create GroupedMultivariatekCRPS instance
-        gmkcrps = GroupedMultivariatekCRPS(
+        # Create GroupedMultivariateKernelCRPS instance
+        gmKernelCRPS = GroupedMultivariateKernelCRPS(
             node_weights=node_weights,
             feature_weights=feature_weights,
             patch_method=patch_method,
@@ -976,7 +1032,7 @@ class TestLosses:
         )
 
         # Calculate loss
-        loss = gmkcrps(preds, target, squash=True)
+        loss = gmKernelCRPS(preds, target, squash=True)
 
         # Basic checks
         assert isinstance(loss, torch.Tensor)
@@ -984,7 +1040,7 @@ class TestLosses:
         assert not torch.isinf(loss)
 
         # Check if loss changes with different inputs
-        loss2 = gmkcrps(preds * 1.1, target)
+        loss2 = gmKernelCRPS(preds * 1.1, target)
         assert loss != loss2
 
         # Check if loss is non-negative
@@ -993,7 +1049,7 @@ class TestLosses:
         
 
         # Test with squash=False
-        unsquashed_loss = gmkcrps(preds, target, squash=False)
+        unsquashed_loss = gmKernelCRPS(preds, target, squash=False)
         if group_on_dim == -2:
             expected_shape = (timesteps, nvars,)
         elif group_on_dim == -3:
@@ -1077,4 +1133,55 @@ class TestLosses:
         reference_loss = np.mean(weighted_spread_occurrence)
 
         assert np.allclose(loss.item(), reference_loss, rtol=1e-5)
+
+    @pytest.mark.parametrize("loss_class, loss_kwargs", [
+        (WeightedMSELoss, {}),
+        (WeightedMAELoss, {}),
+        (VariogramScore, {"beta": 1.0, "group_on_dim": -1}),
+    ])
+    def test_target_each_ens_indep_mixin(self, loss_class, loss_kwargs):
+        bs, nens, timesteps, latlon, nvars = 2, 4, 3, 5, 2
+        preds = torch.randn(bs, nens, timesteps, latlon, nvars)
+        target = torch.randn(bs, nens, timesteps, latlon, nvars)  # Note: target has ensemble dimension
+        node_weights = torch.rand(latlon)
+        feature_weights = torch.rand(nvars)
+
+        # Initialize loss with target_each_ens_indep=True
+        loss_fn = loss_class(
+            node_weights=node_weights,
+            feature_weights=feature_weights,
+            target_each_ens_indep=True,
+            **loss_kwargs
+        )
+
+        # Calculate loss with target_each_ens_indep=True
+        loss_indep = loss_fn(preds, target)
+
+        # Initialize loss with target_each_ens_indep=False
+        loss_fn_regular = loss_class(
+            node_weights=node_weights,
+            feature_weights=feature_weights,
+            target_each_ens_indep=False,
+            **loss_kwargs
+        )
+
+        # Calculate loss for each ensemble member separately
+        loss_manual = 0
+        for i in range(nens):
+            loss_manual += loss_fn_regular(preds[:, i:i+1], target[:, i])
+        loss_manual /= nens
+
+        # Check if the losses are close
+        assert torch.allclose(loss_indep, loss_manual, rtol=1e-5)
+
+        # Test with different ensemble sizes
+        preds_diff_ens = torch.randn(bs, nens * 2, timesteps, latlon, nvars)
+        target_diff_ens = torch.randn(bs, nens * 2, timesteps, latlon, nvars)
+
+        loss_diff_ens = loss_fn(preds_diff_ens, target_diff_ens)
+        assert loss_diff_ens.shape == loss_indep.shape
+
+        # Test error case: mismatched ensemble sizes
+        with pytest.raises(AssertionError):
+            loss_fn(preds, target_diff_ens)
 

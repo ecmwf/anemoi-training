@@ -17,8 +17,6 @@ from torch import nn
 from functools import cached_property
 from typing import Optional
 
-import torch
-from torch import nn
 from .mixins import TargetEachEnsIndepMixin
 LOGGER = logging.getLogger(__name__)
 from typing import Union
@@ -53,6 +51,8 @@ class WeightedMAELoss(TargetEachEnsIndepMixin, nn.Module):
 
         self.register_buffer("feature_weights", feature_weights, persistent=True)
         self.target_each_ens_indep = target_each_ens_indep
+
+
     def forward(
         self,
         pred: torch.Tensor,

@@ -12,6 +12,7 @@ class IgnoranceScore(nn.Module):
         feature_weights: Optional[Tensor] = None,
         eps: float = 1e-5,
         ignore_nans: bool = False,
+        **kwargs,
     ) -> None:
         """Initialize Ignorance Score with latitude-weighted loss.
 

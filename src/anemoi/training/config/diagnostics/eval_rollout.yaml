@@ -117,8 +117,6 @@ log:
     # logger options (these probably come with some overhead)
     gradients: false
     parameters: false
-  tensorboard:
-    enabled: False
   mlflow:
     enabled: false
     offline: false

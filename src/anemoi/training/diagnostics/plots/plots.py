@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
@@ -27,11 +28,15 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
 from dataclasses import dataclass
+from typing import Optional
 
 LOGGER = logging.getLogger(__name__)
 
 continents = Coastlines()
 
+mpl.use("Agg")
+
+LAYOUT = "tight"
 
 @dataclass
 class LatLonData:
@@ -118,12 +123,12 @@ def plot_loss_map(
     parameters: dict[str, int],
     latlons: np.ndarray,
     pointwise_loss: np.ndarray,
-    loss_name: str = "kCRPS",
+    loss_name: str = "KernelCRPS",
 ) -> Figure:
     """
     Plots pointwise Loss values
     latlons: lat/lon coordinates array, shape (lat*lon, 2)
-    pkcrps: array of pointwise kcrps values, shape (nvar, latlon) -> (latlon, nvar).
+    pKernelCRPS: array of pointwise KernelCRPS values, shape (nvar, latlon) -> (latlon, nvar).
     """
     assert latlons.shape[0] == pointwise_loss.shape[0], "Error: shape mismatch!"
 
@@ -601,5 +606,279 @@ def plot_graph_features(
     for i in range(nplots):
         ax_ = ax[i] if nplots > 1 else ax
         scatter_plot(fig, ax_, lon=pc_lon, lat=pc_lat, data=features[..., i])
+
+    return fig
+
+
+def plot_reconstructed_multilevel_sample(
+    parameters: dict[str, int],
+    latlons: np.ndarray,
+    x: np.ndarray,
+    x_rec: np.ndarray,
+) -> Figure:
+    """Plots data for one multilevel latlon-"flat" sample.
+
+    NB: this can be very slow for large data arrays
+    call it as infrequently as possible!
+
+    Parameters
+    ----------
+    parameters : dict[str, int]
+        Dictionary of variable names and indices
+    n_plots_per_sample : int
+        Number of plots per sample
+    latlons : np.ndarray
+        lat/lon coordinates array, shape (lat*lon, 2)
+    x : np.ndarray
+        Input data of shape (lat*lon, nvar*level)
+    x_rec : np.ndarray
+        Reconstructed data of shape (lat*lon, nvar*level)
+
+    Returns
+    -------
+    Figure
+        The figure object handle.
+    """
+    n_plots_per_sample = 3  # plots per sample: input, reconstruction, and error
+    n_plots_x, n_plots_y = len(parameters), n_plots_per_sample
+
+    figsize = (n_plots_y * 4, n_plots_x * 3)
+    fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize)
+
+    pc = EquirectangularProjection()
+    lat, lon = latlons[:, 0], latlons[:, 1]
+    pc_lon, pc_lat = pc(lon, lat)
+
+    for plot_idx, (variable_idx, (variable_name, _)) in enumerate(parameters.items()):
+        xt = x[..., variable_idx].squeeze()
+        xrec = x_rec[..., variable_idx].squeeze()
+        if n_plots_x > 1:
+            plot_reconstructed_sample(fig, ax[plot_idx, :], pc_lon, pc_lat, xt, xrec, variable_name)
+        else:
+            plot_reconstructed_sample(fig, ax, pc_lon, pc_lat, xt, xrec, variable_name)
+
+    return fig
+
+
+def plot_reconstructed_sample(
+    fig,
+    ax,
+    lon: np.ndarray,
+    lat: np.ndarray,
+    input_: np.ndarray,
+    rec: np.ndarray,
+    vname: str,
+) -> None:
+    """Plot a "flat" 1D sample.
+
+    Data on non-rectangular (reduced Gaussian) grids.
+
+    Parameters
+    ----------
+    fig : _type_
+        Figure object handle
+    ax : matplotlib.axes
+        Axis object handle
+    lon : np.ndarray
+        longitude coordinates array, shape (lon,)
+    lat : np.ndarray
+        latitude coordinates array, shape (lat,)
+    input_ : np.ndarray
+        Input data of shape (lat*lon,)
+    rec : np.ndarray
+        Reconstructed data of shape (lat*lon,)
+    vname : str
+        Variable name
+    """
+    scatter_plot(fig, ax[0], lon, lat, input_, title=f"{vname} input")
+    scatter_plot(fig, ax[1], lon, lat, rec, title=f"{vname} reconstruction")
+    scatter_plot(fig, ax[2], lon, lat, input_ - rec, cmap="bwr", norm=TwoSlopeNorm(vcenter=0.0), title=f"{vname} rec error")
+
+    fig.tight_layout()
+    return fig
+
+
+def single_plot(
+    fig,
+    ax,
+    lon: np.array,
+    lat: np.array,
+    data: np.array,
+    cmap: str = "viridis",
+    norm: Optional[str] = None,
+    title: Optional[str] = None,
+    scatter: Optional[bool] = False,
+) -> None:
+    """Lat-lon plot that can work with arbitrary grids.
+
+    Plotting can be made either using scatter plot or hexbin plots.
+    By default it uses hexbin since it is faster and more efficient.
+    If you need to generate sharper plots, with more details,
+    you can use scatter plots or increase the gridsize of the
+    Hexbin plots (default gridsize of 100 )
+
+
+    Parameters
+    ----------
+    fig : _type_
+        Figure object handle
+    ax : matplotlib.axes
+        Axis object handle
+    lon : np.ndarray
+        longitude coordinates array, shape (lon,)
+    lat : np.ndarray
+        latitude coordinates array, shape (lat,)
+    data : _type_
+        Data to plot
+    cmap : str, optional
+        Colormap string from matplotlib, by default "viridis"
+    norm : str, optional
+        Normalization string from matplotlib, by default None
+    title : str, optional
+        Title for plot, by default None
+    scatter: bool, optional
+        Scatter plot, by default False
+    """
+
+    norm = TwoSlopeNorm(vcenter=0.0) if cmap == "bwr" else None
+    if scatter:
+        psc = ax.scatter(
+            lon,
+            lat,
+            c=data,
+            cmap=cmap,
+            s=1,
+            alpha=1.0,
+            norm=norm,
+            rasterized=False,
+        )
+    else:
+        psc = ax.hexbin(
+            lon,
+            lat,
+            C=data,
+            cmap=cmap,
+            gridsize=100,
+            alpha=1.0,
+            norm=norm,
+            rasterized=False,
+        )
+
+    ax.set_xlim((-np.pi, np.pi))
+    ax.set_ylim((-np.pi / 2, np.pi / 2))
+
+    continents.plot_continents(ax)
+
+    if title is not None:
+        ax.set_title(title)
+
+    ax.set_aspect("auto", adjustable=None)
+    _hide_axes_ticks(ax)
+    fig.colorbar(psc, ax=ax)
+
+
+def plot_spread_skill(
+    parameters: dict[int, str],
+    ss_metric: tuple[np.ndarray, np.ndarray],
+    time_step: int,
+) -> Figure:
+    """Plot the spread-skill metric.
+
+    Parameters
+    ----------
+    parameters : Dict[int, str]
+        Dictionary of target variables
+    ss_metric : Tuple[np.ndarray, np.ndarray]
+        Spread-skill metric data
+    time_step : int
+        Time step
+
+    Returns
+    -------
+    Figure
+        Figure object handle
+    """
+    nplots = len(parameters)
+    figsize = (nplots * 5, 4)
+    fig, ax = plt.subplots(1, nplots, figsize=figsize, layout=LAYOUT)
+
+    assert isinstance(ss_metric, tuple), f"Expected a tuple and got {type(ss_metric)}!"
+    assert len(ss_metric) == 2, f"Expected a 2-tuple and got a {len(ss_metric)}-tuple!"
+    assert (
+        ss_metric[0].shape[1] == nplots
+    ), f"Shape mismatch in the RMSE metric: expected (..., {nplots}) and got {ss_metric[0].shape}!"
+    assert (
+        ss_metric[0].shape == ss_metric[1].shape
+    ), f"RMSE and spread metric shapes do not match! {ss_metric[0].shape} and {ss_metric[1].shape}"
+
+    rmse, spread = ss_metric[0], ss_metric[1]
+    rollout = rmse.shape[0]
+    x = np.arange(1, rollout + 1) * time_step
+
+    for i, (_, pname) in enumerate(parameters.items()):
+        ax_ = ax[i] if nplots > 1 else ax
+        ax_.plot(x, rmse[:, i], "-o", color="red", label="mean RMSE")
+        ax_.plot(x, spread[:, i], "-o", color="blue", label="spread")
+        ax_.legend()
+        ax_.set_title(f"{pname[0]} spread-skill")
+        ax_.set_xticks(x)
+        ax_.set_xlabel("Lead time [hrs]")
+
+    return fig
+
+
+def plot_spread_skill_bins(
+    parameters: dict[int, str],
+    ss_metric: tuple[np.ndarray, np.ndarray],
+    time_step: int,
+) -> Figure:
+    """Plot the spread-skill metric in bins.
+
+    Parameters
+    ----------
+    parameters : Dict[int, str]
+        Dictionary of target variables
+    ss_metric : Tuple[np.ndarray, np.ndarray]
+        Spread-skill metric data
+    time_step : int
+        Time step
+
+    Returns
+    -------
+    Figure
+        Figure object handle
+    """
+    nplots = len(parameters)
+    figsize = (nplots * 5, 4)
+    fig, ax = plt.subplots(1, nplots, figsize=figsize, layout=LAYOUT)
+
+    assert isinstance(ss_metric, tuple), f"Expected a tuple and got {type(ss_metric)}!"
+    assert len(ss_metric) == 2, f"Expected a 2-tuple and got a {len(ss_metric)}-tuple!"
+    assert (
+        ss_metric[0].shape[1] == nplots
+    ), f"Shape mismatch in the RMSE metric: expected (..., {nplots}) and got {ss_metric[0].shape}!"
+    assert (
+        ss_metric[0].shape == ss_metric[1].shape
+    ), f"RMSE and spread metric shapes do not match! {ss_metric[0].shape} and {ss_metric[1].shape}"
+
+    bins_rmse, bins_spread = ss_metric[0], ss_metric[1]
+    rollout = bins_rmse.shape[0]
+
+    for i, (_, pname) in enumerate(parameters.items()):
+        ax_ = ax[i] if nplots > 1 else ax
+
+        if bins_spread.min() != 0:
+            for j in range(rollout):
+                ax_.plot(bins_spread[j, i, :], bins_rmse[j, i, :], "-", label=str((j + 1) * time_step) + " hr")
+                ax_.plot(bins_rmse[j, i, :], bins_rmse[j, i, :], "--", color="black", label="__nolabel__")
+            bins_max = max(np.max(bins_rmse[:, i, :]), np.max(bins_spread[:, i, :]))
+        else:
+            bins_max = 1
+        ax_.set_xlim([0, bins_max])
+        ax_.set_ylim([0, bins_max])
+        ax_.legend()
+        ax_.set_title(f"{pname[0]} spread-skill binned")
+        ax_.set_xlabel("Spread")
+        ax_.set_ylabel("Skill")
 
     return fig

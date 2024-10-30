@@ -4,8 +4,10 @@ model:
 activation: GELU
 num_channels: 256
 no_latent_levels: 1 # Hierarchical VAE setting
-no_z_samples: 1 # No of Z samples
 
+# conditional layernorm settings 
+ln_noise_dim: 4
+ln_autocast : false
 
 vector_quantizer:
   _target_: anemoi.models.layers.vector_quantizer.AnemoiVectorQuantizer
@@ -14,8 +16,7 @@ vector_quantizer:
   commitment_cost: ${model.commitment_cost}
 
 encoder:
- _target_: anemoi.models.layers.coderblock.AnemoiEncoderBlocks
- num_latent_levels: 3
+ _target_: anemoi.models.layers.coderblock.EncoderBlock
  freeze_parameters: False
  mapper:
     trainable_size: ${model.trainable_parameters.data2hidden}
@@ -37,7 +38,7 @@ encoder:
 
 
 decoder:
- num_latent_levels: ${model.encoder.num_latent_levels}
+ _target_: anemoi.models.layers.coderblock.DecoderBlock
  freeze_parameters: False
  mapper:
    _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper

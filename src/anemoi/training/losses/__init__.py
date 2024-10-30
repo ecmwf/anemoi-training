@@ -1,12 +1,12 @@
 # (C) 2023 Your Company Name. All rights reserved.
-from .energy import EnergyScore, GroupedEnergyScore
-from .divergences import KLDivergenceLoss, RenyiDivergenceLoss
 from .mse import WeightedMSELoss
 from .mae import WeightedMAELoss
+from .kcrps import KernelCRPS, GroupedMultivariateKernelCRPS, MultivariateKernelCRPS
+from .energy import EnergyScore, GroupedEnergyScore
+from .divergences import KLDivergenceLoss, RenyiDivergenceLoss
 from .vae import VAELoss
 from .variogram import VariogramScore
 from .spectra import SpectralEnergyLoss, SHTAmplitudePhaseLoss, SHTComplexBetaLoss
-from .kcrps import kCRPS, GroupedMultivariatekCRPS, MultivariatekCRPS
 from .ignorance import IgnoranceScore
 from .composite import CompositeLoss
 from .spread_skill import SpreadLoss, SpreadSkillLoss, ZeroSpreadRateLoss
@@ -17,11 +17,11 @@ __all__ = [
     "CompositeLoss",
     "EnergyScore",
     "GroupedEnergyScore",
-    "GroupedMultivariatekCRPS",
+    "KernelCRPS",
+    "MultivariateKernelCRPS",
+    "GroupedMultivariateKernelCRPS",
     "IgnoranceScore",
     "KLDivergenceLoss",
-    "kCRPS",
-    "MultivariatekCRPS",
     "RenyiDivergenceLoss",
     "SpectralEnergyLoss",
     "SHTAmplitudePhaseLoss",

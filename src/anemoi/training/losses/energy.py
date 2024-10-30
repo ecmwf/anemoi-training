@@ -2,24 +2,19 @@
 
 from __future__ import annotations
 
-import os
-import types
-from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
-from torch import nn, Tensor
-from anemoi.training.losses.utils import process_file
 import logging
-from anemoi.training.losses.kcrps import MultivariatekCRPS, GroupedMultivariatekCRPS
+from anemoi.training.losses import MultivariateKernelCRPS, GroupedMultivariateKernelCRPS
 if TYPE_CHECKING:
     from omegaconf.dictconfig import DictConfig
 
 LOGGER = logging.getLogger(__name__)
 
-class EnergyScore(MultivariatekCRPS):
+class EnergyScore(MultivariateKernelCRPS):
     """EnergyScore loss for ensemble forecasts.
 
     #TODO (rilwan-ade): allow the distance metric to be passed as an argument 
@@ -77,7 +72,7 @@ class EnergyScore(MultivariatekCRPS):
         return f"{fair_str}energy_d{self.group_on_dim}_{power_str}"
 
 
-class GroupedEnergyScore(GroupedMultivariatekCRPS):
+class GroupedEnergyScore(GroupedMultivariateKernelCRPS):
     """Grouped Energy Score using Voronoi patches or grouping strategies
 
     This class computes the Energy score over spatial patches defined by Voronoi regions. It includes

@@ -1,0 +1,72 @@
+defaults:
+- data: zarr
+- dataloader: native_grid
+- diagnostics: eval_rollout
+- hardware: slurm
+- graph: encoder_decoder_only.yaml
+- model: transformer.yaml
+- training: default
+- _self_
+
+hardware:
+  paths:
+    data: /home/mlx/ai-ml/datasets/
+    grids: /home/mlx/ai-ml/grids
+    output: ${oc.env:HPCPERM}/aifs/${data.resolution}/
+  files:
+    dataset: aifs-ea-an-oper-0001-mars-${data.resolution}-1979-2023-6h-v7.zarr
+    graph: graph_${data.resolution}_1.pt
+
+diagnostics:
+  plot:
+    enabled: true
+  log:
+    mlflow:
+      enabled: true
+      offline: false
+      authentication: false
+      log_model: false
+      tracking_uri: 'https://mlflow.copernicus-climate.eu'
+      experiment_name: 'anemoi_d_debug'
+      project_name: 'AIFS' # 'Anemoi'
+      system: true
+      terminal: true
+      run_name: null # If set to null, the run name will be the a random UUID
+      on_resume_create_child: true
+    interval: 10
+
+model:
+  activation: SiLU
+  num_channels: 256
+  processor:
+    num_layers: 4
+    num_chunks: 2
+    num_heads: 4 # GraphTransformer or Transformer only
+    window_size: 608
+  encoder:
+    num_heads: 2 # GraphTransformer or Transformer only
+  decoder:
+    num_heads: 2 # GraphTransformer or Transformer only
+  trainable_parameters:
+    data: 8
+    hidden: 8
+    data2hidden: 8
+    hidden2data: 8
+
+data:
+  timestep: 12h
+
+dataloader:
+  limit_batches:
+    training: 20
+    validation: 10
+  batch_size:
+    training: 1
+    validation: 1
+    test: 1
+    predict: 1
+
+training:
+  rate: 10e-4
+  max_epochs: 1
+  num_sanity_val_steps: 0

@@ -4,10 +4,6 @@ import torch_harmonics as harmonics
 from typing import Optional
 import einops
 from .mixins import TargetEachEnsIndepMixin
-import torch
-import torch.nn as nn
-import einops
-from typing import Optional
 from typing import Union
 #TODO(rilwan-ade): Probably need to add optional weightings for frequencies since this will just focus on the larger scales
 #TODO(rilwan-ade): maybe make loss across amplitudes proportional difference for scales - or (scale it proportional to how it generally varies for each variable)

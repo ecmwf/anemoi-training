@@ -44,13 +44,7 @@ zero_optimizer: False
 # don't enable this by default until it's been tested and proven beneficial
 loss_gradient_scaling: False
 
-# length of the "rollout" window (see Keisler's paper)
-rollout:
-  start: 1
-  # increase rollout every n epochs
-  epoch_increment: 0
-  # maximum rollout to use
-  max: 1
+
 
 max_epochs: null
 max_steps: 150000
@@ -96,8 +90,8 @@ loss:
 
 validation_metrics:
   variables:
-    - all_individual
-    - all_grouped
+    - all
+    - group_all
     # - z_500
     # - t_850
     # - u_850
@@ -110,7 +104,7 @@ validation_metrics:
     -
       _target_: anemoi.training.losses.SkillScoreRatio #TODO: this needs to be calculated on denormalized values to have any meaning - relies on being calculated on non grouped values. Make sure the is_valid_compute flag indicates this should only be done when variable is not grouped????
     -
-      _target_: anemoi.training.losses.kcrps
+      _target_: anemoi.training.losses.KernelCRPS
       fair: True
 
 

@@ -66,7 +66,7 @@ class VAELoss(nn.Module):
 
         self.register_buffer("divergence_loss_weight", torch.tensor(divergence_loss_weight))
 
-    def forward(self, preds: Tensor, target: Tensor, squash: Union[bool, tuple] = True, feature_scale: bool = True, feature_indices: Optional[Tensor] = None, **kwargs) -> Tensor:
+    def forward(self, preds: Tensor, target: Tensor, squash: bool|tuple = True, feature_scale: bool = True, feature_indices: Optional[Tensor] = None, **kwargs) -> Tensor:
         """
         Parameters
         ----------

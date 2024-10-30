@@ -98,8 +98,8 @@ loss:
 
 validation_metrics:
   variables:
-    - all_individual
-    - all_grouped
+    - all
+    - group_all
     # - z_500
     # - t_850
     # - u_850

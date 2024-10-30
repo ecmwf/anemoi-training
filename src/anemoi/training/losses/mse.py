@@ -86,10 +86,10 @@ class WeightedMSELoss(TargetEachEnsIndepMixin,nn.Module):
         return mse 
 
     def calc(pred, target):
-        pred = pred.mean(dim=1)
-        target = target.mean(dim=1)
-
+        
         mse = torch.square(pred - target)
+
+
         return mse
 
     def scale(self, loss: torch.Tensor, feature_scale: bool = True, feature_indices: torch.Tensor | None = None, squash: Union[bool, tuple] = True):

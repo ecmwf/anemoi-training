@@ -195,7 +195,7 @@ jobscripts/
 
 src/anemoi/training/config/**/private_*
 .env
-!.vscode/tasks.json
 
-# I want to include .vscode/tasks.json in the repo
+# VSCode things to keep
 !.vscode/tasks.json
+!.vscode/settings.json

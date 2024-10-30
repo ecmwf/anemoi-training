@@ -2,24 +2,20 @@ import logging
 from collections import defaultdict
 from collections.abc import Mapping
 
-import numpy as np
 import pytorch_lightning as pl
 import torch
-from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.interface import AnemoiModelInterfaceForecasting
 
-from hydra.utils import instantiate
-from omegaconf import DictConfig
 
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.training.lightning_module.mixins import DeterministicCommunicationMixin, EnsembleCommunicationMixin
-
+from torch import Tensor
+from anemoi.training.data.inicond import EnsembleInitialConditions
 from anemoi.training.lightning_module.anemoi import AnemoiLightningModule
 from typing import Optional
 LOGGER = logging.getLogger(__name__)
-from torch import Tensor
-from anemoi.training.data.inicond import EnsembleInitialConditions
+
 
 class ForecastingLightningModule(AnemoiLightningModule):
     def __init__(self, config, graph_data, statistics, statistics_tendencies, data_indices, metadata):
@@ -63,7 +59,6 @@ class ForecastingLightningModule(AnemoiLightningModule):
         batch_target: Optional[torch.Tensor] = None,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], Mapping[str, list]]:
         return self.step_functions[self.prediction_mode](batch, batch_idx, validation_mode, use_checkpoint, batch_target)
-
 
     def _step_state(
         self,
@@ -178,6 +173,7 @@ class ForecastingLightningModule(AnemoiLightningModule):
         # scale loss
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
+    
     def get_proc_and_unproc_data(self, y_pred=None, y=None, y_pred_postprocessed=None, y_postprocessed=None):
         assert y_pred is not None or y_pred_postprocessed is not None, "Either y_pred or y_pred_postprocessed must be provided"
         assert y is not None or y_postprocessed is not None, "Either y or y_postprocessed must be provided"
@@ -268,13 +264,13 @@ class ForecastingLightningModule(AnemoiLightningModule):
         ]
         return x
 
-
 class ForecastingLightningModuleDeterministic(DeterministicCommunicationMixin, pl.LightningModule):
     """Deterministic version of Forecasting Lightning Module."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    
 
 class ForecastingLightningModuleICEnsemble(EnsembleCommunicationMixin, pl.LightningModule):
     """Ensemble version of Forecasting Lightning Module."""
@@ -396,12 +392,13 @@ class ForecastingLightningModuleDiffussion(EnsembleCommunicationMixin, Forecasti
             # calculate loss
             # NOTE: currently only WeightedMSE implements calc and scale
             if use_checkpoint:
-                l = checkpoint(self.loss.calc, tendency_pred, tendency_target, use_reentrant=False)
+                _loss = checkpoint(self.loss.calc, tendency_pred, tendency_target, use_reentrant=False)
             else:
-                l = self.loss.calc(tendency_pred, tendency_target)
-            l = (l * loss_weight) # scaling by noise related weights
-            l = self.loss.scale(l)
-            loss += l
+                _loss = self.loss.calc(tendency_pred, tendency_target)
+            _loss = (_loss * loss_weight) # scaling by noise related weights
+            _loss = self.loss.scale(_loss)
+
+            loss += _loss
 
             # re-construct non-processed predicted state
             y_pred = self.model.add_tendency_to_state(x[:, -1, ...], tendency_pred)
@@ -417,29 +414,23 @@ class ForecastingLightningModuleDiffussion(EnsembleCommunicationMixin, Forecasti
 
         
         if validation_mode:
-            y_pred_postprocessed = torch.stack(y_preds, dim=1)
-            y_postprocessed = batch[:, self.multi_step + rollout_step, ..., self.data_indices.data.output.full] 
 
-            
-            y_noised = self.model.pre_processors_state(
-                y_noiseds,
-                in_place=False,
-                data_index=self.data_indices.data.output.full,
-            )
-            
-            # calculate_val_metrics requires processed inputs
+            y_pred_postprocessed = torch.stack(y_preds, dim=1)
+            y_postprocessed = batch[:, self.multi_step: self.multi_step + self.rollout, ..., self.data_indices.data.output.full] 
+
+            dict_outputs = self.get_proc_and_unproc_data(y_pred_postprocessed=y_pred_postprocessed, y_postprocessed=y_postprocessed)
+
             metrics = self.calculate_val_metrics(
                 **dict_outputs
             )
 
-            dict_outputs["y_noised"] = torch.split(y_noiseds, 1, dim=1)
-
-        
-            # dict_outputs["y_preds"] = torch.split(y_preds, 1, dim=1)
+            y_noised = self.model.pre_processors_state(
+                torch.stack(y_noiseds, dim=1),
+                in_place=False,
+                data_index=self.data_indices.data.output.full,
+            )
             
-
-            # dict_outputs["y_postprocessed"] = torch.split(y_postprocessed, 1, dim=1)
-            # dict_outputs["y_pred_postprocessed"] = torch.split(y_pred_postprocessed, 1, dim=1)
+            dict_outputs["y_noised"] = y_noised
 
         # scale loss
         loss *= 1.0 / self.rollout

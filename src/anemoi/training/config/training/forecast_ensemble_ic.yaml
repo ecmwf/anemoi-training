@@ -8,3 +8,10 @@ lightning_module:
 target_ic: false # if false, then we calculate loss against the highest resolution signal, if true we calculate loss against the ICs recentered on the highest resolution signal
 ic_ensemble_size: 4
 noise_sample_per_ic: 1 # number of times to sample noise for each IC
+
+rollout:
+  start: 1
+  # increase rollout every n epochs
+  epoch_increment: 0
+  # maximum rollout to use
+  max: 1

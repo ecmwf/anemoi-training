@@ -198,5 +198,3 @@ lint.ignore = [
   "TD003",
 ]
 
-[tool.pytest.ini_options]
-addopts = "-n 6"  # Run with 6 parallel workers and stop after 12 test failures

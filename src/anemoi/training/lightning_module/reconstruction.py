@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 
-import numpy as np
-import torch
 
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint
@@ -10,14 +8,12 @@ from anemoi.training.lightning_module.mixins import DeterministicCommunicationMi
 from anemoi.training.lightning_module.anemoi import AnemoiLightningModule
 from anemoi.models.interface import AnemoiModelInterfaceReconstruction
 from anemoi.training.data.inicond import EnsembleInitialConditions
-from hydra.utils import instantiate
 
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from omegaconf import DictConfig
     from collections.abc import Mapping
 LOGGER = logging.getLogger(__name__)
 
@@ -115,12 +111,17 @@ class ReconstructionLightningModule(AnemoiLightningModule):
 
         return metric_vals
 
+
 class ReconstructionLightningModuleDeterministic(DeterministicCommunicationMixin, ReconstructionLightningModule):
     """Deterministic version of Reconstruction Lightning Module."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    @classmethod
+    def get_callbacks(self, monitored_metrics, val_dset_len):
+        from anemoi.training.diagnostics.callbacks.forecast import get_callbacks
+        return get_callbacks(self.config, monitored_metrics, val_dset_len)
 
 class ReconstructionLightningModuleICEnsemble(EnsembleCommunicationMixin, ReconstructionLightningModule):
     """Ensemble version of Reconstruction Lightning Module.
@@ -187,3 +188,8 @@ class ReconstructionLightningModuleICEnsemble(EnsembleCommunicationMixin, Recons
 
         # Reducing the time dimension out (leave it in)
         return loss, metrics, {**dict_tensors, **dict_model_outputs}
+
+    @classmethod
+    def get_callbacks(self, monitored_metrics, val_dset_len):
+        from anemoi.training.diagnostics.callbacks.forecast_ensemble import get_callbacks
+        return get_callbacks(self.config, monitored_metrics, val_dset_len)

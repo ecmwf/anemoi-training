@@ -71,9 +71,10 @@ class VariogramScore(TargetEachEnsIndepMixin, nn.Module):
         self.target_each_ens_indep = target_each_ens_indep
         if self.target_each_ens_indep:
             assert group_on_dim in [-1, -2, -3], "Target full ensemble is only applicable when group_on_dim is one of the last three dimensions, Please make sure you understand the nuance of this Variogram Score"
-
+        else:
+            assert self.group_on_dim in [-1, -2, -3, -4], "Group on dim must be one of the last four dimensions"
         self.group_on_dim = group_on_dim
-        assert self.group_on_dim in [-1, -2, -3, -4], "Group on dim must be one of the last four dimensions"
+        
 
         self.register_buffer("beta", torch.as_tensor(beta), persistent=False)
         if self.beta.ndim == 0:

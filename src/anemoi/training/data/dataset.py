@@ -17,8 +17,8 @@ import torch
 from einops import rearrange
 from torch.utils.data import IterableDataset
 from torch.utils.data import get_worker_info
-from einops import rearrange
 from anemoi.training.utils.seeding import get_base_seed
+from typing import Generator
 
 LOGGER = logging.getLogger(__name__)
 
@@ -124,6 +124,28 @@ class NativeGridDataset(IterableDataset):
         """Return dataset resolution."""
         return self.data.resolution
 
+
+    def shard_len(self) -> int:
+        
+        # Total number of valid ICs is dataset length minus rollout minus additional multistep inputs
+        len_corrected = len(self.data) - (self.rollout + (self.multi_step - 1)) * self.timeincrement
+
+        # Divide this equally across shards (one shard per group!)
+        shard_len = len_corrected // self.model_comm_num_groups
+        return shard_len
+
+    def shard_start_end(self) -> tuple[int, int]:
+        shard_len = self.shard_len()
+        
+        full_ds_start = (self.multi_step - 1) * self.timeincrement
+        full_ds_end = len(self.data) - self.rollout * self.timeincrement
+
+        shard_start = full_ds_start + self.model_comm_group_id * shard_len
+        shard_end = shard_start + shard_len
+        
+        return shard_start, shard_end
+
+
     def per_worker_init(self, n_workers: int, worker_id: int) -> None:
         """Called by worker_init_func on each copy of dataset.
 
@@ -139,31 +161,16 @@ class NativeGridDataset(IterableDataset):
         """
         self.worker_id = worker_id
 
-        # Total number of valid ICs is dataset length minus rollout minus additional multistep inputs
-        len_corrected = len(self.data) - (self.rollout + (self.multi_step - 1)) * self.timeincrement
+        shard_start, shard_end = self.shard_start_end()
 
-        # Divide this equally across shards (one shard per group!)
-        shard_size = len_corrected // self.model_comm_num_groups
-        shard_start = self.model_comm_group_id * shard_size + (self.multi_step - 1) * self.timeincrement
-        shard_end = min((self.model_comm_group_id + 1) * shard_size, len(self.data) - self.rollout * self.timeincrement)
+        # shard_len = shard_end - shard_start
+        # self.n_samples_per_worker = shard_len // n_workers
 
-        shard_len = shard_end - shard_start
-        self.n_samples_per_worker = shard_len // n_workers
+        # Getting worker min and max
+        shard_idx_range = np.arange(shard_start, shard_end, dtype=np.uint32)
+        shard_idx_range_grouped = np.array_split(shard_idx_range, n_workers)
 
-        low = shard_start + worker_id * self.n_samples_per_worker
-        high = min(shard_start + (worker_id + 1) * self.n_samples_per_worker, shard_end)
-
-        LOGGER.debug(
-            "Worker %d (pid %d, global_rank %d, model comm group %d) has low/high range %d / %d",
-            worker_id,
-            os.getpid(),
-            self.global_rank,
-            self.model_comm_group_id,
-            low,
-            high,
-        )
-
-        self.chunk_index_range = np.arange(low, high, dtype=np.uint32)
+        self.chunk_index_range = shard_idx_range_grouped[worker_id]
 
         # each worker must have a different seed for its random number generator,
         # otherwise all the workers will output exactly the same data
@@ -183,7 +190,7 @@ class NativeGridDataset(IterableDataset):
         LOGGER.debug(
             (
                 "Worker %d (%s, pid %d, glob. rank %d, model comm group %d, "
-                "group_rank %d, base_seed %d) using seed %d, sanity rnd %f"
+                "group_rank %d, base_seed %d) using seed %d, sanity rnd %f has low/high range %d / %d"
             ),
             worker_id,
             self.label,
@@ -194,9 +201,11 @@ class NativeGridDataset(IterableDataset):
             base_seed,
             seed,
             sanity_rnd,
+            low,
+            high,
         )
 
-    def __iter__(self) -> torch.Tensor:
+    def __iter__(self) -> Generator[torch.Tensor, None, None]:
         """Return an iterator over the dataset.
 
         The datasets are retrieved by Anemoi Datasets from zarr files. This iterator yields
@@ -233,22 +242,18 @@ class NativeGridDataset(IterableDataset):
             end = i + (self.rollout + 1) * self.timeincrement
 
             x = self.data[start : end : self.timeincrement]
-            x = rearrange(x, "dates variables ensemble gridpoints -> ensemble dates gridpoints variables")
-            self.ensemble_dim = 0
+            x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
+            self.ensemble_dim = 1
 
             yield torch.from_numpy(x)
 
     def __len__(self) -> int:
-        # Calculation for __len__ of dataset should align to calculation used in per_worker_init
+        # This is then __len__ for this shard, which is distributed across the workers
 
-        len_corrected = len(self.data) - (self.rollout + (self.multi_step - 1)) * self.timeincrement
-        # Divide this equally across shards (one shard per group!)
-        shard_size = len_corrected // self.model_comm_num_groups
-        shard_start = self.model_comm_group_id * shard_size + (self.multi_step - 1) * self.timeincrement
-        shard_end = min((self.model_comm_group_id + 1) * shard_size, len(self.data) - self.rollout * self.timeincrement)
-        samples = shard_end - shard_start
+        shard_len = self.shard_len()
 
-        return (samples // self.model_comm_group_nworkers) * self.model_comm_group_nworkers
+        # Ensures the length is divisible by the number of workers
+        return shard_len
 
     def __repr__(self) -> str:
         return f"""
@@ -327,10 +332,18 @@ class EnsNativeGridDataset(NativeGridDataset):
         self.num_gpus_per_ens = num_gpus_per_ens
         self.num_gpus_per_model = num_gpus_per_model
 
+        self.ensemble_size = self.num_eda_members
+
     @property
     def num_eda_members(self) -> int:
         """Return number of EDA members."""
         return self.data.shape[2] - 1
+    
+    @property
+    def num_analysis_members(self) -> int:
+        """Return number of analysis members."""
+        return 1
+    
 
     @property
     def eda_flag(self) -> bool:
@@ -377,8 +390,11 @@ class EnsNativeGridDataset(NativeGridDataset):
         for i in shuffled_chunk_indices:
             # start and end time indices, for analysis and EDA
             start = i - (self.multi_step - 1) * self.timeincrement
-            end_an = i + (self.rollout + 1) * self.timeincrement
-            end_eda = i + self.timeincrement
+            end = i + (self.rollout + 1) * self.timeincrement
+            # old only took eda for first timestep
+            # end_eda = i + self.timeincrement
+            # new we take eda for all timesteps
+            
 
             if self.eda_flag:
                 eda_member_gen_idx, eda_member_idx = self.sample_eda_members(self.num_eda_members)
@@ -386,13 +402,13 @@ class EnsNativeGridDataset(NativeGridDataset):
                 eda_member_gen_idx = None
                 eda_member_idx = None
 
-            x_an = self.data[start : end_an : self.timeincrement, :, 0:1, ...]
+            x_an = self.data[start : end : self.timeincrement, :, 0:1, ...]
             x_an = rearrange(torch.from_numpy(x_an), "dates variables ensemble gridpoints -> ensemble dates gridpoints variables")
 
             x_pert: Optional[torch.Tensor] = None
             if self.eda_flag:
 
-                x_pert = self.data[start : end_eda : self.timeincrement, eda_member_idx,...]
+                x_pert = self.data[start : end : self.timeincrement, :, eda_member_idx,...]
                 sample = (
                     x_an,
                     rearrange(
@@ -411,7 +427,7 @@ class EnsNativeGridDataset(NativeGridDataset):
                 self.comm_group_id,
                 self.comm_group_rank,
                 start,
-                end_an,
+                end,
                 self.eda_flag,
                 eda_member_gen_idx,
                 eda_member_idx,

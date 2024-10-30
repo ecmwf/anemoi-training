@@ -11,13 +11,14 @@ from hydra.utils import instantiate
 from anemoi.utils.config import DotDict
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from torch_geometric.data import HeteroData
-
-
+import numpy as np
+from torch.distributed import ProcessGroup
 from omegaconf import OmegaConf
 from typing import Optional
+from anemoi.models.data_indices.collection import IndexCollection
 
 LOGGER = logging.getLogger(__name__)
-from anemoi.models.data_indices.collection import IndexCollection
+
 
 
 class AnemoiLightningModule(pl.LightningModule):
@@ -88,8 +89,20 @@ class AnemoiLightningModule(pl.LightningModule):
                 # Group metrics for pressure levels (e.g., Q, T, U, V, etc.)
                 val_metric_ranges[f"pl_{split[0]}"].append(idx)
 
-                if key in config.training.metrics or "all_individual" in config.training.metrics:
+                if key in config.training.metrics or "all" in config.training.metrics:
                     val_metric_ranges[key] = [idx]
+            # Check if there is any number in the key
+            elif any(char.isdigit() for char in key):
+                import re
+                # Get the number in the key
+                number = int(re.search(r'\d+', key).group())
+                max_sfc_level = 50
+                
+                if number < max_sfc_level:
+                    val_metric_ranges["sfc"].append(idx)
+                else:
+                    val_metric_ranges[f"pl_{number}"].append(idx)
+
             else:
                 val_metric_ranges["sfc"].append(idx)
 
@@ -97,13 +110,19 @@ class AnemoiLightningModule(pl.LightningModule):
             if key in config.training.metrics:
                 val_metric_ranges[key] = [idx]
 
-        if "all_grouped" in config.training.metrics:
+        if "group_all" in config.training.metrics:
             val_metric_ranges.update(
                 {"all" : list(data_indices.model.output.name_to_index.values())},
+            )
+        
+        if "all" in config.training.metrics:
+            val_metric_ranges.update(
+                {key: [idx] for key, idx in data_indices.model.output.name_to_index.items()}
             )
 
         return val_metric_ranges
 
+    @classmethod
     def get_feature_weights(self, config: DictConfig, data_indices: IndexCollection) -> torch.Tensor:
         """
         Calculates the feature weights for each output feature based on the configuration, data indices. User can specify weighting strategies based on pressure level, feature type, and inverse variance scaling. Any strategies provided are combined.
@@ -144,7 +163,7 @@ class AnemoiLightningModule(pl.LightningModule):
                     LOGGER.debug("Parameter %s was not scaled.", key)
 
         if config.training.feature_weighting.inverse_tendency_variance_scaling:
-            variances = self.model.statistics_tendencies["stdev"][data_indices.data.output.full]
+            variances = self.model.statistics_tendencies["stdev"][data_indices.data.output.full] ** 2
             feature_weights /= variances
 
         return torch.from_numpy(feature_weights)
@@ -186,10 +205,31 @@ class AnemoiLightningModule(pl.LightningModule):
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
 
     def training_steps(self):
-        if self.config.training.max_steps is not None:
+
+        if self.config.training.max_steps is not None and self.config.training.max_epochs is not None:
+            return min(self.config.training.max_steps, self.config.training.max_epochs * self.training_steps_per_epoch())
+        elif self.config.training.max_steps is not None:
             return self.config.training.max_steps
-        train_batches_per_epoch = len(self.trainer.datamodule.ds_train) // self.config.dataloader.batch_size["training"]
-        return self.config.training.max_epochs * train_batches_per_epoch
+        else:
+            return self.config.training.max_epochs * self.training_steps_per_epoch()
+    
+    
+    def training_steps_per_epoch(self):
+        training_batches_per_epoch = self.trainer.datamodule.ds_train.shard_size() // self.config.dataloader.batch_size["training"]
+        return training_batches_per_epoch
+
+    def validation_steps_per_epoch(self):
+        validation_batches_per_epoch = self.trainer.datamodule.ds_val.shard_size() // self.config.dataloader.batch_size["validation"]
+
+        if self.config.training.val_check_interval is not None:
+            return self.config.training.val_check_interval * validation_batches_per_epoch
+        elif self.config.training.limit_val_batches is not None:
+            return min(self.config.training.limit_val_batches, validation_batches_per_epoch)
+        else:
+            return validation_batches_per_epoch
+        
+    def validation_steps(self):
+        return self.config.training.max_epochs * self.validation_steps_per_epoch()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)

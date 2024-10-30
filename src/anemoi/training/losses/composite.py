@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import os
-import sys
 import logging
 import hydra
-import logging
 
 
 from functools import cached_property
@@ -12,9 +9,9 @@ from functools import cached_property
 import torch
 from torch import nn
 from torch import Tensor
-
-
 from typing import TYPE_CHECKING
+from typing import Union
+
 from anemoi.training.losses.utils import buffered_arange
 
 LOGGER = logging.getLogger(__name__)

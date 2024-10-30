@@ -129,6 +129,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     def test_dataloader(self) -> DataLoader:
         return self._get_dataloader(self.ds_test, "test")
+    
 
 class AnemoiForecastingDataModule(AnemoiDatasetsDataModule):
     """Data module for forecasting models, with rollout functionality."""

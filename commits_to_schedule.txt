@@ -1,0 +1,40 @@
+# This file explains the commits that would have to be added to anemoi-training in order to bring these branches inline
+
+---- Commits to schedule (anemo-training) --------:
+0) Original code base doesn't plot weighted losses over subgroups e.g. the sums are just unweighted over denormalized observations with various sizes
+1) checkpointing by interval & performance (refactor these to be hydra initiated)
+2) early stopping
+3) Callbacks structuring
+4) Losses operating on timestep 1 by 1
+5) Subclassng data modules
+6) asynchronous logging of metrics using mlflow
+7) tensorboard gradient logging (add documentation)
+8) Simon added trainer predict step
+9) Subclassed Lightning Modules / DataModules to seperate logic between Forecasting, Reconstruction, Diffussion and also add base classes with shared logic
+10) precision: float32_matmul_precision and precision=bf16-mixed by default
+11) in training config seperate the optimizer and scheduler settings
+12) seperate the function for getting scalings and getting parameter groups
+13) hydra instantiated losses
+14) method for instantiating train and validation losses
+15) tieing together max_steps and max_epochs
+16) Use of val_check_interval instead of limit_batches - requires adding global step to plot labels to distinguish
+17) Removed restrictions on what times/dates can be passed to datamodule e.g. that validation set must be after train set
+18) LongRollout Should be removed/replaced and behaviour integrated into NormalEvalRollout. The only thing that would have to change is just keeping intemediary rollout steps on cpu instead of gpu
+19) __len__ property has been added to dataloader in order allowing limit batches to be based on percentage of dataset seen 
+20) Callback Refactor: 20a) Parent Callback e.g. Reconstruction/Rollout and other callbacks are children - prevents the repeated normalization/denormalization in every callback (time-saving) 20b) Allowing researchers flexibility to determine what exactly is plotted. 20c) specify if a callback operates on epoch or batch 20e) allows callback to be specified to produce output every fraction of validation batch 20f) improve easy of use by add flags "op_on_batch", "op_on_epoch" which will be caught by the main callback 
+21) Change outputs of forecaster to be labelled dictionary for code clairty
+22) Allowing losses to operate on input of (bs, timesteps, ens, latlon, feature) e.g. we don't need to calculate a loss on every timestep- changes to lightning module and callbacks 
+23) Add MemCleanUpCallback to operate at end of callback chain
+24) Added back tensorboard functionality (Very common ML experiment observation monitoring tool /
+25) Let the LightningModule just hold the self.config object to avoid having to make loads of properties in the __init__.py
+26) De couple the get_feature_weights and get_val_metric_ranges in the lightning module
+27) Add optionality for scale_by_gpus -> generally should move away from this behaviour, if you used 50 GPUS would you ever want a lr > 1 and secondly factors such as layernormalization only experience stability increase when batch size per GPU increases not when number nodes or GPUS increases
+28) Remove the in_place_proc from the LightningModules. Previously it was needed to make sure that when the callbacks used the _step function that inputs were renormalized. Solution was to refactor the callbacks into parent callbacks and children callbacks
+29) _step functions now output a dictionary of outputs as the final of three params, other code must use keys in order to extract required output
+30) adding tests for the dataloader
+31) The get_time_step and related logic to improving logs in mlflow e.g. make it clear what time span the output is for
+32) EarlyStoppingRollout Callback / Rollout Scheduler Callback (better control over when rollout happens) preset from start of run (reduce it just to work on #steps
+33) Distinguished between IC sampling and noise sampling per IC
+34) skip connection removed in EncProcDec structure
+35) In EnsNativeGridDatasetDataloader, we now take the same time period of eda as we do analysis by using the same start and end for both dsets 
+36) Allow "all" and "all_grouped" to be added as val_metrics for validation scoring

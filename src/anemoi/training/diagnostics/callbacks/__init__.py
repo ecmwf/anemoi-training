@@ -455,7 +455,7 @@ class BaseLossBarPlot(BasePlotCallback):
     def _plot(
         self,
         trainer: pl.Trainer,
-        pl_module: pl.Lightning_module,
+        pl_module: pl.LightningModule,
         outputs: list[torch.Tensor],
         batch: torch.Tensor,
         batch_idx: int,
@@ -470,7 +470,7 @@ class BaseLossBarPlot(BasePlotCallback):
         self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
 
         y_hat = outputs[1]
-        y_true = batch[:, pl_module.multi_step: pl_module.multi_step + rollout_step, ..., pl_module.data_indices.data.output.full]
+        y_true = batch[:, pl_module.multi_step: pl_module.multi_step + pl_module.rollout, ..., pl_module.data_indices.data.output.full]
         loss = pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()
 
         for rollout_step in range(pl_module.rollout):
@@ -503,7 +503,9 @@ class BaseLossBarPlot(BasePlotCallback):
 
 # TODO: (rilwan-ade) make sure that this is added for implementations of forecaster, forecast_ensemble,
 class WeightGradOutputLoggerCallback(Callback):
-    """Tensorboard Callback."""
+    """Tensorboard Callback.
+        #NOTE (rilwan-ade): This only works with forecasting models currently
+    """
 
     from torch.utils.tensorboard import SummaryWriter
 
