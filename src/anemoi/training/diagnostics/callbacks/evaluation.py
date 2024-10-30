@@ -27,7 +27,7 @@ LOGGER = logging.getLogger(__name__)
 class RolloutEval(Callback):
     """Evaluates the model performance over a (longer) rollout window."""
 
-    def __init__(self, config: OmegaConf, rollout: int, frequency: int) -> None:
+    def __init__(self, config: OmegaConf, rollout: int, batch_frequency: int) -> None:
         """Initialize RolloutEval callback.
 
         Parameters
@@ -36,20 +36,20 @@ class RolloutEval(Callback):
             Dictionary with configuration settings
         rollout : int
             Rollout length for evaluation
-        frequency : int
-            Frequency of evaluation, per batch
+        batch_frequency : int
+            batch_frequency of evaluation
 
         """
         super().__init__()
         self.config = config
 
         LOGGER.debug(
-            "Setting up RolloutEval callback with rollout = %d, frequency = %d ...",
+            "Setting up RolloutEval callback with rollout = %d, batch_frequency = %d ...",
             rollout,
-            frequency,
+            batch_frequency,
         )
         self.rollout = rollout
-        self.frequency = frequency
+        self.batch_frequency = batch_frequency
 
     def _eval(
         self,
@@ -113,7 +113,7 @@ class RolloutEval(Callback):
         batch_idx: int,
     ) -> None:
         del outputs  # outputs are not used
-        if batch_idx % self.frequency == 0:
+        if batch_idx % self.batch_frequency == 0:
             precision_mapping = {
                 "16-mixed": torch.float16,
                 "bf16-mixed": torch.bfloat16,
