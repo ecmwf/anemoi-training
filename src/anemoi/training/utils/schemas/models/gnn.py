@@ -9,6 +9,7 @@
 
 
 from pydantic import Field
+from pydantic import NonNegativeInt
 from pydantic import field_validator
 
 from .base_model import BaseModelConfig
@@ -18,10 +19,12 @@ from .base_model import ModelComponent
 class GNNModelComponent(ModelComponent):
     sub_graph_edge_attributes: list = Field(default_factory=list)
     mlp_extra_layers: int = 0
+    num_chunks: NonNegativeInt = 1
 
 
 class GNNProcessor(GNNModelComponent):
-    num_layers: int = Field(gt=0, default=16, repr=False)
+    num_layers: NonNegativeInt = 16
+    num_chunks: NonNegativeInt = 2
 
     @field_validator("target_")
     @classmethod
