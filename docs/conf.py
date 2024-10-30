@@ -22,10 +22,11 @@
 import datetime
 import os
 import sys
+from pathlib import Path
 
 read_the_docs_build = os.environ.get("READTHEDOCS", None) == "True"
 
-sys.path.insert(0, os.path.join(os.path.abspath(".."), "src"))  # noqa: PTH118, PTH100
+sys.path.insert(0, Path("..").absolute() / "src")
 
 
 source_suffix = ".rst"
