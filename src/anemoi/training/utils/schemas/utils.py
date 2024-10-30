@@ -13,5 +13,5 @@ from pydantic import Field
 
 
 class HydraInstantiable(BaseModel):
-    _target_: str = Field(..., alias="_target_")
-    _convert_: str = Field("all", alias="_convert_")
+    target_: str = Field(..., alias="_target_")
+    convert_: str = Field("all", alias="_convert_")

@@ -15,7 +15,9 @@ from pydantic import BaseModel
 
 from .data import DataConfig
 from .diagnostics import DiagnosticsConfig
+from .graphs.base_graph import BaseGraphConfig
 from .hardware import HardwareConfig
+from .models.gnn import GNNConfig
 from .training import TrainingConfig
 
 
@@ -24,9 +26,14 @@ class BaseConfig(BaseModel):
     dataloader: Any
     diagnostics: DiagnosticsConfig
     hardware: HardwareConfig
-    graph: Any  # BaseGraphConfig
-    model: Any
+    graph: BaseGraphConfig
+    model: GNNConfig
     training: TrainingConfig
+
+    class Config:
+        """Pydantic configuration."""
+
+        arbitrary_types_allowed = True
 
 
 def convert_to_omegaconf(config: BaseConfig) -> dict:
@@ -36,8 +43,9 @@ def convert_to_omegaconf(config: BaseConfig) -> dict:
         "dataloader": config.dataloader,
         "diagnostics": config.diagnostics.model_dump(),
         "hardware": config.hardware.model_dump(),
-        "graph": config.graph,
-        "model": config.model,
-        "training": config.training.model_dump(),
+        "graph": config.graph.model_dump(by_alias=True),
+        "model": config.model.model_dump(by_alias=True),
+        "training": config.training.model_dump(by_alias=True),
     }
+
     return OmegaConf.create(config)

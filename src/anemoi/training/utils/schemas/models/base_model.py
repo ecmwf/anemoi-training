@@ -7,35 +7,46 @@
 # nor does it submit to any jurisdiction.
 #
 
+from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import field
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import field_validator
+
+from anemoi.training.utils.schemas.utils import HydraInstantiable
+
+_allowed_models = ["anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"]
 
 
-@dataclass
-class Model:
-    _target_: str = "anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"
+class ModelComponent(HydraInstantiable):
+    activation: str = "${model.activation}"
+    trainable_size: int = 8
+    num_chunks: int = 1
 
 
-@dataclass
-class TrainableParameters:
+class TrainableParameters(BaseModel):
     data: int = 8
     hidden: int = 8
     data2hidden: int = 8
     hidden2data: int = 8
+    hidden2hidden: int | None = None
 
 
-@dataclass
-class Attributes:
-    edges: list[str] = field(default_factory=lambda: ["edge_length", "edge_dirs"])
-    nodes: list[str] = field(default_factory=list)
+class Attributes(BaseModel):
+    edges: list[str] = Field(default_factory=lambda: ["edge_length", "edge_dirs"])
+    nodes: list[str] = Field(default_factory=list)
 
 
-@dataclass
-class BaseModelConfig:
+class BaseModelConfig(BaseModel):
     activation: str = "GELU"
     num_channels: int = 512
-    model: Model = field(default_factory=Model)
-    trainable_parameters: TrainableParameters = field(default_factory=TrainableParameters)
-    attributes: Attributes = field(default_factory=Attributes)
+    model: HydraInstantiable = Field(default_factory=HydraInstantiable)
+    trainable_parameters: TrainableParameters = Field(default_factory=TrainableParameters)
+    attributes: Attributes = Field(default_factory=Attributes)
     node_loss_weight: str = "area_weight"
+
+    @field_validator("model")
+    @classmethod
+    def check_valid_model(cls, model: HydraInstantiable) -> HydraInstantiable:
+        assert model.target_ in _allowed_models, f"Model not implemented. Allowed models are {_allowed_models}"
+        return model

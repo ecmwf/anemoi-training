@@ -8,52 +8,47 @@
 #
 
 
-from dataclasses import dataclass
-from dataclasses import field
+from pydantic import Field
+from pydantic import field_validator
 
 from .base_model import BaseModelConfig
-from .base_model import TrainableParameters
+from .base_model import ModelComponent
 
 
-@dataclass
-class ModelComponent:
-    _target_: str = ""
-    _convert_: str = "all"
-    trainable_size: int = ""
-    sub_graph_edge_attributes: list = field(default_factory=list)
-    activation: str = "${model.activation}"
-    num_chunks: int = 1
+class GNNModelComponent(ModelComponent):
+    sub_graph_edge_attributes: list = Field(default_factory=list)
     mlp_extra_layers: int = 0
 
 
-@dataclass
-class Processor(ModelComponent):
-    _target_: str = "anemoi.models.layers.processor.GNNProcessor"
-    _convert_: str = "all"
-    trainable_size: int = "${model.trainable_parameters.hidden2hidden}"
-    num_layers: int = 16
+class GNNProcessor(GNNModelComponent):
+    num_layers: int = Field(gt=0, default=16, repr=False)
+
+    @field_validator("target_")
+    @classmethod
+    def check_valid_target(cls, target: str) -> str:
+        assert target == "anemoi.models.layers.processor.GNNProcessor"
+        return target
 
 
-@dataclass
-class Encoder(ModelComponent):
-    _target_: str = "anemoi.models.layers.mapper.GNNForwardMapper"
-    trainable_size: int = "${model.trainable_parameters.data2hidden}"
+class GNNEncoder(GNNModelComponent):
+
+    @field_validator("target_")
+    @classmethod
+    def check_valid_target(cls, target: str) -> str:
+        assert target == "anemoi.models.layers.mapper.GNNForwardMapper"
+        return target
 
 
-@dataclass
-class Decoder(ModelComponent):
-    _target_: str = "anemoi.models.layers.mapper.GNNBackwardMapper"
-    trainable_size: int = "${model.trainable_parameters.hidden2data}"
+class GNNDecoder(GNNModelComponent):
+
+    @field_validator("target_")
+    @classmethod
+    def check_valid_target(cls, target: str) -> str:
+        assert target == "anemoi.models.layers.mapper.GNNBackwardMapper"
+        return target
 
 
-@dataclass
-class TrainableParametersGNN(TrainableParameters):
-    hidden2hidden: int = 8
-
-
-@dataclass
 class GNNConfig(BaseModelConfig):
-    processor: Processor = field(default_factory=Processor)
-    encoder: Encoder = field(default_factory=Encoder)
-    decoder: Decoder = field(default_factory=Decoder)
-    trainable_parameters: TrainableParametersGNN = field(default_factory=TrainableParametersGNN)
+    processor: GNNProcessor = Field(default_factory=GNNProcessor)
+    encoder: GNNEncoder = Field(default_factory=GNNEncoder)
+    decoder: GNNDecoder = Field(default_factory=GNNDecoder)
