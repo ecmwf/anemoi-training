@@ -10,6 +10,7 @@
 
 from pydantic import Field
 from pydantic import NonNegativeInt
+from pydantic import field_validator
 
 from .base_model import BaseModelConfig
 from .base_model import GraphTransformerDecoder
@@ -22,7 +23,13 @@ class TransformerProcessor(TransformerModelComponent):
     num_layers: NonNegativeInt = 16
     num_chunks: NonNegativeInt = 2
     window_size: NonNegativeInt = 512
-    dropout_p: float = 0.0  # GraphTransformer
+    dropout_p: float = 0.0
+
+    @field_validator("target_")
+    @classmethod
+    def check_valid_target(cls, target: str) -> str:
+        assert target == "anemoi.models.layers.processor.TransformerProcessor"
+        return target
 
 
 class TransformerConfig(BaseModelConfig):

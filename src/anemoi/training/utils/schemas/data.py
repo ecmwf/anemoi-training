@@ -13,7 +13,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 from pydantic import Field
 
-from .utils import HydraInstantiable
+from .base_config import HydraInstantiable
 
 
 class NormalizerConfig(BaseModel):

@@ -14,6 +14,7 @@ from typing import Any
 
 from omegaconf import OmegaConf
 from pydantic import BaseModel
+from pydantic import Field
 
 # to make these available at runtime for pydantic, bug should be resolved in
 # future versions (see https://github.com/astral-sh/ruff/issues/7866)
@@ -25,6 +26,11 @@ from .models.gnn import GNNConfig  # noqa: TCH001
 from .models.graph_transformer import GraphTransformerConfig  # noqa: TCH001
 from .models.transformer import TransformerConfig  # noqa: TCH001
 from .training import TrainingConfig  # noqa: TCH001
+
+
+class HydraInstantiable(BaseModel):
+    target_: str = Field(..., alias="_target_")
+    convert_: str = Field("all", alias="_convert_")
 
 
 class BaseConfig(BaseModel):

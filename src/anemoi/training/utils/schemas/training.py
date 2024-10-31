@@ -14,7 +14,7 @@ from pydantic import Field
 from pydantic import NonNegativeInt
 from pydantic import PositiveInt
 
-from .utils import HydraInstantiable
+from .base_config import HydraInstantiable
 
 
 class GradientClip(BaseModel):

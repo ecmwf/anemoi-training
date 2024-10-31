@@ -14,9 +14,12 @@ from pydantic import Field
 from pydantic import NonNegativeInt
 from pydantic import field_validator
 
-from anemoi.training.utils.schemas.utils import HydraInstantiable
-
 _allowed_models = ["anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"]
+
+
+class HydraInstantiable(BaseModel):
+    target_: str = Field(..., alias="_target_")
+    convert_: str = Field("all", alias="_convert_")
 
 
 class TransformerModelComponent(BaseModel):
@@ -31,10 +34,22 @@ class GraphTransformerEncoder(TransformerModelComponent):
     target_: str = Field("anemoi.models.layers.mapper.GraphTransformerForwardMapper", alias="_target_")
     sub_graph_edge_attributes: list = Field(default_factory=list)
 
+    @field_validator("target_")
+    @classmethod
+    def check_valid_target(cls, target: str) -> str:
+        assert target == "anemoi.models.layers.mapper.GraphTransformerForwardMapper"
+        return target
+
 
 class GraphTransformerDecoder(TransformerModelComponent):
     target_: str = Field("anemoi.models.layers.mapper.GraphTransformerBackwardMapper", alias="_target_")
     sub_graph_edge_attributes: list = Field(default_factory=list)
+
+    @field_validator("target_")
+    @classmethod
+    def check_valid_target(cls, target: str) -> str:
+        assert target == "anemoi.models.layers.mapper.GraphTransformerBackwardMapper"
+        return target
 
 
 class TrainableParameters(BaseModel):

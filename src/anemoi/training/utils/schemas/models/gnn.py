@@ -8,24 +8,24 @@
 #
 
 
+from pydantic import BaseModel
 from pydantic import Field
 from pydantic import NonNegativeInt
 from pydantic import field_validator
 
-from anemoi.training.utils.schemas.utils import HydraInstantiable
-
 from .base_model import BaseModelConfig
 
 
-class GNNModelComponent(HydraInstantiable):
+class GNNModelComponent(BaseModel):
     activation: str = "GELU"
     trainable_size: NonNegativeInt = 8
+    num_chunks: NonNegativeInt = 1
     sub_graph_edge_attributes: list = Field(default_factory=list)
     mlp_extra_layers: int = 0
-    num_chunks: NonNegativeInt = 1
 
 
 class GNNProcessor(GNNModelComponent):
+    target_: str = Field("anemoi.models.layers.processor.GNNProcessor", alias="_target_")
     num_layers: NonNegativeInt = 16
     num_chunks: NonNegativeInt = 2
 
@@ -37,6 +37,7 @@ class GNNProcessor(GNNModelComponent):
 
 
 class GNNEncoder(GNNModelComponent):
+    target_: str = Field("anemoi.models.layers.mapper.GNNForwardMapper", alias="_target_")
 
     @field_validator("target_")
     @classmethod
@@ -46,6 +47,7 @@ class GNNEncoder(GNNModelComponent):
 
 
 class GNNDecoder(GNNModelComponent):
+    target_: str = Field("anemoi.models.layers.mapper.GNNBackwardMapper", alias="_target_")
 
     @field_validator("target_")
     @classmethod
