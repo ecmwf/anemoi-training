@@ -23,16 +23,16 @@ class HydraInstantiable(BaseModel):
 
 
 class TransformerModelComponent(BaseModel):
-    activation: str = "GELU"
-    trainable_size: NonNegativeInt = 8
-    num_chunks: NonNegativeInt = 1
-    mlp_hidden_ratio: NonNegativeInt = 4
-    num_heads: NonNegativeInt = 16  # GraphTransformer or Transformer only
+    activation: str = Field(default="GELU")
+    trainable_size: NonNegativeInt = Field(default=8)
+    num_chunks: NonNegativeInt = Field(default=1)
+    mlp_hidden_ratio: NonNegativeInt = Field(default=4)
+    num_heads: NonNegativeInt = Field(default=16)  # GraphTransformer or Transformer only
 
 
 class GraphTransformerEncoder(TransformerModelComponent):
     target_: str = Field("anemoi.models.layers.mapper.GraphTransformerForwardMapper", alias="_target_")
-    sub_graph_edge_attributes: list = Field(default_factory=list)
+    sub_graph_edge_attributes: list[str] = ["edge_length", "edge_dir"]
 
     @field_validator("target_")
     @classmethod
@@ -43,7 +43,7 @@ class GraphTransformerEncoder(TransformerModelComponent):
 
 class GraphTransformerDecoder(TransformerModelComponent):
     target_: str = Field("anemoi.models.layers.mapper.GraphTransformerBackwardMapper", alias="_target_")
-    sub_graph_edge_attributes: list = Field(default_factory=list)
+    sub_graph_edge_attributes: list[str] = ["edge_length", "edge_dir"]
 
     @field_validator("target_")
     @classmethod
@@ -53,15 +53,15 @@ class GraphTransformerDecoder(TransformerModelComponent):
 
 
 class TrainableParameters(BaseModel):
-    data: NonNegativeInt = 8
-    hidden: NonNegativeInt = 8
+    data: NonNegativeInt = Field(default=8)
+    hidden: NonNegativeInt = Field(default=8)
 
 
 class BaseModelConfig(BaseModel):
-    num_channels: NonNegativeInt = 512
+    num_channels: NonNegativeInt = Field(default=512)
     model: HydraInstantiable = Field(default_factory=HydraInstantiable)
     trainable_parameters: TrainableParameters = Field(default_factory=TrainableParameters)
-    node_loss_weight: str = "area_weight"
+    node_loss_weight: str = Field(default="area_weight")
 
     @field_validator("model")
     @classmethod

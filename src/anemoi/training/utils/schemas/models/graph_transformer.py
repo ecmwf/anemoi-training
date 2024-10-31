@@ -20,10 +20,10 @@ from .base_model import TransformerModelComponent
 
 class GraphTransformerProcessor(TransformerModelComponent):
     target_: str = Field("anemoi.models.layers.processor.GraphTransformerProcessor", alias="_target_")
-    sub_graph_edge_attributes: list = Field(default_factory=list)
-    num_layers: NonNegativeInt = 16
-    num_chunks: NonNegativeInt = 2
-    dropout_p: NonNegativeFloat = 0.0
+    sub_graph_edge_attributes: tuple[str] = ["edge_length", "edge_dir"]
+    num_layers: NonNegativeInt = Field(default=16)
+    num_chunks: NonNegativeInt = Field(default=2)
+    dropout_p: NonNegativeFloat = Field(default=0.0)
 
     @field_validator("target_")
     @classmethod

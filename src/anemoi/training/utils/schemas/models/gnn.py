@@ -17,17 +17,17 @@ from .base_model import BaseModelConfig
 
 
 class GNNModelComponent(BaseModel):
-    activation: str = "GELU"
-    trainable_size: NonNegativeInt = 8
-    num_chunks: NonNegativeInt = 1
+    activation: str = Field(default="GELU")
+    trainable_size: NonNegativeInt = Field(default=8)
+    num_chunks: NonNegativeInt = Field(default=1)
     sub_graph_edge_attributes: list = Field(default_factory=list)
-    mlp_extra_layers: NonNegativeInt = 0
+    mlp_extra_layers: NonNegativeInt = Field(default=0)
 
 
 class GNNProcessor(GNNModelComponent):
     target_: str = Field("anemoi.models.layers.processor.GNNProcessor", alias="_target_")
-    num_layers: NonNegativeInt = 16
-    num_chunks: NonNegativeInt = 2
+    num_layers: NonNegativeInt = Field(default=16)
+    num_chunks: NonNegativeInt = Field(default=2)
 
     @field_validator("target_")
     @classmethod

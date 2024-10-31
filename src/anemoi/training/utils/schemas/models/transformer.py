@@ -21,10 +21,10 @@ from .base_model import TransformerModelComponent
 
 class TransformerProcessor(TransformerModelComponent):
     target_: str = Field("anemoi.models.layers.processor.TransformerProcessor", alias="_target_")
-    num_layers: NonNegativeInt = 16
-    num_chunks: NonNegativeInt = 2
-    window_size: NonNegativeInt = 512
-    dropout_p: NonNegativeFloat = 0.0
+    num_layers: NonNegativeInt = Field(default=16)
+    num_chunks: NonNegativeInt = Field(default=2)
+    window_size: NonNegativeInt = Field(default=512)
+    dropout_p: NonNegativeFloat = Field(default=0.0)
 
     @field_validator("target_")
     @classmethod
