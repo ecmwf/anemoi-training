@@ -8,22 +8,16 @@
 #
 
 
-from pydantic import BaseModel
 from pydantic import Field
 from pydantic import NonNegativeInt
 
 from .base_model import BaseModelConfig
+from .base_model import GraphTransformerDecoder
+from .base_model import GraphTransformerEncoder
+from .base_model import TransformerModelComponent
 
 
-class TransformerModelComponent(BaseModel):
-    activation: str = "GELU"
-    trainable_size: NonNegativeInt = 8
-    num_chunks: NonNegativeInt = 1
-    mlp_hidden_ratio: NonNegativeInt = 4
-    num_heads: NonNegativeInt = 16  # GraphTransformer or Transformer only
-
-
-class Processor(TransformerModelComponent):
+class TransformerProcessor(TransformerModelComponent):
     target_: str = Field("anemoi.models.layers.processor.TransformerProcessor", alias="_target_")
     num_layers: NonNegativeInt = 16
     num_chunks: NonNegativeInt = 2
@@ -31,17 +25,7 @@ class Processor(TransformerModelComponent):
     dropout_p: float = 0.0  # GraphTransformer
 
 
-class Encoder(TransformerModelComponent):
-    target_: str = Field("anemoi.models.layers.mapper.GraphTransformerForwardMapper", alias="_target_")
-    sub_graph_edge_attributes: list = Field(default_factory=list)
-
-
-class Decoder(TransformerModelComponent):
-    target_: str = Field("anemoi.models.layers.mapper.GraphTransformerBackwardMapper", alias="_target_")
-    sub_graph_edge_attributes: list = Field(default_factory=list)
-
-
 class TransformerConfig(BaseModelConfig):
-    processor: Processor = Field(default_factory=Processor)
-    encoder: Encoder = Field(default_factory=Encoder)
-    decoder: Decoder = Field(default_factory=Decoder)
+    processor: TransformerProcessor = Field(default_factory=TransformerProcessor)
+    encoder: GraphTransformerEncoder = Field(default_factory=GraphTransformerEncoder)
+    decoder: GraphTransformerDecoder = Field(default_factory=GraphTransformerDecoder)

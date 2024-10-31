@@ -22,6 +22,7 @@ from .diagnostics import DiagnosticsConfig  # noqa: TCH001
 from .graphs.base_graph import BaseGraphConfig  # noqa: TCH001
 from .hardware import HardwareConfig  # noqa: TCH001
 from .models.gnn import GNNConfig  # noqa: TCH001
+from .models.graph_transformer import GraphTransformerConfig  # noqa: TCH001
 from .models.transformer import TransformerConfig  # noqa: TCH001
 from .training import TrainingConfig  # noqa: TCH001
 
@@ -32,7 +33,7 @@ class BaseConfig(BaseModel):
     diagnostics: DiagnosticsConfig
     hardware: HardwareConfig
     graph: BaseGraphConfig
-    model: GNNConfig | TransformerConfig
+    model: GNNConfig | TransformerConfig | GraphTransformerConfig
     training: TrainingConfig
 
     class Config:

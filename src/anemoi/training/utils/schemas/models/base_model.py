@@ -19,6 +19,24 @@ from anemoi.training.utils.schemas.utils import HydraInstantiable
 _allowed_models = ["anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"]
 
 
+class TransformerModelComponent(BaseModel):
+    activation: str = "GELU"
+    trainable_size: NonNegativeInt = 8
+    num_chunks: NonNegativeInt = 1
+    mlp_hidden_ratio: NonNegativeInt = 4
+    num_heads: NonNegativeInt = 16  # GraphTransformer or Transformer only
+
+
+class GraphTransformerEncoder(TransformerModelComponent):
+    target_: str = Field("anemoi.models.layers.mapper.GraphTransformerForwardMapper", alias="_target_")
+    sub_graph_edge_attributes: list = Field(default_factory=list)
+
+
+class GraphTransformerDecoder(TransformerModelComponent):
+    target_: str = Field("anemoi.models.layers.mapper.GraphTransformerBackwardMapper", alias="_target_")
+    sub_graph_edge_attributes: list = Field(default_factory=list)
+
+
 class TrainableParameters(BaseModel):
     data: NonNegativeInt = 8
     hidden: NonNegativeInt = 8

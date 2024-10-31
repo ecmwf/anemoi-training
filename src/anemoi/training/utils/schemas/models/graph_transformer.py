@@ -7,51 +7,24 @@
 # nor does it submit to any jurisdiction.
 #
 
-
-from dataclasses import dataclass
-from dataclasses import field
+from pydantic import Field
+from pydantic import NonNegativeInt
 
 from .base_model import BaseModelConfig
-from .gnn import TrainableParametersGNN
+from .base_model import GraphTransformerDecoder
+from .base_model import GraphTransformerEncoder
+from .base_model import TransformerModelComponent
 
 
-@dataclass
-class ModelComponent:
-    _target_: str = ""
-    _convert_: str = "all"
-    trainable_size: int = ""
-    sub_graph_edge_attributes: list = field(default_factory=list)
-    activation: str = "${model.activation}"
-    num_chunks: int = 1
-    mlp_hidden_ratio: int = 4  # GraphTransformer or Transformer only
-    num_heads: int = 16  # GraphTransformer or Transformer only
-
-
-@dataclass
-class Processor(ModelComponent):
-    _target_: str = "anemoi.models.layers.processor.GraphTransformerProcessor"
-    _convert_: str = "all"
-    trainable_size: int = "${model.trainable_parameters.hidden2hidden}"
-    num_layers: int = 16
-    num_chunks: int = 2
+class GraphTransformerProcessor(TransformerModelComponent):
+    target_: str = Field("anemoi.models.layers.processor.GraphTransformerProcessor", alias="_target_")
+    sub_graph_edge_attributes: list = Field(default_factory=list)
+    num_layers: NonNegativeInt = 16
+    num_chunks: NonNegativeInt = 2
     dropout_p: float = 0.0
 
 
-@dataclass
-class Encoder(ModelComponent):
-    _target_: str = "anemoi.models.layers.mapper.GraphTransformerForwardMapper"
-    trainable_size: int = "${model.trainable_parameters.data2hidden}"
-
-
-@dataclass
-class Decoder(ModelComponent):
-    _target_: str = "anemoi.models.layers.mapper.GraphTransformerBackwardMapper"
-    trainable_size: int = "${model.trainable_parameters.hidden2data}"
-
-
-@dataclass
 class GraphTransformerConfig(BaseModelConfig):
-    processor: Processor = field(default_factory=Processor)
-    encoder: Encoder = field(default_factory=Encoder)
-    decoder: Decoder = field(default_factory=Decoder)
-    trainable_parameters: TrainableParametersGNN = field(default_factory=TrainableParametersGNN)
+    processor: GraphTransformerProcessor = Field(default_factory=GraphTransformerProcessor)
+    encoder: GraphTransformerEncoder = Field(default_factory=GraphTransformerEncoder)
+    decoder: GraphTransformerDecoder = Field(default_factory=GraphTransformerDecoder)
