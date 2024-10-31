@@ -7,51 +7,41 @@
 # nor does it submit to any jurisdiction.
 #
 
-from dataclasses import dataclass
-from dataclasses import field
+
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import NonNegativeInt
 
 from .base_model import BaseModelConfig
 
 
-@dataclass
-class ModelComponent:
-    _target_: str = ""
-    _convert_: str = "all"
-    activation: str = "${model.activation}"
-    trainable_size: int = 8
-    num_chunks: int = 1
-    mlp_hidden_ratio: int = 4
-    num_heads: int = 16  # GraphTransformer or Transformer only
+class TransformerModelComponent(BaseModel):
+    activation: str = "GELU"
+    trainable_size: NonNegativeInt = 8
+    num_chunks: NonNegativeInt = 1
+    mlp_hidden_ratio: NonNegativeInt = 4
+    num_heads: NonNegativeInt = 16  # GraphTransformer or Transformer only
 
 
-@dataclass
-class Processor(ModelComponent):
-    _target_: str = "anemoi.models.layers.processor.TransformerProcessor "
-    _convert_: str = "all"
-    num_layers: int = 16
-    num_chunks: int = 2
-    window_size: int = 512
+class Processor(TransformerModelComponent):
+    target_: str = Field("anemoi.models.layers.processor.TransformerProcessor", alias="_target_")
+    num_layers: NonNegativeInt = 16
+    num_chunks: NonNegativeInt = 2
+    window_size: NonNegativeInt = 512
     dropout_p: float = 0.0  # GraphTransformer
 
 
-@dataclass
-class Encoder(ModelComponent):
-    _target_: str = "anemoi.models.layers.mapper.GraphTransformerForwardMapper"
-    trainable_size: int = "${model.trainable_parameters.data2hidden}"
-    sub_graph_edge_attributes: list = field(default_factory=list)
-    mlp_hidden_ratio: int = 4  # GraphTransformer or Transformer only
+class Encoder(TransformerModelComponent):
+    target_: str = Field("anemoi.models.layers.mapper.GraphTransformerForwardMapper", alias="_target_")
+    sub_graph_edge_attributes: list = Field(default_factory=list)
 
 
-@dataclass
-class Decoder(ModelComponent):
-    _target_: str = "anemoi.models.layers.mapper.GraphTransformerBackwardMapper"
-    trainable_size: int = "${model.trainable_parameters.hidden2data}"
-    sub_graph_edge_attributes: list = field(default_factory=list)
-    mlp_hidden_ratio: int = 4  # GraphTransformer or Transformer only
+class Decoder(TransformerModelComponent):
+    target_: str = Field("anemoi.models.layers.mapper.GraphTransformerBackwardMapper", alias="_target_")
+    sub_graph_edge_attributes: list = Field(default_factory=list)
 
 
-@dataclass
 class TransformerConfig(BaseModelConfig):
-    processor: Processor = field(default_factory=Processor)
-    encoder: Encoder = field(default_factory=Encoder)
-    decoder: Decoder = field(default_factory=Decoder)
+    processor: Processor = Field(default_factory=Processor)
+    encoder: Encoder = Field(default_factory=Encoder)
+    decoder: Decoder = Field(default_factory=Decoder)

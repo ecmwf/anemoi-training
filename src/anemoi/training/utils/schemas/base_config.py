@@ -8,17 +8,22 @@
 #
 
 
+from __future__ import annotations
+
 from typing import Any
 
 from omegaconf import OmegaConf
 from pydantic import BaseModel
 
-from .data import DataConfig
-from .diagnostics import DiagnosticsConfig
-from .graphs.base_graph import BaseGraphConfig
-from .hardware import HardwareConfig
-from .models.gnn import GNNConfig
-from .training import TrainingConfig
+# to make these available at runtime for pydantic, bug should be resolved in
+# future versions (see https://github.com/astral-sh/ruff/issues/7866)
+from .data import DataConfig  # noqa: TCH001
+from .diagnostics import DiagnosticsConfig  # noqa: TCH001
+from .graphs.base_graph import BaseGraphConfig  # noqa: TCH001
+from .hardware import HardwareConfig  # noqa: TCH001
+from .models.gnn import GNNConfig  # noqa: TCH001
+from .models.transformer import TransformerConfig  # noqa: TCH001
+from .training import TrainingConfig  # noqa: TCH001
 
 
 class BaseConfig(BaseModel):
@@ -27,7 +32,7 @@ class BaseConfig(BaseModel):
     diagnostics: DiagnosticsConfig
     hardware: HardwareConfig
     graph: BaseGraphConfig
-    model: GNNConfig
+    model: GNNConfig | TransformerConfig
     training: TrainingConfig
 
     class Config:
