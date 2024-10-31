@@ -55,22 +55,12 @@ class GraphTransformerDecoder(TransformerModelComponent):
 class TrainableParameters(BaseModel):
     data: NonNegativeInt = 8
     hidden: NonNegativeInt = 8
-    data2hidden: NonNegativeInt = 8
-    hidden2data: NonNegativeInt = 8
-    hidden2hidden: NonNegativeInt | None = None
-
-
-class Attributes(BaseModel):
-    edges: list[str] = Field(default_factory=lambda: ["edge_length", "edge_dirs"])
-    nodes: list[str] = Field(default_factory=list)
 
 
 class BaseModelConfig(BaseModel):
-    activation: str = "GELU"
     num_channels: NonNegativeInt = 512
     model: HydraInstantiable = Field(default_factory=HydraInstantiable)
     trainable_parameters: TrainableParameters = Field(default_factory=TrainableParameters)
-    attributes: Attributes = Field(default_factory=Attributes)
     node_loss_weight: str = "area_weight"
 
     @field_validator("model")

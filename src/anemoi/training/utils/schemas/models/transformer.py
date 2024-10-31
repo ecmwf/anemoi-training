@@ -9,6 +9,7 @@
 
 
 from pydantic import Field
+from pydantic import NonNegativeFloat
 from pydantic import NonNegativeInt
 from pydantic import field_validator
 
@@ -23,7 +24,7 @@ class TransformerProcessor(TransformerModelComponent):
     num_layers: NonNegativeInt = 16
     num_chunks: NonNegativeInt = 2
     window_size: NonNegativeInt = 512
-    dropout_p: float = 0.0
+    dropout_p: NonNegativeFloat = 0.0
 
     @field_validator("target_")
     @classmethod

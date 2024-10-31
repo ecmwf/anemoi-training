@@ -21,7 +21,7 @@ class GNNModelComponent(BaseModel):
     trainable_size: NonNegativeInt = 8
     num_chunks: NonNegativeInt = 1
     sub_graph_edge_attributes: list = Field(default_factory=list)
-    mlp_extra_layers: int = 0
+    mlp_extra_layers: NonNegativeInt = 0
 
 
 class GNNProcessor(GNNModelComponent):

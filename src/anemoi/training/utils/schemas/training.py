@@ -11,10 +11,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import NonNegativeFloat
 from pydantic import NonNegativeInt
 from pydantic import PositiveInt
-
-from .base_config import HydraInstantiable
 
 
 class GradientClip(BaseModel):
@@ -26,7 +25,7 @@ class GradientClip(BaseModel):
 
 class SWA(BaseModel):
     enabled: bool = False
-    lr: float = 1.0e-4
+    lr: NonNegativeFloat = 1.0e-4
 
 
 class Rollout(BaseModel):
@@ -36,9 +35,9 @@ class Rollout(BaseModel):
 
 
 class LR(BaseModel):
-    rate: float = 0.625e-4
+    rate: NonNegativeFloat = 0.625e-4
     iterations: NonNegativeInt = 300000
-    min: float = 3e-7
+    min: NonNegativeFloat = 3e-7
 
 
 class PressureLevel(BaseModel):
@@ -65,8 +64,8 @@ class LossScaling(BaseModel):
     sfc: Surface = Field(default_factory=Surface)
 
 
-class PressureLevelScaler(HydraInstantiable):
-    _target_: str = "anemoi.training.data.scaling.ReluPressureLevelScaler"
+class PressureLevelScaler(BaseModel):
+    target_: str = Field("anemoi.training.data.scaling.ReluPressureLevelScaler", alias="_target_")
     minimum: float = 0.2
     slope: float = 0.001
 

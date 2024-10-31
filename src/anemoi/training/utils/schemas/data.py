@@ -12,8 +12,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from pydantic import Field
-
-from .base_config import HydraInstantiable
+from pydantic import field_validator
 
 
 class NormalizerConfig(BaseModel):
@@ -31,8 +30,34 @@ class RemapperConfig(BaseModel):
     default: str
 
 
-class Processor(HydraInstantiable):
+class Processor(BaseModel):
+    target_: str = Field(..., alias="_target_")
     config: NormalizerConfig | ImputerConfig | RemapperConfig
+
+    @field_validator("target_")
+    @classmethod
+    def check_valid_target(cls, target: str) -> str:
+        assert target in [
+            "anemoi.models.preprocessing.normalizer.InputNormalizer",
+            "anemoi.models.preprocessing.imputer.InputImputer",
+            "anemoi.models.preprocessing.remapper.Remapper",
+        ]
+        return target
+
+    @field_validator("config")
+    @classmethod
+    def check_config_matches_target(
+        cls,
+        config: NormalizerConfig | ImputerConfig | RemapperConfig,
+        target: str,
+    ) -> dict:
+        if target == "anemoi.training.utils.processors.normalizer.Normalizer":
+            assert isinstance(config, NormalizerConfig)
+        elif target == "anemoi.training.utils.processors.imputer.Imputer":
+            assert isinstance(config, ImputerConfig)
+        elif target == "anemoi.training.utils.processors.remapper.Remapper":
+            assert isinstance(config, RemapperConfig)
+        return config
 
 
 class DataConfig(BaseModel):

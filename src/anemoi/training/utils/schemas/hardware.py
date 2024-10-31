@@ -12,47 +12,48 @@ from __future__ import annotations
 from pathlib import Path  # noqa: TCH003
 
 from pydantic import BaseModel
+from pydantic import DirectoryPath
 from pydantic import NonNegativeInt
 from pydantic import field_validator
 from pydantic import model_validator
 
 
 class Checkpoint(BaseModel):
-    every_n_epochs: str
-    every_n_train_steps: str
-    every_n_minutes: str
+    every_n_epochs: str = "anemoi-by_epoch-epoch_{epoch:03d}-step_{step:06d}"
+    every_n_train_steps: str = "anemoi-by_step-epoch_{epoch:03d}-step_{step:06d}"
+    every_n_minutes: str = "anemoi-by_time-epoch_{epoch:03d}-step_{step:06d}"
 
 
 class FilesConfig(BaseModel):
-    dataset: Path
+    dataset: Path  # TODO(Helen): Change to FilePath, only posisble after refactor
     graph: Path
     checkpoint: dict[str, str]
-    warm_start: str | None
+    warm_start: str | None = None
 
 
 class Logs(BaseModel):
-    base: str | None = None
-    wandb: str | None = None
-    mlflow: str | None = None
-    tensorboard: str | None = None
+    base: DirectoryPath | None = None
+    wandb: DirectoryPath | None = None
+    mlflow: DirectoryPath | None = None
+    tensorboard: DirectoryPath | None = None
 
 
 class PathsConfig(BaseModel):
-    data: str
-    grids: str
-    output: str
+    data: DirectoryPath
+    grids: DirectoryPath
+    graph: DirectoryPath
+    output: Path
     logs: Logs
-    checkpoints: str
-    plots: str
-    profiler: str
-    graph: str
+    checkpoints: Path
+    plots: Path
+    profiler: Path
 
 
 class HardwareConfig(BaseModel):
-    accelerator: str
-    num_gpus_per_node: NonNegativeInt
-    num_nodes: NonNegativeInt
-    num_gpus_per_model: NonNegativeInt
+    accelerator: str = "auto"
+    num_gpus_per_node: NonNegativeInt = 1
+    num_nodes: NonNegativeInt = 1
+    num_gpus_per_model: NonNegativeInt = 1
     files: FilesConfig
     paths: PathsConfig
 
