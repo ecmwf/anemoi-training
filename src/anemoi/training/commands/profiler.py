@@ -13,16 +13,21 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from functools import cached_property
 
 from anemoi.training.commands.train import TrainBase
 
 LOGGER = logging.getLogger(__name__)
 
 
-class Profiler(TrainBase):
+class Profile(TrainBase):
     """Commands to profile Anemoi models."""
 
     accept_unknown_args = True
+
+    @cached_property
+    def name(self) -> str:
+        return "profile"
 
     def run(self, args: list[str], unknown_args: list[str] | None = None) -> None:
         os.environ["ANEMOI_TRAINING_CMD"] = f"{sys.argv[0]} {args.command}"
@@ -46,9 +51,9 @@ def main() -> None:
         error = "This entrypoint should not be called directly. Use `anemoi-training profiler` instead."
         raise RuntimeError(error)
 
-    from anemoi.training.train.profiler import main as anemoi_profiler
+    from anemoi.training.train.profiler import main as anemoi_profile
 
-    anemoi_profiler()
+    anemoi_profile()
 
 
-command = Profiler
+command = Profile
