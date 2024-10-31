@@ -335,12 +335,12 @@ class GraphForecaster(pl.LightningModule):
         for rollout_step in range(self.rollout):
 
             # normalise inputs
-            x_in = self.model.pre_processors_state(x, in_place=False, data_index=self.data_indices.data.input.full)
+            x_norm = self.model.pre_processors_state(x, in_place=False, data_index=self.data_indices.data.input.full)
 
             # prediction (normalized tendency)
-            tendency_pred = self(x_in)
+            tendency_pred = self(x_norm)
 
-            tendency_target = batch_tendency_target[:, rollout_step]
+            tendency_target = batch_tendency_target[:, rollout_step, ...]
 
             # calculate loss
             if use_checkpoint:
@@ -349,7 +349,7 @@ class GraphForecaster(pl.LightningModule):
                 loss += self.loss(tendency_pred, tendency_target)
 
             # re-construct non-processed predicted state
-            y_pred = self.model.add_tendency_to_state(x[:, -1, ...], tendency_pred)
+            y_pred = self.model.add_tendency_to_state(x_norm[:, -1, ...], tendency_pred)
 
             # advance input using non-processed x, y_pred and batch
             x = self.advance_input(x, y_pred, batch, rollout_step)
@@ -358,24 +358,18 @@ class GraphForecaster(pl.LightningModule):
                 y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.data.output.full]
 
                 # calculate_val_metrics requires processed inputs
-                metrics_next, _ = self.calculate_val_metrics(
+                metrics_next, y_preds_next = self.calculate_val_metrics(
                     None,
                     None,
                     rollout_step,
-                    self.enable_plot,
+                    enable_plot=self.enable_plot,
                     y_pred_postprocessed=y_pred,
                     y_postprocessed=y,
                 )
 
                 metrics.update(metrics_next)
+                y_preds.extend(y_preds_next)
 
-                y_preds.extend(
-                    self.model.pre_processors_state(
-                        y_pred,
-                        in_place=False,
-                        data_index=self.data_indices.data.output.full,
-                    ),
-                )
         # scale loss
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
@@ -406,9 +400,17 @@ class GraphForecaster(pl.LightningModule):
         metrics = {}
         y_preds = []
         if y_postprocessed is None:
-            y_postprocessed = self.model.post_processors_state(y, in_place=False)
+            y_postprocessed = self.model.post_processors_state(
+                y,
+                in_place=False,
+                data_index=self.data_indices.data.output.full,
+            )
         if y_pred_postprocessed is None:
-            y_pred_postprocessed = self.model.post_processors_state(y_pred, in_place=False)
+            y_pred_postprocessed = self.model.post_processors_state(
+                y_pred,
+                in_place=False,
+                data_index=self.data_indices.data.output.full,
+            )
 
         for mkey, indices in self.metric_ranges_validation.items():
             metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(
@@ -417,7 +419,14 @@ class GraphForecaster(pl.LightningModule):
             )
 
         if enable_plot:
+            if y_pred is None:
+                y_pred = self.model.pre_processors_state(
+                    y_pred_postprocessed,
+                    in_place=False,
+                    data_index=self.data_indices.data.output.full,
+                )
             y_preds.append(y_pred)
+
         return metrics, y_preds
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
