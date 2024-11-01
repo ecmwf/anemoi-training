@@ -12,11 +12,16 @@ Keep it human-readable, your future self will thank you!
 
 ### Fixed
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
+    - Updated docs [#115](https://github.com/ecmwf/anemoi-training/pull/115)
+    - Fix enabling LearningRateMonitor [#119](https://github.com/ecmwf/anemoi-training/pull/119)
 - Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
     - Enable longer validation rollout than training
 ### Added
 - Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
 - Include option to use datashader and optimised asyncronohous callbacks [#102](https://github.com/ecmwf/anemoi-training/pull/102)
+   - Fix that applies the metric_ranges in the post-processed variable space [#116](https://github.com/ecmwf/anemoi-training/pull/116)
+- Sub-hour datasets [#63](https://github.com/ecmwf/anemoi-training/pull/63)
+- Add synchronisation workflow [#92](https://github.com/ecmwf/anemoi-training/pull/92)
 
 ### Changed
 - Modified training configuration to support max_steps and tied lr iterations to max_steps by default [#67](https://github.com/ecmwf/anemoi-training/pull/67)
@@ -64,6 +69,8 @@ Keep it human-readable, your future self will thank you!
 #### Miscellaneous
 
 - Introduction of remapper to anemoi-models leads to changes in the data indices. Some preprocessors cannot be applied in-place anymore.
+
+- Variable Bounding as configurable model layers [#13](https://github.com/ecmwf/anemoi-models/issues/13)
 
 #### Functionality
 
