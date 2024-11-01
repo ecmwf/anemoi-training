@@ -136,7 +136,7 @@ class BasePlotCallback(Callback, ABC):
 
         if self._executor is not None:
             LOGGER.info("waiting and shutting down the executor ...")
-            self._executor.shutdown(wait=False,cancel_futures=True)
+            self._executor.shutdown(wait=False, cancel_futures=True)
 
             self.loop.call_soon_threadsafe(self.loop.stop)
             self.loop_thread.join()
