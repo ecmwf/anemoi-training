@@ -89,7 +89,6 @@ class GraphForecaster(pl.LightningModule):
         else:
             self.output_mask = NoOutputMask()
 
-
         self.loss_weights = self.output_mask.apply(self.loss_weights, dim=0, fill_value=0.0)
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
@@ -100,27 +99,27 @@ class GraphForecaster(pl.LightningModule):
         )
         self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
-
         
-
         # Check if the model is a stretched grid
-        # if config.graph.nodes.hidden.node_builder.lam_resolution:
         if "lam_resolution" in getattr(config.graph.nodes.hidden, "node_builder", []):
             self.stretched_grid = True
-            # Options for stretched grid loss logging
             self.mask_name = config.graph.nodes.hidden.node_builder.mask_attr_name
             self.mask = graph_data[config.graph.data][self.mask_name].squeeze().bool()
+
+            # Define stretched grid metrics according to options for stretched grid loss logging
+            self.sg_metrics = torch.nn.ModuleDict()
+            if config.diagnostics.sg_metrics.wmse_per_region:
+                self.sg_metrics['wmse_inside_lam_epoch'] = WeightedMSELossStretchedGrid(node_weights=self.loss_weights, mask=self.mask,
+                          inside_LAM=True, wmse_contribution=False, data_variances=loss_scaling)
+                self.sg_metrics['wmse_outside_lam_epoch'] = WeightedMSELossStretchedGrid(node_weights=self.loss_weights, mask=self.mask,
+                          inside_LAM=False, wmse_contribution=False, data_variances=loss_scaling)
+            if config.diagnostics.sg_metrics.wmse_contributions:
+                self.sg_metrics['wmse_inside_lam_contribution_epoch'] = WeightedMSELossStretchedGrid(node_weights=self.loss_weights, mask=self.mask,
+                          inside_LAM=True, wmse_contribution=True, data_variances=loss_scaling)
+                self.sg_metrics['wmse_outside_lam_contribution_epoch'] = WeightedMSELossStretchedGrid(node_weights=self.loss_weights, mask=self.mask,
+                          inside_LAM=False, wmse_contribution=True, data_variances=loss_scaling)
         else:
             self.stretched_grid = False
-        # print("STRETCHED GRID", self.stretched_grid)
-        # print("CONFIG", config.diagnostics.sg_metrics)
-        # Define stretched grid metrics
-        sg_config= config.diagnostics.sg_metrics
-        if sg_config is not None and self.stretched_grid == True:
-            self.sg_metrics = torch.nn.ModuleDict()
-            for item in sg_config.values():
-                self.sg_metrics[item.name] = WeightedMSELossStretchedGrid(node_weights = self.loss_weights, mask = self.mask,
-                            inside_LAM = item.inside_lam, wmse_contribution=item.wmse_contribution, data_variances=loss_scaling)
 
         if config.training.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
@@ -308,7 +307,7 @@ class GraphForecaster(pl.LightningModule):
             )
         if self.stretched_grid:
             for name, metric in self.sg_metrics.items():
-                metrics["{}_{}".format(name, rollout_step + 1)] = metric(y_pred, y)
+                metrics["{}".format(name)] = metric(y_pred, y)
         if enable_plot:
             y_preds.append(y_pred)
         return metrics, y_preds

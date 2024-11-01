@@ -1,22 +1,4 @@
 ---
-sg_metrics:
-  metric_1:
-    name: loss_inside_lam
-    inside_lam: True
-    wmse_contribution: False
-  metric_2: 
-    name: loss_inside_lam_contribution
-    inside_lam: True
-    wmse_contribution: True
-  metric_3: 
-    name: loss_outside_lam
-    inside_lam: False
-    wmse_contribution: False
-  metric_4: 
-    name: loss_outside_lam_contribution
-    inside_lam: False
-    wmse_contribution: True
-
 eval:
   enabled: False
   # use this to evaluate the model over longer rollouts, every so many validation batches
@@ -66,6 +48,10 @@ plot:
     enabled: False
     rollout: [60]
     frequency: 20 # every X epochs
+
+sg_metrics:
+  wmse_per_region: True
+  wmse_contributions: True
 
 debug:
   # this will detect and trace back NaNs / Infs etc. but will slow down training
