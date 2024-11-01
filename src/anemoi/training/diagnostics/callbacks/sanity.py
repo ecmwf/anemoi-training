@@ -114,7 +114,7 @@ class CheckVariableOrder(pl.callbacks.Callback):
             keys1 = set(self._model_name_to_index.keys())
             keys2 = set(data_name_to_index.keys())
 
-            error_msg = None
+            error_msg = ""
 
             # Find keys unique to each dictionary
             only_in_model = {key: self._model_name_to_index[key] for key in (keys1 - keys2)}
@@ -146,18 +146,18 @@ class CheckVariableOrder(pl.callbacks.Callback):
                 )
             else:
                 # If the renamed variables are not in the same index locations, raise an error.
-                error_msg = (
+                error_msg += (
                     "The variable order in the model and data is different.\n"
                     "Please adjust the variable order in your config, you may need to "
                     "use the 'reorder' and 'rename' key in the dataloader config.\n"
-                    "Refer to the Anemoi Datasets documentation for more information."
+                    "Refer to the Anemoi Datasets documentation for more information.\n"
                 )
             if different_values:
                 # If the variables are named the same but in different order, raise an error.
-                error_msg = (
+                error_msg += (
                     f"Detected a different sort order of the same variables: {different_values}.\n"
                     "Please adjust the variable order in your config, you may need to use the "
-                    f"'reorder' key in the dataloader config. With:\n `reorder: {self._model_name_to_index}`"
+                    f"'reorder' key in the dataloader config. With:\n `reorder: {self._model_name_to_index}`\n"
                 )
 
             if error_msg:
