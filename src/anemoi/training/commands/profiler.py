@@ -26,7 +26,7 @@ class Profile(TrainBase):
     accept_unknown_args = True
 
     @cached_property
-    def name(self) -> str:
+    def command(self) -> str:
         return "profile"
 
     def run(self, args: list[str], unknown_args: list[str] | None = None) -> None:
