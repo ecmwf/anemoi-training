@@ -132,10 +132,17 @@ class BasePlotCallback(Callback, ABC):
     def teardown(self, trainer, pl_module, stage) -> None:
         """Teardown the callback."""
         del trainer, pl_module, stage  # unused
+        LOGGER.info("Teardown of the Plot Callback ...")
+
         if self._executor is not None:
-            self._executor.shutdown(wait=True)
+            LOGGER.info("waiting and shutting down the executor ...")
+            self._executor.shutdown(wait=False,cancel_futures=True)
+
             self.loop.call_soon_threadsafe(self.loop.stop)
             self.loop_thread.join()
+            # Step 3: Close the asyncio event loop
+            self.loop_thread._stop()
+            self.loop_thread._delete()
 
     def apply_output_mask(self, pl_module: pl.LightningModule, data: torch.Tensor) -> torch.Tensor:
         if hasattr(pl_module, "output_mask") and pl_module.output_mask is not None:
@@ -158,13 +165,14 @@ class BasePlotCallback(Callback, ABC):
     async def submit_plot(self, trainer, *args, **kwargs) -> None:
         """Async function or coroutine to schedule the plot function."""
         loop = asyncio.get_running_loop()
+        # run_in_executor doesn't support keyword arguments,
         await loop.run_in_executor(
             self._executor,
             self._plot_with_error_catching,
             trainer,
             *args,
             *kwargs.values(),
-        )  # ONE FOR KWARGS OTHERWISE IT BREAKS!
+        )  # One because loop.run_in_executor expects positional arguments, not keyword arguments
 
     @rank_zero_only
     def _async_plot(
