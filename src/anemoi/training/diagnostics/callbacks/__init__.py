@@ -48,8 +48,8 @@ def nestedget(conf: DictConfig, key, default):
 CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str | Callable[[DictConfig], bool], type[Callback]]] = [
     ("training.swa.enabled", StochasticWeightAveraging),
     (
-        lambda config: nestedget(config, "diagnostics.log.wandb.enabled", True)
-        or nestedget(config, "diagnostics.log.mflow.enabled", True),
+        lambda config: nestedget(config, "diagnostics.log.wandb.enabled", False)
+        or nestedget(config, "diagnostics.log.mlfow.enabled", False),
         LearningRateMonitor,
     ),
 ]
