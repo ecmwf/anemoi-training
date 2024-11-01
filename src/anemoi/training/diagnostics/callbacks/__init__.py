@@ -30,8 +30,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def nestedget(conf: DictConfig, key, default):
-    """
-    Get a nested key from a DictConfig object
+    """Get a nested key from a DictConfig object
 
     E.g.
     >>> nestedget(config, "diagnostics.log.wandb.enabled", False)
@@ -49,8 +48,8 @@ def nestedget(conf: DictConfig, key, default):
 CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str | Callable[[DictConfig], bool], type[Callback]]] = [
     ("training.swa.enabled", StochasticWeightAveraging),
     (
-        lambda config: nestedget(config, "diagnostics.log.wandb.enabled", False)
-        or nestedget(config, "diagnostics.log.mflow.enabled", False),
+        lambda config: nestedget(config, "diagnostics.log.wandb.enabled", True)
+        or nestedget(config, "diagnostics.log.mflow.enabled", True),
         LearningRateMonitor,
     ),
 ]
