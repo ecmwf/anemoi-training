@@ -49,7 +49,7 @@ CONFIG_ENABLED_CALLBACKS: list[tuple[list[str] | str | Callable[[DictConfig], bo
     ("training.swa.enabled", StochasticWeightAveraging),
     (
         lambda config: nestedget(config, "diagnostics.log.wandb.enabled", False)
-        or nestedget(config, "diagnostics.log.mlfow.enabled", False),
+        or nestedget(config, "diagnostics.log.mlflow.enabled", False),
         LearningRateMonitor,
     ),
 ]
