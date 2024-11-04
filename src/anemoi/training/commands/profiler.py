@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from functools import cached_property
 
 from anemoi.training.commands.train import TrainBase
 
@@ -24,24 +23,13 @@ class Profile(TrainBase):
     """Commands to profile Anemoi models."""
 
     accept_unknown_args = True
-
-    @cached_property
-    def command(self) -> str:
-        return "profile"
+    command = "profile"
 
     def run(self, args: list[str], unknown_args: list[str] | None = None) -> None:
-        os.environ["ANEMOI_TRAINING_CMD"] = f"{sys.argv[0]} {args.command}"
-        # Merge the known subcommands with a non-whitespace character for hydra
-        new_sysargv = self._merge_sysargv(args)
+        # This will be picked up by the logger
+        self.prepare_sysargv(args, unknown_args)
 
-        # Add the unknown arguments (belonging to hydra) to sys.argv
-        if unknown_args is not None:
-            sys.argv = [new_sysargv, *unknown_args]
-        else:
-            sys.argv = [new_sysargv]
-
-        # Import and run the profiler command
-        LOGGER.info("Running anemoi profiling command with overrides: %s", sys.argv[1:])
+        LOGGER.info("Running anemoi profile command with overrides: %s", sys.argv[1:])
         main()
 
 
