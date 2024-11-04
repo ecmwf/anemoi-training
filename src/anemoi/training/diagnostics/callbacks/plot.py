@@ -119,10 +119,10 @@ class BasePlotCallback(Callback, ABC):
         plt.close(fig)  # cleanup
 
     @rank_zero_only
-    def _plot_with_error_catching(self, trainer, *args, **kwargs) -> None:
+    def _plot_with_error_catching(self, trainer, *args) -> None:
         """To execute the plot function but ensuring we catch any errors."""
         try:
-            self._plot(trainer, *args, **kwargs)
+            self._plot(trainer, *args)
         except BaseException:
             import os
 
@@ -209,19 +209,6 @@ class BasePerBatchPlotCallback(BasePlotCallback):
         super().__init__(config)
         self.batch_frequency = batch_frequency or self.config.diagnostics.plot.frequency.batch
 
-    @abstractmethod
-    @rank_zero_only
-    def _plot(
-        self,
-        trainer: pl.Trainer,
-        pl_module: pl.LightningModule,
-        outputs: list[torch.Tensor],
-        batch: torch.Tensor,
-        batch_idx: int,
-        epoch: int,
-        **kwargs,
-    ) -> None:
-        """Plotting function to be implemented by subclasses."""
 
     @rank_zero_only
     def on_validation_batch_end(
