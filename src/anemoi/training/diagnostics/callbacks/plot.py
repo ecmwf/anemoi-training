@@ -209,7 +209,6 @@ class BasePerBatchPlotCallback(BasePlotCallback):
         super().__init__(config)
         self.batch_frequency = batch_frequency or self.config.diagnostics.plot.frequency.batch
 
-
     @rank_zero_only
     def on_validation_batch_end(
         self,
