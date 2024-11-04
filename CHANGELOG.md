@@ -21,6 +21,8 @@ Keep it human-readable, your future self will thank you!
    - Fix that applies the metric_ranges in the post-processed variable space [#116](https://github.com/ecmwf/anemoi-training/pull/116)
 - Sub-hour datasets [#63](https://github.com/ecmwf/anemoi-training/pull/63)
 - Add synchronisation workflow [#92](https://github.com/ecmwf/anemoi-training/pull/92)
+- Feat: Anemoi Profiler compatible with mlflow and using Pytorch (Kineto) Profiler for memory report [38](https://github.com/ecmwf/anemoi-training/pull/38/)
+
 
 ### Changed
 - Modified training configuration to support max_steps and tied lr iterations to max_steps by default [#67](https://github.com/ecmwf/anemoi-training/pull/67)
@@ -32,9 +34,6 @@ Keep it human-readable, your future self will thank you!
 
 - Lock python version <3.13 [#107](https://github.com/ecmwf/anemoi-training/pull/107)
 
-
-### Added
-- Feat: Anemoi Profiler compatible with mlflow and using Pytorch (Kineto) Profiler for memory report [38](https://github.com/ecmwf/anemoi-training/pull/38/)
 
 
 ## [0.2.1 - Bugfix: resuming mlflow runs](https://github.com/ecmwf/anemoi-training/compare/0.2.0...0.2.1) - 2024-10-24
