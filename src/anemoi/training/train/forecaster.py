@@ -28,7 +28,8 @@ from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
-from anemoi.training.losses.mse import WeightedMSELoss, WeightedMSELossStretchedGrid
+from anemoi.training.losses.mse import WeightedMSELoss
+from anemoi.training.losses.mse import WeightedMSELossStretchedGrid
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.masks import Boolean1DMask
@@ -109,15 +110,35 @@ class GraphForecaster(pl.LightningModule):
             # Define stretched grid metrics according to options for stretched grid loss logging
             self.sg_metrics = torch.nn.ModuleDict()
             if config.diagnostics.sg_metrics.wmse_per_region:
-                self.sg_metrics['wmse_inside_lam_epoch'] = WeightedMSELossStretchedGrid(node_weights=self.loss_weights, mask=self.mask,
-                          inside_LAM=True, wmse_contribution=False, data_variances=loss_scaling)
-                self.sg_metrics['wmse_outside_lam_epoch'] = WeightedMSELossStretchedGrid(node_weights=self.loss_weights, mask=self.mask,
-                          inside_LAM=False, wmse_contribution=False, data_variances=loss_scaling)
+                self.sg_metrics['wmse_inside_lam_epoch'] = WeightedMSELossStretchedGrid(
+                    node_weights=self.loss_weights,
+                    mask=self.mask,
+                    inside_LAM=True,
+                    wmse_contribution=False,
+                    data_variances=loss_scaling,
+                )
+                self.sg_metrics['wmse_outside_lam_epoch'] = WeightedMSELossStretchedGrid(
+                    node_weights=self.loss_weights,
+                    mask=self.mask,
+                    inside_LAM=False,
+                    wmse_contribution=False,
+                    data_variances=loss_scaling,
+                )
             if config.diagnostics.sg_metrics.wmse_contributions:
-                self.sg_metrics['wmse_inside_lam_contribution_epoch'] = WeightedMSELossStretchedGrid(node_weights=self.loss_weights, mask=self.mask,
-                          inside_LAM=True, wmse_contribution=True, data_variances=loss_scaling)
-                self.sg_metrics['wmse_outside_lam_contribution_epoch'] = WeightedMSELossStretchedGrid(node_weights=self.loss_weights, mask=self.mask,
-                          inside_LAM=False, wmse_contribution=True, data_variances=loss_scaling)
+                self.sg_metrics['wmse_inside_lam_contribution_epoch'] = WeightedMSELossStretchedGrid(
+                    node_weights=self.loss_weights,
+                    mask=self.mask,
+                    inside_LAM=True,
+                    wmse_contribution=True,
+                    data_variances=loss_scaling,
+                )
+                self.sg_metrics['wmse_outside_lam_contribution_epoch'] = WeightedMSELossStretchedGrid(
+                    node_weights=self.loss_weights,
+                    mask=self.mask,
+                    inside_LAM=False,
+                    wmse_contribution=True,
+                    data_variances=loss_scaling,
+                )
         else:
             self.stretched_grid = False
 
@@ -307,7 +328,7 @@ class GraphForecaster(pl.LightningModule):
             )
         if self.stretched_grid:
             for name, metric in self.sg_metrics.items():
-                metrics["{}".format(name)] = metric(y_pred, y)
+                metrics[f"{name}"] = metric(y_pred, y)
         if enable_plot:
             y_preds.append(y_pred)
         return metrics, y_preds

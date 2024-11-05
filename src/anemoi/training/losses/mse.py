@@ -162,11 +162,11 @@ class WeightedMSELossStretchedGrid(nn.Module):
         full_out_dims = pred[:, :, :, 0]
 
         if self.inside_LAM:
-            pred = pred[ :, :, self.mask]
+            pred = pred[:, :, self.mask]
             target = target[:, :, self.mask]
             weights_selected = self.weights_inside_LAM
         else:
-            pred = pred[ :, :, ~self.mask]
+            pred = pred[:, :, ~self.mask]
             target = target[:, :, ~self.mask]
             weights_selected = self.weights_outside_LAM
 

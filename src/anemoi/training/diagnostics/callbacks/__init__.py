@@ -196,7 +196,7 @@ class RolloutEval(Callback):
         )
         self.rollout = config.diagnostics.eval.rollout
         self.frequency = config.diagnostics.eval.frequency
-        self.config=config
+        self.config = config
 
     def _eval(
         self,
@@ -252,7 +252,7 @@ class RolloutEval(Callback):
             rank_zero_only=True,
         )
 
-        #check if stretched grid
+        # check if stretched grid
         if self.config.graph.nodes.hidden.node_builder.lam_resolution:
             for str_area in ["inside", "contribution_inside", "outside", "contribution_outside"]:
                 pl_module.log(
@@ -667,7 +667,7 @@ class PlotSample(BasePlotCallback):
         """
         super().__init__(config)
         self.sample_idx = self.config.diagnostics.plot.sample_idx
-        self.config=config
+        self.config = config
         self.precip_and_related_fields = self.config.diagnostics.plot.precip_and_related_fields
         LOGGER.info(f"Using defined accumulation colormap for fields: {self.precip_and_related_fields}")
 
@@ -739,8 +739,8 @@ class PlotSample(BasePlotCallback):
                 exp_log_tag=f"val_pred_sample_rstep{rollout_step:02d}_rank{local_rank:01d}",
             )
             
-            #check if stretched grid
-            if self.config.graph.nodes.hidden.node_builder.lam_resolution:
+            # check if stretched grid
+            if "lam_resolution" in getattr(self.config.graph.nodes.hidden, "node_builder", []):
                 fig_lam_inside = plot_predicted_multilevel_flat_sample(
                     plot_parameters_dict,
                     self.config.diagnostics.plot.per_sample,
@@ -748,15 +748,15 @@ class PlotSample(BasePlotCallback):
                     self.config.diagnostics.plot.accumulation_levels_plot,
                     self.config.diagnostics.plot.cmap_accumulation,
                     data[0, :, pl_module.mask, :].squeeze(),
-                    data[rollout_step + 1,  :, pl_module.mask, :].squeeze(),
+                    data[rollout_step + 1, :, pl_module.mask, :].squeeze(),
                     output_tensor[rollout_step, :, pl_module.mask, :],
                 )
                 self._output_figure(
                     logger,
                     fig_lam_inside,
                     epoch=epoch,
-                    tag=f"lam_inside_pred_val_sample_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
-                    exp_log_tag=f"lam_inside_val_pred_sample_rstep{rollout_step:02d}_rank{local_rank:01d}",
+                    tag=f"pred_val_sample_inside_lam_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
+                    exp_log_tag=f"val_pred_sample_inside_lam_rstep{rollout_step:02d}_rank{local_rank:01d}",
                 )
                 fig_lam_outside = plot_predicted_multilevel_flat_sample(
                     plot_parameters_dict,
@@ -765,15 +765,15 @@ class PlotSample(BasePlotCallback):
                     self.config.diagnostics.plot.accumulation_levels_plot,
                     self.config.diagnostics.plot.cmap_accumulation,
                     data[0, :, ~pl_module.mask, :].squeeze(),
-                    data[rollout_step + 1,  :, ~pl_module.mask, :].squeeze(),
+                    data[rollout_step + 1, :, ~pl_module.mask, :].squeeze(),
                     output_tensor[rollout_step, :, ~pl_module.mask, :],
                 )
                 self._output_figure(
                     logger,
                     fig_lam_outside,
                     epoch=epoch,
-                    tag=f"lam_outside_pred_val_sample_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
-                    exp_log_tag=f"lam_outside_val_pred_sample_rstep{rollout_step:02d}_rank{local_rank:01d}",
+                    tag=f"pred_val_sample_outside_lam_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
+                    exp_log_tag=f"val_pred_sample_outside_lam_rstep{rollout_step:02d}_rank{local_rank:01d}",
                 )
 
     def on_validation_batch_end(
