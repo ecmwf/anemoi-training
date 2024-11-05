@@ -136,12 +136,7 @@ class WeightedMSELossStretchedGrid(nn.Module):
         if data_variances is not None:
             self.register_buffer("ivar", data_variances, persistent=True)
 
-    def forward(
-        self,
-        pred: torch.Tensor,
-        target: torch.Tensor,
-        squash=True
-    ) -> torch.Tensor:
+    def forward(self, pred: torch.Tensor, target: torch.Tensor, squash=True) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 
         Parameters

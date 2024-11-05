@@ -110,14 +110,14 @@ class GraphForecaster(pl.LightningModule):
             # Define stretched grid metrics according to options for stretched grid loss logging
             self.sg_metrics = torch.nn.ModuleDict()
             if config.diagnostics.sg_metrics.wmse_per_region:
-                self.sg_metrics['wmse_inside_lam_epoch'] = WeightedMSELossStretchedGrid(
+                self.sg_metrics["wmse_inside_lam_epoch"] = WeightedMSELossStretchedGrid(
                     node_weights=self.loss_weights,
                     mask=self.mask,
                     inside_LAM=True,
                     wmse_contribution=False,
                     data_variances=loss_scaling,
                 )
-                self.sg_metrics['wmse_outside_lam_epoch'] = WeightedMSELossStretchedGrid(
+                self.sg_metrics["wmse_outside_lam_epoch"] = WeightedMSELossStretchedGrid(
                     node_weights=self.loss_weights,
                     mask=self.mask,
                     inside_LAM=False,
@@ -125,14 +125,14 @@ class GraphForecaster(pl.LightningModule):
                     data_variances=loss_scaling,
                 )
             if config.diagnostics.sg_metrics.wmse_contributions:
-                self.sg_metrics['wmse_inside_lam_contribution_epoch'] = WeightedMSELossStretchedGrid(
+                self.sg_metrics["wmse_inside_lam_contribution_epoch"] = WeightedMSELossStretchedGrid(
                     node_weights=self.loss_weights,
                     mask=self.mask,
                     inside_LAM=True,
                     wmse_contribution=True,
                     data_variances=loss_scaling,
                 )
-                self.sg_metrics['wmse_outside_lam_contribution_epoch'] = WeightedMSELossStretchedGrid(
+                self.sg_metrics["wmse_outside_lam_contribution_epoch"] = WeightedMSELossStretchedGrid(
                     node_weights=self.loss_weights,
                     mask=self.mask,
                     inside_LAM=False,
