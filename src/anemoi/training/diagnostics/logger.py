@@ -55,12 +55,15 @@ def get_mlflow_logger(config: DictConfig) -> None:
         )
         log_hyperparams = False
 
-    http_max_retries = config.diagnostics.log.mlflow.get("http_max_retries", 15)
-    http_timeout = config.diagnostics.log.mlflow.get("http_timeout", 600)
+    # 35 retries allow for 1 hour of server downtime
+    http_max_retries = config.diagnostics.log.mlflow.get("http_max_retries", 35)
 
     os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = str(http_max_retries)
     os.environ["_MLFLOW_HTTP_REQUEST_MAX_RETRIES_LIMIT"] = str(http_max_retries + 1)
-    os.environ["MLFLOW_HTTP_REQUEST_TIMEOUT"] = str(http_timeout)
+
+    # these are the default values, but set them explicitly in case they change
+    os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR"] = "2"
+    os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_JITTER"] = "1"
 
     LOGGER.info("AnemoiMLFlow logging to %s", tracking_uri)
     logger = AnemoiMLflowLogger(
