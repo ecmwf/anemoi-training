@@ -37,7 +37,7 @@ class RolloutEval(Callback):
         rollout : int
             Rollout length for evaluation
         batch_frequency : int
-            batch_frequency of evaluation
+            Frequency of rollout evaluation, runs every `n` validation batches
 
         """
         super().__init__()
