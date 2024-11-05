@@ -40,13 +40,12 @@ html_logo = "_static/logo.png"
 
 project = "Anemoi Training"
 
-author = "ECMWF"
+author = "Anemoi contributors"
 
 year = datetime.datetime.now(tz="UTC").year
 years = "2024" if year == 2024 else f"2024-{year}"
 
-copyright = f"{years}, ECMWF"  # noqa: A001
-
+copyright = f"{years}, Anemoi contributors"
 
 try:
     from anemoi.training._version import __version__
