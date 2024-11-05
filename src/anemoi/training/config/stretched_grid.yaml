@@ -8,8 +8,6 @@ defaults:
  - training: default
  - _self_
 
-
-
 dataloader:
   num_workers:
     training: 2
@@ -78,7 +76,6 @@ model:
     hidden2data: 0
     hidden2hidden: 0 # GNN and GraphTransformer Processor only
 
-
 graphs:
   output_path: ${hardware.paths.graph}${hardware.files.graph}
   save_graph_plots: False
@@ -92,5 +89,3 @@ training:
     rate: 5.0e-6
     iterations: 10000
     min: 8.0e-6
-
-

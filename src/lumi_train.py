@@ -1,4 +1,5 @@
-from hydra import compose, initialize
+from hydra import compose
+from hydra import initialize
 from anemoi.training.train.train import AnemoiTrainer
 
 with initialize(version_base=None, config_path="anemoi/training/config"):

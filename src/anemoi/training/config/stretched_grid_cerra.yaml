@@ -7,7 +7,7 @@ defaults:
  - model: graphtransformer
  - training: default
  - _self_
- 
+
 diagnostics:
   log:
     mlflow:

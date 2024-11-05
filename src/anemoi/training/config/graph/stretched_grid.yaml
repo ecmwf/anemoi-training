@@ -11,7 +11,7 @@ nodes:
       forcing_dataset: ${hardware.paths.data}/${hardware.files.dataset}
       adjust: all
 #      min_distance_km: 0
-    attributes: 
+    attributes:
       area_weight:
         _target_: anemoi.graphs.nodes.attributes.AreaWeights
         norm: unit-max
@@ -31,7 +31,7 @@ edges:
   edge_builder:
     _target_: anemoi.graphs.edges.KNNEdges
     num_nearest_neighbours: 12
-  attributes: 
+  attributes:
     edge_length:
       _target_: anemoi.graphs.edges.attributes.EdgeLength
       norm: unit-max

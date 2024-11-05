@@ -90,6 +90,7 @@ class WeightedMSELoss(nn.Module):
         out /= self.sum_function(self.weights[..., None].expand_as(out), axis=(0, 1, 2))
         return self.sum_function(out, axis=(0, 1, 2))
 
+
 class WeightedMSELossStretchedGrid(nn.Module):
     """Latitude-weighted MSE loss, calculated only within or outside the limited area.
     Further, the loss can be computed for the specified region (default),
@@ -153,7 +154,6 @@ class WeightedMSELossStretchedGrid(nn.Module):
         torch.Tensor
             Weighted MSE loss
         """
-
         full_out_dims = pred[:, :, :, 0]
 
         if self.inside_LAM:

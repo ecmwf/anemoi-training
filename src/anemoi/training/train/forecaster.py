@@ -100,7 +100,7 @@ class GraphForecaster(pl.LightningModule):
         )
         self.loss = WeightedMSELoss(node_weights=self.loss_weights, data_variances=loss_scaling)
         self.metrics = WeightedMSELoss(node_weights=self.loss_weights, ignore_nans=True)
-        
+
         # Check if the model is a stretched grid
         if "lam_resolution" in getattr(config.graph.nodes.hidden, "node_builder", []):
             self.stretched_grid = True

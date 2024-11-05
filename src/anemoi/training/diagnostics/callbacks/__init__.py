@@ -738,7 +738,7 @@ class PlotSample(BasePlotCallback):
                 tag=f"gnn_pred_val_sample_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
                 exp_log_tag=f"val_pred_sample_rstep{rollout_step:02d}_rank{local_rank:01d}",
             )
-            
+
             # check if stretched grid
             if "lam_resolution" in getattr(self.config.graph.nodes.hidden, "node_builder", []):
                 fig_lam_inside = plot_predicted_multilevel_flat_sample(
