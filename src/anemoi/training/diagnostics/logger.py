@@ -28,6 +28,16 @@ def get_mlflow_logger(config: DictConfig) -> None:
         LOGGER.debug("MLFlow logging is disabled.")
         return None
 
+    # 35 retries allow for 1 hour of server downtime
+    http_max_retries = config.diagnostics.log.mlflow.get("http_max_retries", 35)
+
+    os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = str(http_max_retries)
+    os.environ["_MLFLOW_HTTP_REQUEST_MAX_RETRIES_LIMIT"] = str(http_max_retries + 1)
+
+    # these are the default values, but set them explicitly in case they change
+    os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR"] = "2"
+    os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_JITTER"] = "1"
+
     from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger
 
     resumed = config.training.run_id is not None
@@ -54,16 +64,6 @@ def get_mlflow_logger(config: DictConfig) -> None:
             ),
         )
         log_hyperparams = False
-
-    # 35 retries allow for 1 hour of server downtime
-    http_max_retries = config.diagnostics.log.mlflow.get("http_max_retries", 35)
-
-    os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = str(http_max_retries)
-    os.environ["_MLFLOW_HTTP_REQUEST_MAX_RETRIES_LIMIT"] = str(http_max_retries + 1)
-
-    # these are the default values, but set them explicitly in case they change
-    os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR"] = "2"
-    os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_JITTER"] = "1"
 
     LOGGER.info("AnemoiMLFlow logging to %s", tracking_uri)
     logger = AnemoiMLflowLogger(
