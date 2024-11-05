@@ -11,6 +11,8 @@ import yaml
 
 from anemoi.training.diagnostics.callbacks import get_callbacks
 
+NUM_FIXED_CALLBACKS = 2  # ParentUUIDCallback, CheckVariableOrder
+
 default_config = """
 diagnostics:
   callbacks: []
@@ -36,7 +38,7 @@ def test_no_extra_callbacks_set():
     # No extra callbacks set
     config = omegaconf.OmegaConf.create(yaml.safe_load(default_config))
     callbacks = get_callbacks(config)
-    assert len(callbacks) == 1  # ParentUUIDCallback
+    assert len(callbacks) == NUM_FIXED_CALLBACKS  # ParentUUIDCallback, CheckVariableOrder, etc
 
 
 def test_add_config_enabled_callback():
@@ -44,7 +46,7 @@ def test_add_config_enabled_callback():
     config = omegaconf.OmegaConf.create(default_config)
     config.diagnostics.callbacks.append({"log": {"mlflow": {"enabled": True}}})
     callbacks = get_callbacks(config)
-    assert len(callbacks) == 2
+    assert len(callbacks) == NUM_FIXED_CALLBACKS + 1
 
 
 def test_add_callback():
@@ -53,7 +55,7 @@ def test_add_callback():
         {"_target_": "anemoi.training.diagnostics.callbacks.provenance.ParentUUIDCallback"},
     )
     callbacks = get_callbacks(config)
-    assert len(callbacks) == 2
+    assert len(callbacks) == NUM_FIXED_CALLBACKS + 1
 
 
 def test_add_plotting_callback(monkeypatch):
@@ -70,4 +72,4 @@ def test_add_plotting_callback(monkeypatch):
     config.diagnostics.plot.enabled = True
     config.diagnostics.plot.callbacks = [{"_target_": "anemoi.training.diagnostics.callbacks.plot.PlotLoss"}]
     callbacks = get_callbacks(config)
-    assert len(callbacks) == 2
+    assert len(callbacks) == NUM_FIXED_CALLBACKS + 1
