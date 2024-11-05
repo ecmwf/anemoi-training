@@ -197,4 +197,3 @@ model:
     hidden2data: 0
     hidden2hidden: 0
   num_channels: 256
-

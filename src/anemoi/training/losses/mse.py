@@ -93,6 +93,7 @@ class WeightedMSELoss(nn.Module):
 
 class WeightedMSELossStretchedGrid(nn.Module):
     """Latitude-weighted MSE loss, calculated only within or outside the limited area.
+
     Further, the loss can be computed for the specified region (default),
     or as the contribution to the overall loss.
     """
@@ -101,7 +102,7 @@ class WeightedMSELossStretchedGrid(nn.Module):
         self,
         node_weights: torch.Tensor,
         mask: torch.Tensor,
-        inside_LAM: bool = True,
+        inside_lam: bool = True,
         wmse_contribution: bool = False,
         data_variances: torch.Tensor | None = None,
         ignore_nans: bool | None = False,
@@ -114,7 +115,7 @@ class WeightedMSELossStretchedGrid(nn.Module):
             Weight of each node in the loss function
         mask: torch.Tensor
             the mask marking the indices of the regional data points (bool)
-        inside_LAM: bool
+        inside_lam: bool
             compute the loss inside or outside the limited area, by default inside (True)
         wmse_contribution: bool
             compute loss as the contribution to the overall MSE, by default False
@@ -128,16 +129,21 @@ class WeightedMSELossStretchedGrid(nn.Module):
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-        self.inside_LAM = inside_LAM
+        self.inside_lam = inside_lam
         self.wmse_contribution = wmse_contribution
         self.register_buffer("weights", node_weights, persistent=True)
-        self.register_buffer("weights_inside_LAM", node_weights[mask], persistent=True)
-        self.register_buffer("weights_outside_LAM", node_weights[~mask], persistent=True)
+        self.register_buffer("weights_inside_lam", node_weights[mask], persistent=True)
+        self.register_buffer("weights_outside_lam", node_weights[~mask], persistent=True)
         self.register_buffer("mask", mask, persistent=True)
         if data_variances is not None:
             self.register_buffer("ivar", data_variances, persistent=True)
 
-    def forward(self, pred: torch.Tensor, target: torch.Tensor, squash=True) -> torch.Tensor:
+    def forward(
+        self,
+        pred: torch.Tensor,
+        target: torch.Tensor,
+        squash: bool = True,
+    ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 
         Parameters
@@ -156,14 +162,14 @@ class WeightedMSELossStretchedGrid(nn.Module):
         """
         full_out_dims = pred[:, :, :, 0]
 
-        if self.inside_LAM:
+        if self.inside_lam:
             pred = pred[:, :, self.mask]
             target = target[:, :, self.mask]
-            weights_selected = self.weights_inside_LAM
+            weights_selected = self.weights_inside_lam
         else:
             pred = pred[:, :, ~self.mask]
             target = target[:, :, ~self.mask]
-            weights_selected = self.weights_outside_LAM
+            weights_selected = self.weights_outside_lam
 
         out = torch.square(pred - target)
 

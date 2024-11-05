@@ -65,4 +65,3 @@ edges:
     edge_dirs:
       _target_: anemoi.graphs.edges.attributes.EdgeDirection
       norm: unit-std
-

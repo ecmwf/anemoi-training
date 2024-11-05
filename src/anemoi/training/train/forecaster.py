@@ -113,14 +113,14 @@ class GraphForecaster(pl.LightningModule):
                 self.sg_metrics["wmse_inside_lam_epoch"] = WeightedMSELossStretchedGrid(
                     node_weights=self.loss_weights,
                     mask=self.mask,
-                    inside_LAM=True,
+                    inside_lam=True,
                     wmse_contribution=False,
                     data_variances=loss_scaling,
                 )
                 self.sg_metrics["wmse_outside_lam_epoch"] = WeightedMSELossStretchedGrid(
                     node_weights=self.loss_weights,
                     mask=self.mask,
-                    inside_LAM=False,
+                    inside_lam=False,
                     wmse_contribution=False,
                     data_variances=loss_scaling,
                 )
@@ -128,14 +128,14 @@ class GraphForecaster(pl.LightningModule):
                 self.sg_metrics["wmse_inside_lam_contribution_epoch"] = WeightedMSELossStretchedGrid(
                     node_weights=self.loss_weights,
                     mask=self.mask,
-                    inside_LAM=True,
+                    inside_lam=True,
                     wmse_contribution=True,
                     data_variances=loss_scaling,
                 )
                 self.sg_metrics["wmse_outside_lam_contribution_epoch"] = WeightedMSELossStretchedGrid(
                     node_weights=self.loss_weights,
                     mask=self.mask,
-                    inside_LAM=False,
+                    inside_lam=False,
                     wmse_contribution=True,
                     data_variances=loss_scaling,
                 )
