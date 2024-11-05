@@ -45,7 +45,7 @@ author = "Anemoi contributors"
 year = datetime.datetime.now(tz="UTC").year
 years = "2024" if year == 2024 else f"2024-{year}"
 
-copyright = f"{years}, Anemoi contributors" # noqa: A001 
+copyright = f"{years}, Anemoi contributors"  # noqa: A001
 
 try:
     from anemoi.training._version import __version__
