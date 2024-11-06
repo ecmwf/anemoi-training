@@ -329,6 +329,7 @@ class GraphForecaster(pl.LightningModule):
         if self.stretched_grid:
             for name, metric in self.sg_metrics.items():
                 metrics[f"{name}"] = metric(y_pred, y)
+
         if enable_plot:
             y_preds.append(y_pred)
         return metrics, y_preds
