@@ -42,6 +42,8 @@ from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sam
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
 
 if TYPE_CHECKING:
+    from typing import Any
+
     import pytorch_lightning as pl
     from omegaconf import OmegaConf
 
@@ -119,10 +121,10 @@ class BasePlotCallback(Callback, ABC):
         plt.close(fig)  # cleanup
 
     @rank_zero_only
-    def _plot_with_error_catching(self, trainer, *args) -> None:
+    def _plot_with_error_catching(self, trainer, args, kwargs) -> None:
         """To execute the plot function but ensuring we catch any errors."""
         try:
-            self._plot(trainer, *args)
+            self._plot(trainer, *args, **kwargs)
         except BaseException:
             import os
 
@@ -156,8 +158,8 @@ class BasePlotCallback(Callback, ABC):
         self,
         trainer: pl.Trainer,
         pl_module: pl.LightningModule,
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """Plotting function to be implemented by subclasses."""
 
@@ -170,16 +172,16 @@ class BasePlotCallback(Callback, ABC):
             self._executor,
             self._plot_with_error_catching,
             trainer,
-            *args,
-            *kwargs.values(),
+            args,
+            kwargs,
         )  # One because loop.run_in_executor expects positional arguments, not keyword arguments
 
     @rank_zero_only
     def _async_plot(
         self,
-        trainer,
-        *args,
-        **kwargs,
+        trainer: pl.Trainer,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """Run the plot function asynchronously.
 
@@ -208,7 +210,6 @@ class BasePerBatchPlotCallback(BasePlotCallback):
         """
         super().__init__(config)
         self.batch_frequency = batch_frequency or self.config.diagnostics.plot.frequency.batch
-
 
     @rank_zero_only
     def on_validation_batch_end(
