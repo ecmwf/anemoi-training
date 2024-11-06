@@ -253,11 +253,11 @@ class RolloutEval(Callback):
         )
 
         # check if stretched grid
-        if self.config.graph.nodes.hidden.node_builder.lam_resolution:
-            for str_area in ["inside", "contribution_inside", "outside", "contribution_outside"]:
+        if "lam_resolution" in getattr(self.config.graph.nodes.hidden, "node_builder", []):
+            for str_area in ["inside_lam", "outside_lam", "inside_lam_contribution", "outside_lam_contribution"]:
                 pl_module.log(
-                    f"val_wmse_{str_area}_LAM_r{self.rollout}",
-                    metrics["val_wmse_{str_area}_LAM_1"],
+                    f"val_wmse_{str_area}_r{self.rollout}",
+                    metrics["wmse_{str_area}_epoch"],
                     on_epoch=True,
                     on_step=True,
                     prog_bar=False,
