@@ -7,7 +7,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-# ruff: noqa: ANN001
 
 from __future__ import annotations
 
@@ -74,7 +73,7 @@ class BasePlotCallback(Callback, ABC):
         self.plot = self._plot
         self._executor = None
         self._error: BaseException = None
-        self.scatter_plotting = config.diagnostics.plot.scatter
+        self.datashader_plotting = config.diagnostics.plot.datashader
 
         if self.config.diagnostics.plot.asynchronous:
             LOGGER.info("Setting up asynchronous plotting ...")
@@ -121,7 +120,7 @@ class BasePlotCallback(Callback, ABC):
         plt.close(fig)  # cleanup
 
     @rank_zero_only
-    def _plot_with_error_catching(self, trainer, args, kwargs) -> None:
+    def _plot_with_error_catching(self, trainer: pl.Trainer, args: Any, kwargs: Any) -> None:
         """To execute the plot function but ensuring we catch any errors."""
         try:
             self._plot(trainer, *args, **kwargs)
@@ -131,7 +130,7 @@ class BasePlotCallback(Callback, ABC):
             LOGGER.exception(traceback.format_exc())
             os._exit(1)  # to force exit when sanity val steps are used
 
-    def teardown(self, trainer, pl_module, stage) -> None:
+    def teardown(self, trainer: pl.Trainer, pl_module: pl.LightningModule, stage: str) -> None:
         """Teardown the callback."""
         del trainer, pl_module, stage  # unused
         LOGGER.info("Teardown of the Plot Callback ...")
@@ -164,7 +163,7 @@ class BasePlotCallback(Callback, ABC):
         """Plotting function to be implemented by subclasses."""
 
     # Async function to run the plot function in the background thread
-    async def submit_plot(self, trainer, *args, **kwargs) -> None:
+    async def submit_plot(self, trainer: pl.Trainer, *args: Any, **kwargs: Any) -> None:
         """Async function or coroutine to schedule the plot function."""
         loop = asyncio.get_running_loop()
         # run_in_executor doesn't support keyword arguments,
@@ -214,9 +213,9 @@ class BasePerBatchPlotCallback(BasePlotCallback):
     @rank_zero_only
     def on_validation_batch_end(
         self,
-        trainer,
-        pl_module,
-        output,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        output: list[torch.Tensor],
         batch: torch.Tensor,
         batch_idx: int,
         **kwargs,
@@ -315,12 +314,12 @@ class LongRolloutPlots(BasePlotCallback):
     @rank_zero_only
     def _plot(
         self,
-        trainer,
+        trainer: pl.Trainer,
         pl_module: pl.LightningModule,
         output: list[torch.Tensor],
         batch: torch.Tensor,
-        batch_idx,
-        epoch,
+        batch_idx: int,
+        epoch: int,
     ) -> None:
         _ = output
 
@@ -411,9 +410,9 @@ class LongRolloutPlots(BasePlotCallback):
     @rank_zero_only
     def on_validation_batch_end(
         self,
-        trainer,
-        pl_module,
-        output,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        output: list[torch.Tensor],
         batch: torch.Tensor,
         batch_idx: int,
     ) -> None:
@@ -458,7 +457,7 @@ class GraphNodeTrainableFeaturesPlot(BasePerEpochPlotCallback):
     ) -> None:
         model = pl_module.model.module.model if hasattr(pl_module.model, "module") else pl_module.model.model
 
-        fig = plot_graph_node_features(model, scatter=self.scatter_plotting)
+        fig = plot_graph_node_features(model, datashader=self.datashader_plotting)
 
         tag = "node_trainable_params"
         exp_log_tag = "node_trainable_params"
@@ -788,7 +787,7 @@ class PlotSample(BasePerBatchPlotCallback):
                 data[0, ...].squeeze(),
                 data[rollout_step + 1, ...].squeeze(),
                 output_tensor[rollout_step, ...],
-                scatter=self.scatter_plotting,
+                datashader=self.datashader_plotting,
                 precip_and_related_fields=self.precip_and_related_fields,
             )
 
@@ -878,7 +877,7 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
         self,
         trainer: pl.Trainer,
         pl_module: pl.LightningModule,
-        outputs: list,
+        outputs: list[torch.Tensor],
         batch: torch.Tensor,
         batch_idx: int,
         epoch: int,
@@ -960,7 +959,7 @@ class PlotHistogram(BasePlotAdditionalMetrics):
         self,
         trainer: pl.Trainer,
         pl_module: pl.LightningModule,
-        outputs: list,
+        outputs: list[torch.Tensor],
         batch: torch.Tensor,
         batch_idx: int,
         epoch: int,

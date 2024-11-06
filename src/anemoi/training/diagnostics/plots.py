@@ -339,7 +339,7 @@ def plot_predicted_multilevel_flat_sample(
     x: np.ndarray,
     y_true: np.ndarray,
     y_pred: np.ndarray,
-    scatter: bool = False,
+    datashader: bool = False,
     precip_and_related_fields: list | None = None,
 ) -> Figure:
     """Plots data for one multilevel latlon-"flat" sample.
@@ -365,7 +365,7 @@ def plot_predicted_multilevel_flat_sample(
         Expected data of shape (lat*lon, nvar*level)
     y_pred : np.ndarray
         Predicted data of shape (lat*lon, nvar*level)
-    scatter: bool, optional
+    datashader: bool, optional
         Scatter plot, by default False
     precip_and_related_fields : list, optional
         List of precipitation-like variables, by default []
@@ -401,7 +401,7 @@ def plot_predicted_multilevel_flat_sample(
                 variable_name,
                 clevels,
                 cmap_precip,
-                scatter,
+                datashader,
                 precip_and_related_fields,
             )
         else:
@@ -416,7 +416,7 @@ def plot_predicted_multilevel_flat_sample(
                 variable_name,
                 clevels,
                 cmap_precip,
-                scatter,
+                datashader,
                 precip_and_related_fields,
             )
 
@@ -434,7 +434,7 @@ def plot_flat_sample(
     vname: str,
     clevels: float,
     cmap_precip: str,
-    scatter: bool = False,
+    datashader: bool = False,
     precip_and_related_fields: list | None = None,
 ) -> None:
     """Plot a "flat" 1D sample.
@@ -463,8 +463,8 @@ def plot_flat_sample(
         Accumulation levels used for precipitation related plots
     cmap_precip: str
         Colors used for each accumulation level
-    scatter: bool, optional
-        Scatter plot, by default False
+    datashader: bool, optional
+        Datashader plott, by default True
     precip_and_related_fields : list, optional
         List of precipitation-like variables, by default []
 
@@ -494,9 +494,19 @@ def plot_flat_sample(
             cmap=precip_colormap,
             norm=norm,
             title=f"{vname} target",
-            scatter=scatter,
+            datashader=datashader,
         )
-        single_plot(fig, ax[2], lon, lat, pred, cmap=precip_colormap, norm=norm, title=f"{vname} pred", scatter=scatter)
+        single_plot(
+            fig,
+            ax[2],
+            lon,
+            lat,
+            pred,
+            cmap=precip_colormap,
+            norm=norm,
+            title=f"{vname} pred",
+            datashader=datashader,
+        )
         single_plot(
             fig,
             ax[3],
@@ -506,7 +516,7 @@ def plot_flat_sample(
             cmap="bwr",
             norm=TwoSlopeNorm(vcenter=0.0),
             title=f"{vname} pred err",
-            scatter=scatter,
+            datashader=datashader,
         )
     elif vname == "mwd":
         cyclic_colormap = "twilight"
@@ -526,7 +536,7 @@ def plot_flat_sample(
             data=truth,
             cmap=cyclic_colormap,
             title=f"{vname} target",
-            scatter=scatter,
+            datashader=datashader,
         )
         single_plot(
             fig,
@@ -536,7 +546,7 @@ def plot_flat_sample(
             data=pred,
             cmap=cyclic_colormap,
             title=f"capped {vname} pred",
-            scatter=scatter,
+            datashader=datashader,
         )
         err_plot = error_plot_in_degrees(truth, pred)
         single_plot(
@@ -548,11 +558,11 @@ def plot_flat_sample(
             cmap="bwr",
             norm=TwoSlopeNorm(vcenter=0.0),
             title=f"{vname} pred err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
-            scatter=scatter,
+            datashader=datashader,
         )
     else:
-        single_plot(fig, ax[1], lon, lat, truth, title=f"{vname} target", scatter=scatter)
-        single_plot(fig, ax[2], lon, lat, pred, title=f"{vname} pred", scatter=scatter)
+        single_plot(fig, ax[1], lon, lat, truth, title=f"{vname} target", datashader=datashader)
+        single_plot(fig, ax[2], lon, lat, pred, title=f"{vname} pred", datashader=datashader)
         single_plot(
             fig,
             ax[3],
@@ -562,7 +572,7 @@ def plot_flat_sample(
             cmap="bwr",
             norm=TwoSlopeNorm(vcenter=0.0),
             title=f"{vname} pred err",
-            scatter=scatter,
+            datashader=datashader,
         )
 
     if sum(input_) != 0:
@@ -575,7 +585,7 @@ def plot_flat_sample(
                 data=input_,
                 cmap=cyclic_colormap,
                 title=f"{vname} input",
-                scatter=scatter,
+                datashader=datashader,
             )
             err_plot = error_plot_in_degrees(pred, input_)
             single_plot(
@@ -587,7 +597,7 @@ def plot_flat_sample(
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} increment [pred - input] % 360",
-                scatter=scatter,
+                datashader=datashader,
             )
             err_plot = error_plot_in_degrees(truth, input_)
             single_plot(
@@ -599,10 +609,10 @@ def plot_flat_sample(
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} persist err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
-                scatter=scatter,
+                datashader=datashader,
             )
         else:
-            single_plot(fig, ax[0], lon, lat, input_, title=f"{vname} input", scatter=scatter)
+            single_plot(fig, ax[0], lon, lat, input_, title=f"{vname} input", datashader=datashader)
             single_plot(
                 fig,
                 ax[4],
@@ -612,7 +622,7 @@ def plot_flat_sample(
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} increment [pred - input]",
-                scatter=scatter,
+                datashader=datashader,
             )
             single_plot(
                 fig,
@@ -623,7 +633,7 @@ def plot_flat_sample(
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} persist err",
-                scatter=scatter,
+                datashader=datashader,
             )
     else:
         ax[0].axis("off")
@@ -640,11 +650,11 @@ def single_plot(
     cmap: str = "viridis",
     norm: str | None = None,
     title: str | None = None,
-    scatter: bool = False,
+    datashader: bool = False,
 ) -> None:
     """Plot a single lat-lon map.
 
-    Plotting can be made either using scatter plot or Datashader(bin) plots.
+    Plotting can be made either using datashader plot or Datashader(bin) plots.
     By default it uses Datashader since it is faster and more efficient.
 
     Parameters
@@ -665,14 +675,14 @@ def single_plot(
         Normalization string from matplotlib, by default None
     title : str, optional
         Title for plot, by default None
-    scatter: bool, optional
+    datashader: bool, optional
         Scatter plot, by default False
 
     Returns
     -------
     None
     """
-    if scatter:
+    if not datashader:
         psc = ax.scatter(
             lon,
             lat,
@@ -781,14 +791,14 @@ def sincos_to_latlon(sincos_coords: torch.Tensor) -> torch.Tensor:
     return torch.atan2(sin_y, cos_y)
 
 
-def plot_graph_node_features(model: torch.nn.Module, scatter: bool = False) -> Figure:
+def plot_graph_node_features(model: torch.nn.Module, datashader: bool = False) -> Figure:
     """Plot trainable graph node features.
 
     Parameters
     ----------
     model: AneomiModelEncProcDec
         Model object
-    scatter: bool, optional
+    datashader: bool, optional
         Scatter plot, by default False
 
     Returns
@@ -817,7 +827,7 @@ def plot_graph_node_features(model: torch.nn.Module, scatter: bool = False) -> F
                 lat=lat,
                 data=features[..., i],
                 title=f"{mesh} trainable feature #{i + 1}",
-                scatter=scatter,
+                datashader=datashader,
             )
 
     return fig
