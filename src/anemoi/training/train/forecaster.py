@@ -21,7 +21,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.models.interface import AnemoiModelInterface
+from anemoi.models.interface.opt_mapper import OptMapperInterface
 from anemoi.utils.config import DotDict
 from hydra.utils import instantiate
 from omegaconf import DictConfig
@@ -73,13 +73,22 @@ class GraphForecaster(pl.LightningModule):
 
         graph_data = graph_data.to(self.device)
 
-        self.model = AnemoiModelInterface(
+        self.model = OptMapperInterface(
             statistics=statistics,
             data_indices=data_indices,
             metadata=metadata,
             graph_data=graph_data,
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
+
+        # Freeze the model weights if using the opt_mapper
+        self.use_opt_mapper = config.training.use_opt_mapper
+        if self.use_opt_mapper:
+            for param in self.model.model.parameters():
+                param.requires_grad = False
+        else:
+            for param in self.model.opt_mapper.parameters():
+                param.requires_grad = False
 
         self.data_indices = data_indices
 
@@ -148,7 +157,7 @@ class GraphForecaster(pl.LightningModule):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x, self.model_comm_group)
+        return self.model(x, self.model_comm_group, use_opt_mapper=self.use_opt_mapper)
 
     # Future import breaks other type hints TODO Harrison Cook
     @staticmethod
