@@ -195,20 +195,20 @@ class BasePlotCallback(Callback, ABC):
 class BasePerBatchPlotCallback(BasePlotCallback):
     """Base Callback for plotting at the end of each batch."""
 
-    def __init__(self, config: OmegaConf, batch_frequency: int | None = None):
+    def __init__(self, config: OmegaConf, every_n_batches: int | None = None):
         """Initialise the BasePerBatchPlotCallback.
 
         Parameters
         ----------
         config : OmegaConf
             Config object
-        batch_frequency : int, optional
+        every_n_batches : int, optional
             Batch Frequency to plot at, by default None
             If not given, uses default from config at `diagnostics.plot.frequency.batch`
 
         """
         super().__init__(config)
-        self.batch_frequency = batch_frequency or self.config.diagnostics.plot.frequency.batch
+        self.every_n_batches = every_n_batches or self.config.diagnostics.plot.frequency.batch
 
     @rank_zero_only
     def on_validation_batch_end(
@@ -220,7 +220,7 @@ class BasePerBatchPlotCallback(BasePlotCallback):
         batch_idx: int,
         **kwargs,
     ) -> None:
-        if batch_idx % self.batch_frequency == 0:
+        if batch_idx % self.every_n_batches == 0:
             self.plot(
                 trainer,
                 pl_module,
@@ -235,19 +235,19 @@ class BasePerBatchPlotCallback(BasePlotCallback):
 class BasePerEpochPlotCallback(BasePlotCallback):
     """Base Callback for plotting at the end of each epoch."""
 
-    def __init__(self, config: OmegaConf, epoch_frequency: int | None = None):
+    def __init__(self, config: OmegaConf, every_n_epochs: int | None = None):
         """Initialise the BasePerEpochPlotCallback.
 
         Parameters
         ----------
         config : OmegaConf
             Config object
-        epoch_frequency : int, optional
+        every_n_epochs : int, optional
             Epoch frequency to plot at, by default None
             If not given, uses default from config at `diagnostics.plot.frequency.epoch`
         """
         super().__init__(config)
-        self.epoch_frequency = epoch_frequency or self.config.diagnostics.plot.frequency.epoch
+        self.every_n_epochs = every_n_epochs or self.config.diagnostics.plot.frequency.epoch
 
     @rank_zero_only
     def on_validation_epoch_end(
@@ -256,7 +256,7 @@ class BasePerEpochPlotCallback(BasePlotCallback):
         pl_module: pl.LightningModule,
         **kwargs,
     ) -> None:
-        if trainer.current_epoch % self.epoch_frequency == 0:
+        if trainer.current_epoch % self.every_n_epochs == 0:
             self.plot(trainer, pl_module, epoch=trainer.current_epoch, **kwargs)
 
 
@@ -272,7 +272,7 @@ class LongRolloutPlots(BasePlotCallback):
         accumulation_levels_plot: list[float] | None = None,
         cmap_accumulation: list[str] | None = None,
         per_sample: int = 6,
-        epoch_frequency: int = 1,
+        every_n_epochs: int = 1,
     ) -> None:
         """Initialise LongRolloutPlots callback.
 
@@ -292,17 +292,17 @@ class LongRolloutPlots(BasePlotCallback):
             Colors of the accumulation levels, by default None
         per_sample : int, optional
             Number of plots per sample, by default 6
-        epoch_frequency : int, optional
+        every_n_epochs : int, optional
             Epoch frequency to plot at, by default 1
         """
         super().__init__(config)
 
-        self.epoch_frequency = epoch_frequency
+        self.every_n_epochs = every_n_epochs
 
         LOGGER.debug(
             "Setting up callback for plots with long rollout: rollout = %d, frequency = every %d epoch ...",
             rollout,
-            epoch_frequency,
+            every_n_epochs,
         )
         self.rollout = rollout
         self.sample_idx = sample_idx
@@ -416,7 +416,7 @@ class LongRolloutPlots(BasePlotCallback):
         batch: torch.Tensor,
         batch_idx: int,
     ) -> None:
-        if (batch_idx) == 0 and (trainer.current_epoch + 1) % self.epoch_frequency == 0:
+        if (batch_idx) == 0 and (trainer.current_epoch + 1) % self.every_n_epochs == 0:
             precision_mapping = {
                 "16-mixed": torch.float16,
                 "bf16-mixed": torch.bfloat16,
@@ -436,17 +436,17 @@ class LongRolloutPlots(BasePlotCallback):
 class GraphNodeTrainableFeaturesPlot(BasePerEpochPlotCallback):
     """Visualize the node trainable features defined."""
 
-    def __init__(self, config: OmegaConf, epoch_frequency: int | None = None) -> None:
+    def __init__(self, config: OmegaConf, every_n_epochs: int | None = None) -> None:
         """Initialise the GraphTrainableFeaturesPlot callback.
 
         Parameters
         ----------
         config : OmegaConf
             Config object
-        epoch_frequency: int | None, optional
+        every_n_epochs: int | None, optional
             Override for frequency to plot at, by default None
         """
-        super().__init__(config, epoch_frequency=epoch_frequency)
+        super().__init__(config, every_n_epochs=every_n_epochs)
 
     @rank_zero_only
     def _plot(
@@ -477,17 +477,17 @@ class GraphEdgeTrainableFeaturesPlot(BasePerEpochPlotCallback):
     Visualize the trainable features defined at the edges between meshes.
     """
 
-    def __init__(self, config: OmegaConf, epoch_frequency: int | None = None) -> None:
+    def __init__(self, config: OmegaConf, every_n_epochs: int | None = None) -> None:
         """Plot trainable edge features.
 
         Parameters
         ----------
         config : OmegaConf
             Config object
-        epoch_frequency : int | None, optional
+        every_n_epochs : int | None, optional
             Override for frequency to plot at, by default None
         """
-        super().__init__(config, epoch_frequency=epoch_frequency)
+        super().__init__(config, every_n_epochs=every_n_epochs)
 
     @rank_zero_only
     def _plot(
@@ -519,7 +519,7 @@ class PlotLoss(BasePerBatchPlotCallback):
         self,
         config: OmegaConf,
         parameter_groups: dict[dict[str, list[str]]],
-        batch_frequency: int | None = None,
+        every_n_batches: int | None = None,
     ) -> None:
         """Initialise the PlotLoss callback.
 
@@ -529,11 +529,11 @@ class PlotLoss(BasePerBatchPlotCallback):
             Object with configuration settings
         parameter_groups : dict
             Dictionary with parameter groups with parameter names as keys
-        batch_frequency : int, optional
+        every_n_batches : int, optional
             Override for batch frequency, by default None
 
         """
-        super().__init__(config, batch_frequency=batch_frequency)
+        super().__init__(config, every_n_batches=every_n_batches)
         self.parameter_names = None
         self.parameter_groups = parameter_groups
         if self.parameter_groups is None:
@@ -691,7 +691,7 @@ class PlotSample(BasePerBatchPlotCallback):
         cmap_accumulation: list[str],
         precip_and_related_fields: list[str] | None = None,
         per_sample: int = 6,
-        batch_frequency: int | None = None,
+        every_n_batches: int | None = None,
     ) -> None:
         """Initialise the PlotSample callback.
 
@@ -711,10 +711,10 @@ class PlotSample(BasePerBatchPlotCallback):
             Precip variable names, by default None
         per_sample : int, optional
             Number of plots per sample, by default 6
-        batch_frequency : int, optional
+        every_n_batches : int, optional
             Batch frequency to plot at, by default None
         """
-        super().__init__(config, batch_frequency=batch_frequency)
+        super().__init__(config, every_n_batches=every_n_batches)
         self.sample_idx = sample_idx
         self.parameters = parameters
 
@@ -853,7 +853,7 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
         config: OmegaConf,
         sample_idx: int,
         parameters: list[str],
-        batch_frequency: int | None = None,
+        every_n_batches: int | None = None,
     ) -> None:
         """Initialise the PlotSpectrum callback.
 
@@ -865,10 +865,10 @@ class PlotSpectrum(BasePlotAdditionalMetrics):
             Sample to plot
         parameters : list[str]
             Parameters to plot
-        batch_frequency : int | None, optional
+        every_n_batches : int | None, optional
             Override for batch frequency, by default None
         """
-        super().__init__(config, batch_frequency=batch_frequency)
+        super().__init__(config, every_n_batches=every_n_batches)
         self.sample_idx = sample_idx
         self.parameters = parameters
 
@@ -928,7 +928,7 @@ class PlotHistogram(BasePlotAdditionalMetrics):
         sample_idx: int,
         parameters: list[str],
         precip_and_related_fields: list[str] | None = None,
-        batch_frequency: int | None = None,
+        every_n_batches: int | None = None,
     ) -> None:
         """Initialise the PlotHistogram callback.
 
@@ -942,10 +942,10 @@ class PlotHistogram(BasePlotAdditionalMetrics):
             Parameters to plot
         precip_and_related_fields : list[str] | None, optional
             Precip variable names, by default None
-        batch_frequency : int | None, optional
+        every_n_batches : int | None, optional
             Override for batch frequency, by default None
         """
-        super().__init__(config, batch_frequency=batch_frequency)
+        super().__init__(config, every_n_batches=every_n_batches)
         self.sample_idx = sample_idx
         self.parameters = parameters
         self.precip_and_related_fields = precip_and_related_fields
