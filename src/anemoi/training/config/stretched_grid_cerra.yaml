@@ -58,15 +58,12 @@ dataloader:
   training:
     start: "1984-09-02"
     end: "2005-12-31"
-    statistics: ${hardware.paths.data}/stable/${hardware.files.dataset}
   validation:
     start: "2006-01-01"
     end: "2007-12-31"
-    statistics: ${hardware.paths.data}/stable/${hardware.files.dataset}
   test:
     start: "2008-01-01"
     end: "2008-06-29"
-    statistics: ${hardware.paths.data}/stable/${hardware.files.dataset}
 
   limit_batches:
     training: 100
