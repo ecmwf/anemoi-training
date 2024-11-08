@@ -30,8 +30,8 @@ class ZarrNodeSchema(BaseModel):
 
 class NPZnodeSchema(BaseModel):
     target_: str = Field("anemoi.graphs.nodes.NPZFileNodes", alias="_target_")
-    grid_definition_path: str | None = None
-    resolution: str | None = None
+    grid_definition_path: str
+    resolution: str
 
     @field_validator("target_")
     @classmethod
@@ -44,8 +44,8 @@ class LimitedAreaNPZFileNodesSchema(BaseModel):
     target_: str = Field("anemoi.graphs.nodes.LimitedAreaNPZFileNodes", alias="_target_")
     grid_definition_path: str
     resolution: str
-    reference_node_name: str  # TODO(Helen): Discuss check that reference nodes exists in the config
     name: str
+    reference_node_name: str  # TODO(Helen): Discuss check that reference nodes exists in the config
     mask_attr_name: str  # TODO(Helen): Discuss check that mask_attr_name exists in the dataset config
     margin_radius_km: PositiveFloat = Field(default=100.0)
 
@@ -58,7 +58,7 @@ class LimitedAreaNPZFileNodesSchema(BaseModel):
 
 class IcosahedralandHealPixNodeSchema(BaseModel):
     target_: str = Field("anemoi.graphs.nodes.TriNodes", alias="_target_")
-    resolution: PositiveInt | None = None
+    resolution: PositiveInt
 
     @field_validator("target_")
     @classmethod
@@ -68,4 +68,39 @@ class IcosahedralandHealPixNodeSchema(BaseModel):
             or target == "anemoi.graphs.nodes.HexNodes"
             or target == "anemoi.graphs.nodes.HEALPixNodes"
         )
+        return target
+
+
+class LimitedAreaIcosahedralandHealPixNodeSchema(BaseModel):
+    target_: str = Field("anemoi.graphs.nodes.LimitedAreaTriNodes", alias="_target_")
+    resolution: PositiveInt
+    name: str
+    reference_node_name: str  # TODO(Helen): Discuss check that reference nodes exists in the config
+    mask_attr_name: str  # TODO(Helen): Discuss check that mask_attr_name exists in the dataset config
+    margin_radius_km: PositiveFloat = Field(default=100.0)
+
+    @field_validator("target_")
+    @classmethod
+    def check_valid_target(cls, target: str) -> str:
+        assert (
+            target == "anemoi.graphs.nodes.LimitedAreaTriNodes"
+            or target == "anemoi.graphs.nodes.LimitedAreaHexNodes"
+            or target == "anemoi.graphs.nodes.LimitedAreaHEALPixNodes"
+        )
+        return target
+
+
+class StretchedIcosahdralNodeSchema(BaseModel):
+    target_: str = Field("anemoi.graphs.nodes.StretchedIcosahedronNodes", alias="_target_")
+    global_resolution: PositiveInt
+    lam_resolution: PositiveInt
+    name: str
+    reference_node_name: str
+    mask_attr_name: str
+    margin_radius_km: PositiveFloat = Field(default=100.0)
+
+    @field_validator("target_")
+    @classmethod
+    def check_valid_target(cls, target: str) -> str:
+        assert target == "anemoi.graphs.nodes.StretchedIcosahedralNodes"
         return target
