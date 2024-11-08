@@ -19,7 +19,6 @@ from .edge_schemas import CutoffEdgeSchema  # noqa: TCH001
 from .edge_schemas import EdgeAttributeSchema  # noqa: TCH001
 from .edge_schemas import KNNEdgeSchema  # noqa: TCH001
 from .edge_schemas import MultiScaleEdgeSchema  # noqa: TCH001
-from .node_schemas import IcosahedralNodeSchema  # noqa: TCH001
 from .node_schemas import LimitedAreaNPZFileNodesSchema  # noqa: TCH001
 from .node_schemas import NPZnodeSchema  # noqa: TCH001
 from .node_schemas import ZarrNodeSchema  # noqa: TCH001
@@ -37,7 +36,7 @@ class AreaWeightSchema(BaseModel):
 
 
 class NodeSchema(BaseModel):
-    node_builder: ZarrNodeSchema | NPZnodeSchema | IcosahedralNodeSchema | LimitedAreaNPZFileNodesSchema
+    node_builder: ZarrNodeSchema | NPZnodeSchema | LimitedAreaNPZFileNodesSchema | LimitedAreaNPZFileNodesSchema
     attributes: dict[str, AreaWeightSchema] | None = None
 
 
