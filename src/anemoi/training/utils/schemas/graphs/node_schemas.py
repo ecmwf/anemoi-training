@@ -56,7 +56,7 @@ class LimitedAreaNPZFileNodesSchema(BaseModel):
         return target
 
 
-class IcosahedralNodeSchema(BaseModel):
+class IcosahedralandHealPixNodeSchema(BaseModel):
     target_: str = Field("anemoi.graphs.nodes.TriNodes", alias="_target_")
     resolution: PositiveInt | None = None
 
