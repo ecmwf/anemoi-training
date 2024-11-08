@@ -137,7 +137,7 @@ class AnemoiTrainer:
 
         from anemoi.graphs.create import GraphCreator
 
-        graph_config = DotDict(OmegaConf.to_container(self.config.graph, resolve=True))
+        graph_config = DotDict(OmegaConf.to_container(convert_to_omegaconf(self.config.graph), resolve=True))
         return GraphCreator(config=graph_config).create(
             save_path=graph_filename,
             overwrite=self.config.graph.overwrite,
