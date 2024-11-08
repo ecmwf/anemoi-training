@@ -251,26 +251,25 @@ def compute_spectra(field: np.ndarray) -> np.ndarray:
 
         # sum over meridional direction
         return np.sum(coeff_amp, axis=0)
-    else:
-        # Use FFT for LAM fields
-        fft_field = np.fft.fft2(field)
-        power_spectrum = np.abs(fft_field)**2
-        
-        # Compute radially averaged power spectrum
-        ny, nx = field.shape
-        kx = np.fft.fftfreq(nx) * nx
-        ky = np.fft.fftfreq(ny) * ny
-        kr = np.sqrt(kx**2[:, np.newaxis] + ky**2[np.newaxis, :])
-        
-        kbins = np.arange(0.5, np.max(kr), 1.)
-        kvals = 0.5 * (kbins[1:] + kbins[:-1])
-        radial_spectrum = np.zeros_like(kvals)
-        
-        for i, (k1, k2) in enumerate(zip(kbins[:-1], kbins[1:])):
-            kfilter = (kr >= k1) & (kr < k2)
-            radial_spectrum[i] = np.mean(power_spectrum[kfilter])
-        
-        return radial_spectrum
+    # Use FFT for LAM fields
+    fft_field = np.fft.fft2(field)
+    power_spectrum = np.abs(fft_field) ** 2
+
+    # Compute radially averaged power spectrum
+    ny, nx = field.shape
+    kx = np.fft.fftfreq(nx) * nx
+    ky = np.fft.fftfreq(ny) * ny
+    kr = np.sqrt(kx**2[:, np.newaxis] + ky**2[np.newaxis, :])
+
+    kbins = np.arange(0.5, np.max(kr), 1.0)
+    kvals = 0.5 * (kbins[1:] + kbins[:-1])
+    radial_spectrum = np.zeros_like(kvals)
+
+    for i, (k1, k2) in enumerate(zip(kbins[:-1], kbins[1:])):
+        kfilter = (kr >= k1) & (kr < k2)
+        radial_spectrum[i] = np.mean(power_spectrum[kfilter])
+
+    return radial_spectrum
     """Compute spectral variability of a field by wavenumber.
 
     Parameters
