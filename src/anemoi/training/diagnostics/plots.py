@@ -698,8 +698,9 @@ def plot_graph_node_features(model: torch.nn.Module) -> Figure:
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
-    for row, (mesh, node_features) in enumerate(model.node_attributes.trainable_tensors.items()):
-        latlons = model.node_attributes.get_coordinates(mesh)
+    for row, (mesh, trainable_tensor) in enumerate(model.node_attributes.trainable_tensors.items()):
+        latlons = model.node_attributes.get_coordinates(mesh).cpu().numpy()
+        node_features = trainable_tensor.trainable.cpu().detach().numpy()
 
         lat, lon = latlons[:, 0], latlons[:, 1]
 
