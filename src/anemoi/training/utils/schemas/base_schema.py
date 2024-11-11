@@ -20,6 +20,7 @@ from pydantic import Field
 # future versions (see https://github.com/astral-sh/ruff/issues/7866)
 from .data import DataSchema  # noqa: TCH001
 from .diagnostics import DiagnosticsSchema  # noqa: TCH001
+from .graphs import BaseGraphSchema  # noqa: TCH001
 from .hardware import HardwareSchema  # noqa: TCH001
 from .models.gnn import GNNConfig  # noqa: TCH001
 from .models.graph_transformer import GraphTransformerConfig  # noqa: TCH001
@@ -32,12 +33,12 @@ class HydraInstantiable(BaseModel):
     convert_: str = Field("all", alias="_convert_")
 
 
-class BaseConfig(BaseModel):
+class BaseSchema(BaseModel):
     data: DataSchema
     dataloader: Any
     diagnostics: DiagnosticsSchema
     hardware: HardwareSchema
-    graph: Any  # BaseGraphConfig
+    graph: BaseGraphSchema
     model: GNNConfig | TransformerConfig | GraphTransformerConfig
     training: TrainingSchema
 
@@ -47,7 +48,7 @@ class BaseConfig(BaseModel):
         arbitrary_types_allowed = True
 
 
-def convert_to_omegaconf(config: BaseConfig) -> dict:
+def convert_to_omegaconf(config: BaseSchema) -> dict:
 
     config = {
         "data": config.data.model_dump(by_alias=True),

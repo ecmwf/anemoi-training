@@ -47,7 +47,7 @@ class EdgeSchema(BaseModel):
     attributes: dict[str, EdgeAttributeSchema]
 
 
-class BaseGraphConfig(BaseModel):
+class BaseGraphSchema(BaseModel):
 
     nodes: dict[str, NodeSchema]
     edges: list[EdgeSchema]
