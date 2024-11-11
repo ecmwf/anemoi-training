@@ -23,7 +23,7 @@ class Plot(BaseModel):
     sample_idx: int
     parameters: list[str]
     precip_and_related_fields: list[str]
-    callbacks: Any | None = None
+    callbacks: Any = Field(default=[])
 
 
 class PlottingFrequency(BaseModel):
@@ -87,7 +87,7 @@ class BenchmarkProfilerSchema(BaseModel):
 
 class DiagnosticsSchema(BaseModel):
     plot: Plot | None = None
-    callbacks: Any
+    callbacks: Any = Field(default=[])
     benchmark_profiler: BenchmarkProfilerSchema
     debug: Debug
     profiler: bool
