@@ -351,6 +351,8 @@ class LongRolloutPlots(BasePlotCallback):
         self.max_rollout = 0
         if self.rollout:
             self.max_rollout = max(self.rollout)
+        else:
+            self.rollout = []
         if self.video_rollout:
             self.max_rollout = max(self.max_rollout, self.video_rollout)
 
