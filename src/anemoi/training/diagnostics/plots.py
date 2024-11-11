@@ -660,7 +660,6 @@ def get_scatter_frame(
     )
     ax.set_xlim((-np.pi, np.pi))
     ax.set_ylim((-np.pi / 2, np.pi / 2))
-
     continents.plot_continents(ax)
     ax.set_aspect("auto", adjustable=None)
     _hide_axes_ticks(ax)

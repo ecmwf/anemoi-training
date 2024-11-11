@@ -135,6 +135,7 @@ class BasePlotCallback(Callback, ABC):
     def _output_gif(
         self,
         logger: pl.loggers.base.LightningLoggerBase,
+        fig: plt.Figure,
         anim: animation.ArtistAnimation,
         epoch: int,
         tag: str = "gnn",
@@ -156,6 +157,8 @@ class BasePlotCallback(Callback, ABC):
             if self.config.diagnostics.log.mlflow.enabled:
                 run_id = logger.run_id
                 logger.experiment.log_artifact(run_id, str(save_path))
+
+        plt.close(fig)  # cleanup
 
     def teardown(self, trainer: pl.Trainer, pl_module: pl.LightningModule, stage: str) -> None:
         """Method is called to close the threads."""
@@ -345,12 +348,12 @@ class LongRolloutPlots(BasePlotCallback):
 
         self.rollout = rollout
         self.video_rollout = video_rollout
-        # find the maximum rollout length
         self.max_rollout = 0
-        if len(self.rollout) == 0:
-            self.max_rollout = 0
+        if self.rollout:
+            self.max_rollout = max(self.rollout)
         if self.video_rollout:
             self.max_rollout = max(self.max_rollout, self.video_rollout)
+
         self.sample_idx = sample_idx
         self.accumulation_levels_plot = accumulation_levels_plot
         self.cmap_accumulation = cmap_accumulation
@@ -378,12 +381,10 @@ class LongRolloutPlots(BasePlotCallback):
         epoch,
     ) -> None:
         _ = output
-
         start_time = time.time()
-
         logger = trainer.logger
 
-        # Build dictionary of inidicies and parameters to be plotted
+        # Initialize required variables for plotting
         plot_parameters_dict = {
             pl_module.data_indices.model.output.name_to_index[name]: (
                 name,
@@ -391,9 +392,7 @@ class LongRolloutPlots(BasePlotCallback):
             )
             for name in self.parameters
         }
-
         if self.post_processors is None:
-            # Copy to be used across all the training cycle
             self.post_processors = copy.deepcopy(pl_module.model.post_processors).cpu()
         if self.latlons is None:
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
@@ -418,7 +417,7 @@ class LongRolloutPlots(BasePlotCallback):
             # collect min and max values for each variable for the colorbar
             vmin, vmax = (np.inf * np.ones(len(plot_parameters_dict)), -np.inf * np.ones(len(plot_parameters_dict)))
 
-        # start rollout
+        # Plot for each rollout step# Plot for each rollout step
         with torch.no_grad():
             for rollout_step, (_, _, y_pred) in enumerate(
                 pl_module.rollout_step(
@@ -481,8 +480,7 @@ class LongRolloutPlots(BasePlotCallback):
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
         data_rollout_step = self.post_processors(input_tensor_rollout_step).numpy()
-
-        # prepare predicted output tensor for plotting
+        # predicted output tensor
         output_tensor = self.post_processors(y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu()).numpy()
 
         fig = plot_predicted_multilevel_flat_sample(
@@ -559,6 +557,7 @@ class LongRolloutPlots(BasePlotCallback):
             anim = animation.ArtistAnimation(fig, frames, interval=400, blit=True)
             self._output_gif(
                 logger,
+                fig,
                 anim,
                 epoch=epoch,
                 tag=f"gnn_pred_val_animation_{variable_name}_rstep{rollout_step:02d}_batch{batch_idx:04d}_rank0",
