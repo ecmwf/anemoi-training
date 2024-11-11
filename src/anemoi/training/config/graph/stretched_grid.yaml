@@ -1,6 +1,6 @@
-# Stretched grid graph config intended to be used with a cutout dataset. 
-# The stretched mesh resolution used here is intended for o96 global resolution with 10km 
-# limited area resolution.  
+# Stretched grid graph config intended to be used with a cutout dataset.
+# The stretched mesh resolution used here is intended for o96 global resolution with 10km
+# limited area resolution.
 overwrite: False
 
 data: "data"
@@ -29,12 +29,12 @@ nodes:
       area_weights:
         _target_: anemoi.graphs.nodes.attributes.AreaWeights
         norm: unit-max
-    
+
 edges:
 # Encoder
 - source_name: ${graph.data}
   target_name: ${graph.hidden}
-  edge_builder: 
+  edge_builder:
     _target_: anemoi.graphs.edges.KNNEdges
     num_nearest_neighbours: 12
   attributes: ${graph.attributes.edges}
