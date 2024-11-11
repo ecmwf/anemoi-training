@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
-import torch
 from anemoi.models.layers.mapper import GraphEdgeMixin
 from matplotlib.collections import LineCollection
 from matplotlib.colors import BoundaryNorm
@@ -31,6 +30,7 @@ from anemoi.training.diagnostics.maps import EquirectangularProjection
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
+    from torch import nn
 
 from dataclasses import dataclass
 
@@ -680,7 +680,7 @@ def edge_plot(
     fig.colorbar(psc, ax=ax)
 
 
-def plot_graph_node_features(model: torch.nn.Module) -> Figure:
+def plot_graph_node_features(model: nn.Module) -> Figure:
     """Plot trainable graph node features.
 
     Parameters
@@ -718,7 +718,7 @@ def plot_graph_node_features(model: torch.nn.Module) -> Figure:
     return fig
 
 
-def plot_graph_edge_features(model: torch.nn.Module, q_extreme_limit: float = 0.05) -> Figure:
+def plot_graph_edge_features(model: nn.Module, q_extreme_limit: float = 0.05) -> Figure:
     """Plot trainable graph edge features.
 
     Parameters
