@@ -237,6 +237,54 @@ def compute_spectra(field: np.ndarray) -> np.ndarray:
     """
     field = np.array(field)
 
+    # Check if the field is global or LAM
+    is_global = field.shape[0] == field.shape[1] * 2
+
+    if is_global:
+        # Use spherical harmonics for global fields
+        lmax = field.shape[0] - 1  # maximum degree of expansion
+        zero_w = SHGLQ(lmax)
+        coeffs_field = SHExpandGLQ(field, w=zero_w[1], zero=zero_w[0])
+
+        # Re**2 + Im**2
+        coeff_amp = coeffs_field[0, :, :] ** 2 + coeffs_field[1, :, :] ** 2
+
+        # sum over meridional direction
+        return np.sum(coeff_amp, axis=0)
+    # Use FFT for LAM fields
+    fft_field = np.fft.fft2(field)
+    power_spectrum = np.abs(fft_field) ** 2
+
+    # Compute radially averaged power spectrum
+    ny, nx = field.shape
+    kx = np.fft.fftfreq(nx) * nx
+    ky = np.fft.fftfreq(ny) * ny
+    kr = np.sqrt(kx**2[:, np.newaxis] + ky**2[np.newaxis, :])
+
+    kbins = np.arange(0.5, np.max(kr), 1.0)
+    kvals = 0.5 * (kbins[1:] + kbins[:-1])
+    radial_spectrum = np.zeros_like(kvals)
+
+    for i, (k1, k2) in enumerate(zip(kbins[:-1], kbins[1:])):
+        kfilter = (kr >= k1) & (kr < k2)
+        radial_spectrum[i] = np.mean(power_spectrum[kfilter])
+
+    return radial_spectrum
+    """Compute spectral variability of a field by wavenumber.
+
+    Parameters
+    ----------
+    field : np.ndarray
+        lat lon field to calculate the spectra of
+
+    Returns
+    -------
+    np.ndarray
+        spectra of field by wavenumber
+
+    """
+    field = np.array(field)
+
     # compute real and imaginary parts of power spectra of field
     lmax = field.shape[0] - 1  # maximum degree of expansion
     zero_w = SHGLQ(lmax)
