@@ -64,6 +64,10 @@ class BaseWeightedLoss(nn.Module, ABC):
     def add_scalar(self, dimension: int | tuple[int], scalar: torch.Tensor, *, name: str | None = None) -> None:
         self.scalar.add_scalar(dimension=dimension, scalar=scalar, name=name)
 
+    @functools.wraps(ScaleTensor.update_scalar, assigned=("__doc__", "__annotations__"))
+    def update_scalar(self, scalar: torch.Tensor, name: str | None = None, *, override: bool = False) -> None:
+        self.scalar.update_scalar(scalar=scalar, name=name, override=override)
+
     def scale(
         self,
         x: torch.Tensor,
