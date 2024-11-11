@@ -56,7 +56,7 @@ edges:
 attributes:
   edges:
     edge_length:
-      _target_: anemoi.graphs.edges.attributes.EdgeLenght
+      _target_: anemoi.graphs.edges.attributes.EdgeLength
       norm: unit-max
     edge_dirs:
       _target_: anemoi.graphs.edges.attributes.EdgeDirection
