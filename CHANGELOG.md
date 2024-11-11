@@ -11,7 +11,7 @@ Keep it human-readable, your future self will thank you!
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.2...HEAD)
 
 ### Changed
-- Increase the default MlFlow HTTP max retries and timeout [#111](https://github.com/ecmwf/anemoi-training/pull/111)
+- Increase the default MlFlow HTTP max retries [#111](https://github.com/ecmwf/anemoi-training/pull/111)
 
 ### Fixed
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
