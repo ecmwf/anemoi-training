@@ -63,6 +63,7 @@ callbacks:
   - _target_:  anemoi.training.diagnostics.callbacks.plot.LongRolloutPlots
     rollout:
       - ${dataloader.validation_rollout}
+    video_rollout: ${dataloader.validation_rollout}
     every_n_epochs: 20
     sample_idx: ${diagnostics.plot.sample_idx}
     parameters: ${diagnostics.plot.parameters}
