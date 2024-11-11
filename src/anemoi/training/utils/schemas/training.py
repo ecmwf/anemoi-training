@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import NonNegativeFloat
@@ -70,7 +72,19 @@ class PressureLevelScaler(BaseModel):
     slope: float = 0.001
 
 
-class TrainingConfig(BaseModel):
+class TrainingLossSchema(BaseModel):
+    target_: str = Field("anemoi.training.losses.mse.WeightedMSELoss", alias="_target_")
+    scalers: Any | None = None  # list[str]
+    ignore_nans: bool = False
+
+
+class ValidationMetricsSchema(BaseModel):
+    target_: str = Field("anemoi.training.losses.mse.WeightedMSELoss", alias="_target_")
+    scalers: Any | None = None  # list[str] | None = None
+    ignore_nans: bool = True
+
+
+class TrainingSchema(BaseModel):
     """Training configuration."""
 
     run_id: str | None = None
@@ -80,13 +94,16 @@ class TrainingConfig(BaseModel):
     precision: str = "16-mixed"
     multistep_input: PositiveInt = 4
     accum_grad_batches: PositiveInt = 1
+    num_sanity_val_steps: PositiveInt = 6
     gradient_clip: GradientClip = Field(default_factory=GradientClip)
     swa: SWA = Field(default_factory=SWA)
     zero_optimizer: bool = False
+    training_loss: TrainingLossSchema
     loss_gradient_scaling: bool = False
+    validation_metrics: list[ValidationMetricsSchema] = Field(default_factory=ValidationMetricsSchema)
     rollout: Rollout = Field(default_factory=Rollout)
-    max_epochs: PositiveInt = 200
+    max_epochs: PositiveInt | None = None
+    max_steps: PositiveInt = 150000
     lr: LR = Field(default_factory=LR)
     loss_scaling: LossScaling = Field(default_factory=LossScaling)
-    metrics: list[str] = Field(default_factory=list)
     pressure_level_scaler: PressureLevelScaler = Field(default_factory=PressureLevelScaler)
