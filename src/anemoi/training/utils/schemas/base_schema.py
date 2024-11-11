@@ -20,7 +20,7 @@ from pydantic import Field
 # future versions (see https://github.com/astral-sh/ruff/issues/7866)
 from .data import DataSchema  # noqa: TCH001
 from .diagnostics import DiagnosticsSchema  # noqa: TCH001
-from .graphs import BaseGraphSchema  # noqa: TCH001
+from .graphs.base_graph import BaseGraphSchema  # noqa: TCH001
 from .hardware import HardwareSchema  # noqa: TCH001
 from .models.gnn import GNNConfig  # noqa: TCH001
 from .models.graph_transformer import GraphTransformerConfig  # noqa: TCH001

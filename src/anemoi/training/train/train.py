@@ -36,7 +36,7 @@ from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.checkpoint import transfer_learning_loading
 from anemoi.training.utils.jsonify import map_config_to_primitives
-from anemoi.training.utils.schemas.base_schema import BaseConfig
+from anemoi.training.utils.schemas.base_schema import BaseSchema
 from anemoi.training.utils.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.utils.seeding import get_base_seed
 
@@ -63,7 +63,7 @@ class AnemoiTrainer:
         torch.set_float32_matmul_precision("high")
         # Resolve the config to avoid shenanigans with lazy loading
         OmegaConf.resolve(config)
-        self.config = BaseConfig(**config)
+        self.config = BaseSchema(**config)
 
         self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
         self.load_weights_only = self.config.training.load_weights_only
