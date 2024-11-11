@@ -474,6 +474,7 @@ class LongRolloutPlots(BasePlotCallback):
         epoch,
         logger,
     ) -> None:
+        """Plot the predicted output, input, true target and error plots for a given rollout step."""
         # prepare true output tensor for plotting
         input_tensor_rollout_step = input_batch[
             self.sample_idx,
@@ -504,6 +505,7 @@ class LongRolloutPlots(BasePlotCallback):
         )
 
     def _store_video_frame_data(self, data_over_time, y_pred, plot_parameters_dict, vmin, vmax) -> None:
+        """Store the data for each frame of the video."""
         # prepare predicted output tensors for video
         output_tensor = self.post_processors(y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu()).numpy()
         data_over_time.append(output_tensor[0, 0, :, np.array(list(plot_parameters_dict.keys()))])
@@ -523,6 +525,7 @@ class LongRolloutPlots(BasePlotCallback):
         epoch,
         logger,
     ) -> None:
+        """Generate the video animation for the rollout."""
         for idx, (variable_idx, (variable_name, _)) in enumerate(plot_parameters_dict.items()):
             # Create the animation and list to store the frames (artists)
             frames = []
