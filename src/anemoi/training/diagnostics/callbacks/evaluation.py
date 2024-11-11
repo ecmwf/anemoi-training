@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 
 import torch
 from pytorch_lightning.callbacks import Callback
-from pytorch_lightning.utilities import rank_zero_only
 
 if TYPE_CHECKING:
     import pytorch_lightning as pl
@@ -103,7 +102,6 @@ class RolloutEval(Callback):
                 rank_zero_only=True,
             )
 
-    @rank_zero_only
     def on_validation_batch_end(
         self,
         trainer: pl.Trainer,
@@ -121,6 +119,8 @@ class RolloutEval(Callback):
             prec = trainer.precision
             dtype = precision_mapping.get(prec)
             context = torch.autocast(device_type=batch.device.type, dtype=dtype) if dtype is not None else nullcontext()
+
+            batch = pl_module.allgather_batch(batch)
 
             with context:
                 self._eval(pl_module, batch)

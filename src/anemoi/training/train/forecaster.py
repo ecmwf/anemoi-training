@@ -379,9 +379,6 @@ class GraphForecaster(pl.LightningModule):
         None
             None
         """
-        if self.reader_group_size > 1:
-            batch = self.allgather_batch(batch)
-
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch = self.model.pre_processors(batch, in_place=not validation_mode)
         # start rollout of preprocessed batch
@@ -423,6 +420,8 @@ class GraphForecaster(pl.LightningModule):
         validation_mode: bool = False,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         del batch_idx
+        batch = self.allgather_batch(batch)
+
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}
         y_preds = []
@@ -442,6 +441,10 @@ class GraphForecaster(pl.LightningModule):
 
     def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
         grid_size = self.model.metadata["dataset"]["shape"][-1]
+
+        if grid_size == batch.shape[-2]:
+            return batch  # already have the full grid
+
         grid_shard_size = grid_size // self.reader_group_size
         last_grid_shard_size = grid_size - (grid_shard_size * (self.reader_group_size - 1))
 

@@ -206,7 +206,6 @@ class BasePerBatchPlotCallback(BasePlotCallback):
     ) -> None:
         """Plotting function to be implemented by subclasses."""
 
-    @rank_zero_only
     def on_validation_batch_end(
         self,
         trainer,
@@ -217,6 +216,8 @@ class BasePerBatchPlotCallback(BasePlotCallback):
         **kwargs,
     ) -> None:
         if batch_idx % self.every_n_batches == 0:
+            batch = pl_module.allgather_batch(batch)
+
             self.plot(
                 trainer,
                 pl_module,
@@ -403,7 +404,6 @@ class LongRolloutPlots(BasePlotCallback):
             int(time.time() - start_time),
         )
 
-    @rank_zero_only
     def on_validation_batch_end(
         self,
         trainer,
@@ -413,6 +413,8 @@ class LongRolloutPlots(BasePlotCallback):
         batch_idx: int,
     ) -> None:
         if (batch_idx) == 0 and (trainer.current_epoch + 1) % self.every_n_epochs == 0:
+            batch = pl_module.allgather_batch(batch)
+
             precision_mapping = {
                 "16-mixed": torch.float16,
                 "bf16-mixed": torch.bfloat16,
