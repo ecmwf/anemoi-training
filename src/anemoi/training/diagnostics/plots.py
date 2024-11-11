@@ -680,24 +680,6 @@ def edge_plot(
     fig.colorbar(psc, ax=ax)
 
 
-def sincos_to_latlon(sincos_coords: torch.Tensor) -> torch.Tensor:
-    """Get the lat/lon coordinates from the model.
-
-    Parameters
-    ----------
-    sincos_coords: torch.Tensor of shape (N, 4)
-        Sine and cosine of latitude and longitude coordinates.
-
-    Returns
-    -------
-    torch.Tensor of shape (N, 2)
-        Lat/lon coordinates.
-    """
-    ndim = sincos_coords.shape[1] // 2
-    sin_y, cos_y = sincos_coords[:, :ndim], sincos_coords[:, ndim:]
-    return torch.atan2(sin_y, cos_y)
-
-
 def plot_graph_node_features(model: torch.nn.Module) -> Figure:
     """Plot trainable graph node features.
 
@@ -717,8 +699,7 @@ def plot_graph_node_features(model: torch.nn.Module) -> Figure:
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
     for row, (mesh, node_features) in enumerate(model.node_attributes.trainable_tensors.items()):
-        sincos_coords = getattr(model, f"latlons_{mesh}")
-        latlons = sincos_to_latlon(sincos_coords).cpu().numpy()
+        latlons = model.node_attributes.get_coordinates(mesh)
 
         lat, lon = latlons[:, 0], latlons[:, 1]
 
@@ -765,8 +746,8 @@ def plot_graph_edge_features(model: torch.nn.Module, q_extreme_limit: float = 0.
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
     for row, ((src, dst), graph_mapper) in enumerate(trainable_modules.items()):
-        src_coords = sincos_to_latlon(getattr(model.node_attributes, f"latlons_{src}")).cpu().numpy()
-        dst_coords = sincos_to_latlon(getattr(model.node_attributes, f"latlons_{dst}")).cpu().numpy()
+        src_coords = model.node_attributes.get_coordinates(src).cpu().numpy()
+        dst_coords = model.node_attributes.get_coordinates(dst).cpu().numpy()
         edge_index = graph_mapper.edge_index_base.cpu().numpy()
         edge_features = graph_mapper.trainable.trainable.cpu().detach().numpy()
 
