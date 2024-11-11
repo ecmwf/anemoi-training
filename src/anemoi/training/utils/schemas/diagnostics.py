@@ -9,30 +9,26 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from pydantic import AnyUrl
 from pydantic import BaseModel
 from pydantic import Field
-
-
-class Eval(BaseModel):
-    enabled: bool
-    rollout: int
-    frequency: int
+from pydantic import PositiveInt
 
 
 class Plot(BaseModel):
-    enabled: bool
     asynchronous: bool
-    frequency: int
+    frequency: PlottingFrequency
     sample_idx: int
-    per_sample: int
     parameters: list[str]
-    accumulation_levels_plot: list[int | float]
-    cmap_accumulation: list[str]
     precip_and_related_fields: list[str]
-    parameters_histogram: list[str]
-    parameters_spectrum: list[str]
-    parameter_groups: dict[str, list[str]]
-    learned_features: bool
+    callbacks: Any | None = None
+
+
+class PlottingFrequency(BaseModel):
+    batch: PositiveInt = Field(default=750)
+    epoch: PositiveInt = Field(default=5)
 
 
 class Debug(BaseModel):
@@ -59,13 +55,14 @@ class Mlflow(BaseModel):
     offline: bool
     authentication: bool
     log_model: bool
-    tracking_uri: str | None
+    tracking_uri: AnyUrl | None
     experiment_name: str
     project_name: str
     system: bool
     terminal: bool
     run_name: str | None
     on_resume_create_child: bool
+    expand_hyperparams: Any
 
 
 class Tensorboard(BaseModel):
@@ -76,15 +73,26 @@ class Logging(BaseModel):
     wandb: Wandb
     tensorboard: Tensorboard
     mlflow: Mlflow
-    interval: int
+    interval: PositiveInt
 
 
-class DiagnosticsConfig(BaseModel):
-    eval: Eval
-    plot: Plot
+class BenchmarkProfilerSchema(BaseModel):
+    memory: Any
+    time: Any
+    speed: Any
+    system: Any
+    model_summary: Any
+    snapshot: Any
+
+
+class DiagnosticsSchema(BaseModel):
+    plot: Plot | None = None
+    callbacks: Any
+    benchmark_profiler: BenchmarkProfilerSchema
     debug: Debug
     profiler: bool
     log: Logging
     enable_progress_bar: bool
     print_memory_summary: bool
+    enable_checkpointing: bool
     checkpoint: dict[str, Checkpoint] = Field(default_factory=dict)

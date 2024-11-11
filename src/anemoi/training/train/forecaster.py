@@ -31,9 +31,9 @@ from torch_geometric.data import HeteroData
 
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
-from anemoi.training.utils.schemas.base_config import convert_to_omegaconf
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
+from anemoi.training.utils.schemas.base_schema import convert_to_omegaconf
 
 LOGGER = logging.getLogger(__name__)
 

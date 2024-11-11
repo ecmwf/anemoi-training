@@ -15,24 +15,24 @@ from pydantic import Field
 from pydantic import field_validator
 
 
-class NormalizerConfig(BaseModel):
+class NormalizerSchema(BaseModel):
     default: str
     min_max: str | None = None
     max: list[str] = Field(default_factory=list)
     none: list[str] = Field(default_factory=list)
 
 
-class ImputerConfig(BaseModel):
+class ImputerSchema(BaseModel):
     default: str
 
 
-class RemapperConfig(BaseModel):
+class RemapperSchema(BaseModel):
     default: str
 
 
 class Processor(BaseModel):
     target_: str = Field(..., alias="_target_")
-    config: NormalizerConfig | ImputerConfig | RemapperConfig
+    config: NormalizerSchema | ImputerSchema | RemapperSchema
 
     @field_validator("target_")
     @classmethod
@@ -48,19 +48,19 @@ class Processor(BaseModel):
     @classmethod
     def check_config_matches_target(
         cls,
-        config: NormalizerConfig | ImputerConfig | RemapperConfig,
+        config: NormalizerSchema | ImputerSchema | RemapperSchema,
         target: str,
     ) -> dict:
         if target == "anemoi.training.utils.processors.normalizer.Normalizer":
-            assert isinstance(config, NormalizerConfig)
+            assert isinstance(config, NormalizerSchema)
         elif target == "anemoi.training.utils.processors.imputer.Imputer":
-            assert isinstance(config, ImputerConfig)
+            assert isinstance(config, ImputerSchema)
         elif target == "anemoi.training.utils.processors.remapper.Remapper":
-            assert isinstance(config, RemapperConfig)
+            assert isinstance(config, RemapperSchema)
         return config
 
 
-class DataConfig(BaseModel):
+class DataSchema(BaseModel):
     """A class used to represent the overall configuration of the dataset.
 
     Attributes

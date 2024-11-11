@@ -18,14 +18,13 @@ from pydantic import Field
 
 # to make these available at runtime for pydantic, bug should be resolved in
 # future versions (see https://github.com/astral-sh/ruff/issues/7866)
-from .data import DataConfig  # noqa: TCH001
-from .diagnostics import DiagnosticsConfig  # noqa: TCH001
-from .graphs.base_graph import BaseGraphConfig  # noqa: TCH001
-from .hardware import HardwareConfig  # noqa: TCH001
+from .data import DataSchema  # noqa: TCH001
+from .diagnostics import DiagnosticsSchema  # noqa: TCH001
+from .hardware import HardwareSchema  # noqa: TCH001
 from .models.gnn import GNNConfig  # noqa: TCH001
 from .models.graph_transformer import GraphTransformerConfig  # noqa: TCH001
 from .models.transformer import TransformerConfig  # noqa: TCH001
-from .training import TrainingConfig  # noqa: TCH001
+from .training import TrainingSchema  # noqa: TCH001
 
 
 class HydraInstantiable(BaseModel):
@@ -34,13 +33,13 @@ class HydraInstantiable(BaseModel):
 
 
 class BaseConfig(BaseModel):
-    data: DataConfig
+    data: DataSchema
     dataloader: Any
-    diagnostics: DiagnosticsConfig
-    hardware: HardwareConfig
-    graph: BaseGraphConfig
+    diagnostics: DiagnosticsSchema
+    hardware: HardwareSchema
+    graph: Any  # BaseGraphConfig
     model: GNNConfig | TransformerConfig | GraphTransformerConfig
-    training: TrainingConfig
+    training: TrainingSchema
 
     class Config:
         """Pydantic configuration."""

@@ -49,7 +49,7 @@ class PathsConfig(BaseModel):
     profiler: Path
 
 
-class HardwareConfig(BaseModel):
+class HardwareSchema(BaseModel):
     accelerator: str = "auto"
     num_gpus_per_node: NonNegativeInt = 1
     num_nodes: NonNegativeInt = 1
