@@ -712,14 +712,13 @@ def plot_graph_node_features(model: torch.nn.Module) -> Figure:
         Figure object handle
     """
     nrows = len(nodes_name := model._graph_data.node_types)
-    ncols = min(getattr(model, f"trainable_{m}").trainable.shape[1] for m in nodes_name)
+    ncols = min(model.node_attributes.trainable_tensors[m].trainable.shape[1] for m in nodes_name)
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
-    for row, mesh in enumerate(nodes_name):
+    for row, (mesh, node_features) in enumerate(model.node_attributes.trainable_tensors.items()):
         sincos_coords = getattr(model, f"latlons_{mesh}")
         latlons = sincos_to_latlon(sincos_coords).cpu().numpy()
-        features = getattr(model, f"trainable_{mesh}").trainable.cpu().detach().numpy()
 
         lat, lon = latlons[:, 0], latlons[:, 1]
 
@@ -730,7 +729,7 @@ def plot_graph_node_features(model: torch.nn.Module) -> Figure:
                 ax_,
                 lon=lon,
                 lat=lat,
-                data=features[..., i],
+                data=node_features[..., i],
                 title=f"{mesh} trainable feature #{i + 1}",
             )
 
@@ -766,8 +765,8 @@ def plot_graph_edge_features(model: torch.nn.Module, q_extreme_limit: float = 0.
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
     for row, ((src, dst), graph_mapper) in enumerate(trainable_modules.items()):
-        src_coords = sincos_to_latlon(getattr(model, f"latlons_{src}")).cpu().numpy()
-        dst_coords = sincos_to_latlon(getattr(model, f"latlons_{dst}")).cpu().numpy()
+        src_coords = sincos_to_latlon(getattr(model.node_attributes, f"latlons_{src}")).cpu().numpy()
+        dst_coords = sincos_to_latlon(getattr(model.node_attributes, f"latlons_{dst}")).cpu().numpy()
         edge_index = graph_mapper.edge_index_base.cpu().numpy()
         edge_features = graph_mapper.trainable.trainable.cpu().detach().numpy()
 
