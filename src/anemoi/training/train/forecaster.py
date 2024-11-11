@@ -289,19 +289,16 @@ class GraphForecaster(pl.LightningModule):
                     LOGGER.debug("Parameter %s was not scaled.", key)
 
         return torch.from_numpy(loss_scaling)
-    
+
     @staticmethod
-    def get_node_weights(
-            config: DictConfig,
-            graph_data: HeteroData
-    ) -> torch.Tensor:
+    def get_node_weights(config: DictConfig, graph_data: HeteroData) -> torch.Tensor:
         node_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
 
         if "spatial" in config.training.loss_scaling:
             spatial_loss_scaler = instantiate(config.training.loss_scaling.spatial)
             node_weights = spatial_loss_scaler.area_weights(graph_data)
             LOGGER.info("Rescaling area weights")
-        
+
         return node_weights
 
     def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:
