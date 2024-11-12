@@ -140,8 +140,8 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     def check_dataset_slicing(self) -> None:
         """Check that the training, validation and test datasets do not overlap."""
 
-        def get_overlap(range1: list[str], range2: list[str]) -> Union[list, None]:  # noqa: FA100
-            intersection = set(range1) & set(range2)
+        def get_overlap(dates1: list[str], dates2: list[str]) -> Union[list, None]:  # noqa: FA100
+            intersection = set(dates1) & set(dates2)
             intersection = sorted(map(str, intersection))
             if len(intersection) > 6:
                 intersection = intersection[:3] + ["..."] + intersection[-3:]
