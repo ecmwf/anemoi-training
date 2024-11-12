@@ -1,102 +1,81 @@
-# (C) Copyright 2024 ECMWF.
+# (C) Copyright 2024 Anemoi contributors.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-#
+
 
 from __future__ import annotations
 
 import logging
 
 import torch
-from torch import nn
+
+from anemoi.training.losses.weightedloss import BaseWeightedLoss
 
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedMSELoss(nn.Module):
-    """Latitude-weighted MSE loss."""
+class WeightedMSELoss(BaseWeightedLoss):
+    """Node-weighted MSE loss."""
+
+    name = "wmse"
 
     def __init__(
         self,
         node_weights: torch.Tensor,
-        data_variances: torch.Tensor | None = None,
-        ignore_nans: bool | None = False,
+        ignore_nans: bool = False,
+        **kwargs,
     ) -> None:
-        """Latitude- and (inverse-)variance-weighted MSE Loss.
+        """Node- and feature weighted MSE Loss.
 
         Parameters
         ----------
         node_weights : torch.Tensor of shape (N, )
             Weight of each node in the loss function
-        data_variances : Optional[torch.Tensor], optional
-            precomputed, per-variable stepwise variance estimate, by default None
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False
 
         """
-        super().__init__()
-
-        self.avg_function = torch.nanmean if ignore_nans else torch.mean
-        self.sum_function = torch.nansum if ignore_nans else torch.sum
-
-        # register_buffer:
-        #   1. save the tensor to the model
-        #   2. make sure that the tensor is moved to the same device as the model
-        self.register_buffer("variable_node_mask", torch.ones(1), persistent=False)  # not saved in state_dict
-        self.register_buffer("weights", node_weights, persistent=True)
-        if data_variances is not None:
-            self.register_buffer("ivar", data_variances, persistent=True)
+        super().__init__(
+            node_weights=node_weights,
+            ignore_nans=ignore_nans,
+            **kwargs,
+        )
 
     def forward(
         self,
         pred: torch.Tensor,
         target: torch.Tensor,
         squash: bool = True,
+        feature_indices: torch.Tensor | None = None,
+        feature_scale: bool = True,
     ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 
         Parameters
         ----------
         pred : torch.Tensor
-            Prediction tensor, shape (bs, lat*lon, n_outputs)
+            Prediction tensor, shape (bs, ensemble, lat*lon, n_outputs)
         target : torch.Tensor
-            Target tensor, shape (bs, lat*lon, n_outputs)
+            Target tensor, shape (bs, ensemble, lat*lon, n_outputs)
         squash : bool, optional
             Average last dimension, by default True
+        feature_indices:
+            feature indices (relative to full model output) of the features passed in pred and target
+        feature_scale:
+            If True, scale the loss by the feature_weights
 
         Returns
         -------
         torch.Tensor
             Weighted MSE loss
-
         """
         out = torch.square(pred - target)
 
-        # Use variances if available
-        if hasattr(self, "ivar"):
-            out *= self.ivar
-
-        # apply variable node mask (masking input-NaN-positions with 0)
-        out = self.variable_node_mask * out
-
-        # Squash by last dimension
-        if squash:
-            out = self.avg_function(out, dim=-1)
-            # Weight by area
-            out *= self.weights.expand_as(out)
-            out /= self.sum_function(self.weights.expand_as(out))
-            return self.sum_function(out)
-
-        # Weight by area
-        out *= self.weights[..., None].expand_as(out)
-        # keep last dimension (variables) when summing weights
-        out /= self.sum_function(self.weights[..., None].expand_as(out), axis=(0, 1, 2))
-        return self.sum_function(out, axis=(0, 1, 2))
-
-    def update_variable_node_mask(self, variable_node_mask: torch.tensor) -> None:
-        """Update the variable node weights."""
-        self.variable_node_mask = variable_node_mask
+        if feature_scale:
+            out = self.scale(out, feature_indices)
+        return self.scale_by_node_weights(out, squash)

@@ -1,4 +1,5 @@
 prefetch_factor: 2
+pin_memory: True
 
 num_workers:
   training: 8
@@ -43,6 +44,8 @@ training:
   end: 2020
   frequency: ${data.frequency}
   drop:  []
+
+validation_rollout: 1 # number of rollouts to use for validation, must be equal or greater than rollout expected by callbacks
 
 validation:
   dataset: ${dataloader.dataset}
