@@ -50,22 +50,23 @@ def test_scale_contains_subset_by_dim_indexing() -> None:
 
 
 def test_add_existing_scalar() -> None:
-    scale = ScaleTensor(test=(0, torch.tensor(2.0)))
+    scale = ScaleTensor(test=(0, torch.tensor([2.0])))
     with pytest.raises(ValueError, match=r".*already exists.*"):
         scale.add_scalar(0, torch.tensor(3.0), name="test")
 
 
 def test_update_scalar() -> None:
-    scale = ScaleTensor(test=(0, torch.tensor(2.0)))
-    scale.update_scalar("test", torch.tensor(3.0))
-    torch.testing.assert_close(scale.tensors["test"][1], torch.tensor(3.0))
+    scale = ScaleTensor(test=(0, torch.ones(2)))
+    scale.update_scalar("test", torch.tensor([3.0]))
+    torch.testing.assert_close(scale.tensors["test"][1], torch.tensor([3.0]))
 
 
 def test_update_missing_scalar() -> None:
-    scale = ScaleTensor(test=(0, torch.tensor(2.0)))
+    scale = ScaleTensor(test=(0, torch.ones(2)))
     with pytest.raises(ValueError, match=r".*not found in scalars.*"):
-        scale.update_scalar("test_missing", torch.tensor(3.0))
+        scale.update_scalar("test_missing", torch.tensor([3.0]))
     assert "test" in scale
+    assert (0,) in scale
 
 
 def test_update_scalar_wrong_dim() -> None:
@@ -73,6 +74,7 @@ def test_update_scalar_wrong_dim() -> None:
     with pytest.raises(ValueError, match=r".*does not match shape of saved scalar.*"):
         scale.update_scalar("test", torch.ones((2, 2)))
     assert "test" in scale
+    assert 0 in scale
 
 
 def test_update_scalar_wrong_dim_allow_override() -> None:
@@ -164,3 +166,35 @@ def test_scale_tensor_two_dim(
         output = torch.tensor(output, dtype=torch.float32)
 
     torch.testing.assert_close(scale.scale(input_tensor), output)
+
+
+def test_scalar_subset() -> None:
+    scale = ScaleTensor(test=(0, torch.tensor([2.0])), wow=(0, torch.tensor([3.0])))
+    subset = scale.subset("test")
+    assert "test" in subset
+    assert "wow" not in subset
+    assert 0 in subset
+
+
+def test_scalar_subset_without() -> None:
+    scale = ScaleTensor(test=(0, torch.tensor([2.0])), wow=(0, torch.tensor([3.0])))
+    subset = scale.without("test")
+    assert "test" not in subset
+    assert "wow" in subset
+    assert 0 in subset
+
+
+def test_scalar_subset_by_dim() -> None:
+    scale = ScaleTensor(test=(0, torch.tensor([2.0])), wow=(1, torch.tensor([3.0])))
+    subset = scale.subset_by_dim(0)
+    assert "test" in subset
+    assert "wow" not in subset
+    assert 0 in subset
+
+
+def test_scalar_subset_by_dim_without() -> None:
+    scale = ScaleTensor(test=(0, torch.tensor([2.0])), wow=(1, torch.tensor([3.0])))
+    subset = scale.without_by_dim(0)
+    assert "test" not in subset
+    assert "wow" in subset
+    assert 0 not in subset
