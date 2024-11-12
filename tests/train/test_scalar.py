@@ -49,6 +49,37 @@ def test_scale_contains_subset_by_dim_indexing() -> None:
     assert "test" not in scale
 
 
+def test_add_existing_scalar() -> None:
+    scale = ScaleTensor(test=(0, torch.tensor(2.0)))
+    with pytest.raises(ValueError, match=r".*already exists.*"):
+        scale.add_scalar(0, torch.tensor(3.0), name="test")
+
+
+def test_update_scalar() -> None:
+    scale = ScaleTensor(test=(0, torch.tensor(2.0)))
+    scale.update_scalar("test", torch.tensor(3.0))
+    torch.testing.assert_close(scale.tensors["test"][1], torch.tensor(3.0))
+
+
+def test_update_missing_scalar() -> None:
+    scale = ScaleTensor(test=(0, torch.tensor(2.0)))
+    with pytest.raises(ValueError, match=r".*not found in scalars.*"):
+        scale.update_scalar("test_missing", torch.tensor(3.0))
+    assert "test" in scale
+
+
+def test_update_scalar_wrong_dim() -> None:
+    scale = ScaleTensor(test=(0, torch.ones((2, 3))))
+    with pytest.raises(ValueError, match=r".*does not match shape of saved scalar.*"):
+        scale.update_scalar("test", torch.ones((2, 2)))
+    assert "test" in scale
+
+
+def test_update_scalar_wrong_dim_allow_override() -> None:
+    scale = ScaleTensor(test=(0, torch.ones((2, 3))))
+    assert scale.update_scalar("test", torch.ones((2, 2)), override=True) is None
+
+
 @pytest.mark.parametrize(
     ("scalars", "input_tensor", "output"),
     [

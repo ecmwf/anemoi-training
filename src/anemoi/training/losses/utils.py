@@ -122,11 +122,8 @@ class ScaleTensor:
         self.tensors = {}
         self._specified_dimensions = []
 
-        scalars = scalars or {}
-        scalars.update(named_tensors)
-
-        for name, tensor_spec in scalars.items():
-            self.add_scalar(*tensor_spec, name=name)
+        named_tensors.update(scalars or {})
+        self.add(named_tensors)
 
         for tensor_spec in tensors:
             self.add_scalar(*tensor_spec)
@@ -144,8 +141,10 @@ class ScaleTensor:
                 if isinstance(dim_assign, tuple) and dimension in dim_assign:
                     return tensor.shape[list(dim_assign).index(dimension)]
 
+            unique_dims = {dim for dim_assign in self._specified_dimensions for dim in dim_assign}
             error_msg = (
-                f"Could not find shape of dimension {dimension} with tensors in dims {list(self.tensors.keys())}"
+                f"Could not find shape of dimension {dimension}. "
+                f"Tensors are only specified for dimensions {list(unique_dims)}."
             )
             raise IndexError(error_msg)
 
@@ -175,8 +174,8 @@ class ScaleTensor:
 
             if self.shape[dim] != scalar.shape[scalar_dim]:
                 error_msg = (
-                    f"Scalar shape {scalar.shape} at dimension {scalar_dim}"
-                    f"does not match shape of scalar at dimension {dim}. Expected {self.shape[dim]}",
+                    f"Incoming scalar shape {scalar.shape} at dimension {scalar_dim} "
+                    f"does not match shape of saved scalar. Expected {self.shape[dim]}"
                 )
                 raise ValueError(error_msg)
 
@@ -190,7 +189,7 @@ class ScaleTensor:
         """Add new scalar to be applied along `dimension`.
 
         Dimension can be a single int even for a multi-dimensional scalar,
-        in this case the dimensions are assigned as a range from the given int.
+        in this case the dimensions are assigned as a range starting from the given int.
         Negative indexes are also valid, and will be resolved against the tensor's ndim.
 
         Parameters
@@ -211,21 +210,90 @@ class ScaleTensor:
             else:
                 dimension = tuple(dimension + i for i in range(len(scalar.shape)))
 
+        if name is None:
+            name = str(uuid.uuid4())
+
+        if name in self.tensors:
+            msg = f"Scalar {name!r} already exists in scalars."
+            raise ValueError(msg)
+
         try:
             self.validate_scalar(dimension, scalar)
         except ValueError as e:
             error_msg = f"Validating tensor {name!r} raised an error."
             raise ValueError(error_msg) from e
 
-        if name is None:
-            name = str(uuid.uuid4())
-
-        if name in self.tensors:
-            self._specified_dimensions.remove(self.tensors[name][0])
-            self.tensors[name] = (dimension, self.tensors[name][1] * scalar)
-        else:
-            self.tensors[name] = (dimension, scalar)
+        self.tensors[name] = (dimension, scalar)
         self._specified_dimensions.append(dimension)
+
+    def update_scalar(self, name: str, scalar: torch.Tensor, *, override: bool = False) -> None:
+        """Update an existing scalar maintaining original dimensions.
+
+        If `override` is False, the scalar must be valid against the original dimensions.
+        If `override` is True, the scalar will be updated regardless of validity against original scalar.
+
+        Parameters
+        ----------
+        name : str
+            Name of the scalar to update
+        scalar : torch.Tensor
+            New scalar tensor
+        override : bool, optional
+            Whether to override the scalar ignoring dimension compatibility, by default False
+        """
+        if name not in self.tensors:
+            msg = f"Scalar {name!r} not found in scalars."
+            raise ValueError(msg)
+
+        dimension = self.tensors[name][0]
+
+        if not override:
+            self.validate_scalar(dimension, scalar)
+
+        original_scalar = self.tensors.pop(name)
+
+        try:
+            self.add_scalar(dimension, scalar, name=name)
+        except ValueError:
+            self.tensors[name] = original_scalar
+            raise
+
+    def add(self, new_scalars: dict[str, TENSOR_SPEC] | list[TENSOR_SPEC] | None = None, **kwargs) -> None:
+        """Add multiple scalars to the existing scalars.
+
+        Parameters
+        ----------
+        new_scalars : dict[str, TENSOR_SPEC] | list[TENSOR_SPEC] | None, optional
+            Scalars to add, see `add_scalar` for more info, by default None
+        **kwargs:
+            Kwargs form of {name: (dimension, tensor)} to add to the scalars
+        """
+        if isinstance(new_scalars, list):
+            for tensor_spec in new_scalars:
+                self.add_scalar(*tensor_spec)
+        else:
+            kwargs.update(new_scalars or {})
+        for name, tensor_spec in kwargs.items():
+            self.add_scalar(*tensor_spec, name=name)
+
+    def update(self, updated_scalars: dict[str, torch.Tensor] | None = None, override: bool = False, **kwargs) -> None:
+        """Update multiple scalars in the existing scalars.
+
+        If `override` is False, the scalar must be valid against the original dimensions.
+        If `override` is True, the scalar will be updated regardless of shape.
+
+        Parameters
+        ----------
+        updated_scalars : dict[str, torch.Tensor] | None, optional
+            Scalars to update, referenced by name, by default None
+        override : bool, optional
+            Whether to override the scalar ignoring dimension compatibility, by default False
+        **kwargs:
+            Kwargs form of {name: tensor} to update in the scalars
+        """
+        kwargs.update(updated_scalars or {})
+        for name, tensor in kwargs.items():
+            self.update_scalar(name, tensor, override=override)
 
     def subset(self, scalars: str | Sequence[str]) -> ScaleTensor:
         """Get subset of the scalars, filtering by name.
@@ -365,7 +433,10 @@ class ScaleTensor:
         return self.scale(tensor)
 
     def __repr__(self):
-        return f"ScalarTensor:\n - With {list(self.tensors.keys())}\n - With dims: {self._specified_dimensions}"
+        return (
+            f"ScalarTensor:\n - With tensors: {list(self.tensors.keys())}\n"
+            f"- In dimensions: {self._specified_dimensions}"
+        )
 
     def __contains__(self, dimension: int | tuple[int] | str) -> bool:
         """Check if either scalar by name or dimension by int/tuple is being scaled."""
