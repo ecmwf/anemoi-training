@@ -230,7 +230,7 @@ class ScaleTensor:
         """Update an existing scalar maintaining original dimensions.
 
         If `override` is False, the scalar must be valid against the original dimensions.
-        If `override` is True, the scalar will be updated regardless of shape.
+        If `override` is True, the scalar will be updated regardless of validity against original scalar.
 
         Parameters
         ----------
@@ -250,8 +250,13 @@ class ScaleTensor:
         if not override:
             self.validate_scalar(dimension, scalar)
 
-        self.tensors.pop(name)
-        self.add_scalar(dimension, scalar, name=name)
+        original_scalar = self.tensors.pop(name)
+
+        try:
+            self.add_scalar(dimension, scalar, name=name)
+        except ValueError:
+            self.tensors[name] = original_scalar
+            raise
 
     def add(self, new_scalars: dict[str, TENSOR_SPEC] | list[TENSOR_SPEC] | None = None, **kwargs) -> None:
         """Add multiple scalars to the existing scalars.
