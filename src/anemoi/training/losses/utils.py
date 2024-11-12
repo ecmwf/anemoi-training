@@ -122,11 +122,8 @@ class ScaleTensor:
         self.tensors = {}
         self._specified_dimensions = []
 
-        scalars = scalars or {}
-        scalars.update(named_tensors)
-
-        for name, tensor_spec in scalars.items():
-            self.add_scalar(*tensor_spec, name=name)
+        named_tensors.update(scalars or {})
+        self.add(named_tensors)
 
         for tensor_spec in tensors:
             self.add_scalar(*tensor_spec)
@@ -255,6 +252,43 @@ class ScaleTensor:
 
         self.tensors.pop(name)
         self.add_scalar(dimension, scalar, name=name)
+
+    def add(self, new_scalars: dict[str, TENSOR_SPEC] | list[TENSOR_SPEC] | None = None, **kwargs) -> None:
+        """Add multiple scalars to the existing scalars.
+
+        Parameters
+        ----------
+        new_scalars : dict[str, TENSOR_SPEC] | list[TENSOR_SPEC] | None, optional
+            Scalars to add, see `add_scalar` for more info, by default None
+        **kwargs:
+            Kwargs form of {name: (dimension, tensor)} to add to the scalars
+        """
+        if isinstance(new_scalars, list):
+            for tensor_spec in new_scalars:
+                self.add_scalar(*tensor_spec)
+        else:
+            kwargs.update(new_scalars or {})
+        for name, tensor_spec in kwargs.items():
+            self.add_scalar(*tensor_spec, name=name)
+
+    def update(self, updated_scalars: dict[str, torch.Tensor] | None = None, override: bool = False, **kwargs) -> None:
+        """Update multiple scalars in the existing scalars.
+
+        If `override` is False, the scalar must be valid against the original dimensions.
+        If `override` is True, the scalar will be updated regardless of shape.
+
+        Parameters
+        ----------
+        updated_scalars : dict[str, torch.Tensor] | None, optional
+            Scalars to update, referenced by name, by default None
+        override : bool, optional
+            Whether to override the scalar ignoring dimension compatibility, by default False
+        **kwargs:
+            Kwargs form of {name: tensor} to update in the scalars
+        """
+        kwargs.update(updated_scalars or {})
+        for name, tensor in kwargs.items():
+            self.update_scalar(name, tensor, override=override)
 
     def subset(self, scalars: str | Sequence[str]) -> ScaleTensor:
         """Get subset of the scalars, filtering by name.
