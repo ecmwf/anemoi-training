@@ -375,12 +375,12 @@ class LongRolloutPlots(BasePlotCallback):
     @rank_zero_only
     def _plot(
         self,
-        trainer,
+        trainer: pl.Trainer,
         pl_module: pl.LightningModule,
         output: list[torch.Tensor],
         batch: torch.Tensor,
-        batch_idx,
-        epoch,
+        batch_idx: int,
+        epoch: int,
     ) -> None:
         _ = output
         start_time = time.time()
@@ -444,7 +444,13 @@ class LongRolloutPlots(BasePlotCallback):
                     )
 
                 if self.video_rollout and rollout_step < self.video_rollout:
-                    self._store_video_frame_data(data_over_time, y_pred, plot_parameters_dict, vmin, vmax)
+                    data_over_time, vmin, vmax = self._store_video_frame_data(
+                        data_over_time,
+                        y_pred,
+                        plot_parameters_dict,
+                        vmin,
+                        vmax,
+                    )
 
             # Generate and save video rollout animation if enabled
             if self.video_rollout:
@@ -464,15 +470,15 @@ class LongRolloutPlots(BasePlotCallback):
 
     def _plot_rollout_step(
         self,
-        pl_module,
-        plot_parameters_dict,
-        input_batch,
-        data_0,
-        rollout_step,
-        y_pred,
-        batch_idx,
-        epoch,
-        logger,
+        pl_module: pl.LightningModule,
+        plot_parameters_dict: dict,
+        input_batch: torch.Tensor,
+        data_0: np.ndarray,
+        rollout_step: int,
+        y_pred: torch.Tensor,
+        batch_idx: int,
+        epoch: int,
+        logger: pl.loggers.base.LightningLoggerBase,
     ) -> None:
         """Plot the predicted output, input, true target and error plots for a given rollout step."""
         # prepare true output tensor for plotting
@@ -504,7 +510,14 @@ class LongRolloutPlots(BasePlotCallback):
             exp_log_tag=f"val_pred_sample_rstep{rollout_step + 1:03d}_rank{pl_module.local_rank:01d}",
         )
 
-    def _store_video_frame_data(self, data_over_time, y_pred, plot_parameters_dict, vmin, vmax) -> None:
+    def _store_video_frame_data(
+        self,
+        data_over_time: list,
+        y_pred: torch.Tensor,
+        plot_parameters_dict: dict,
+        vmin: np.ndarray,
+        vmax: np.ndarray,
+    ) -> tuple[list, np.ndarray, np.ndarray]:
         """Store the data for each frame of the video."""
         # prepare predicted output tensors for video
         output_tensor = self.post_processors(y_pred[self.sample_idx : self.sample_idx + 1, ...].cpu()).numpy()
@@ -512,18 +525,19 @@ class LongRolloutPlots(BasePlotCallback):
         # update min and max values for each variable for the colorbar
         vmin[:] = np.minimum(vmin, np.nanmin(data_over_time[-1], axis=1))
         vmax[:] = np.maximum(vmax, np.nanmax(data_over_time[-1], axis=1))
+        return data_over_time, vmin, vmax
 
     def _generate_video_rollout(
         self,
-        data_0,
-        data_over_time,
-        plot_parameters_dict,
-        vmin,
-        vmax,
-        rollout_step,
-        batch_idx,
-        epoch,
-        logger,
+        data_0: np.ndarray,
+        data_over_time: list,
+        plot_parameters_dict: dict,
+        vmin: np.ndarray,
+        vmax: np.ndarray,
+        rollout_step: int,
+        batch_idx: int,
+        epoch: int,
+        logger: pl.loggers.base.LightningLoggerBase,
     ) -> None:
         """Generate the video animation for the rollout."""
         for idx, (variable_idx, (variable_name, _)) in enumerate(plot_parameters_dict.items()):
@@ -571,9 +585,9 @@ class LongRolloutPlots(BasePlotCallback):
     @rank_zero_only
     def on_validation_batch_end(
         self,
-        trainer,
-        pl_module,
-        output,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        output: list[torch.Tensor],
         batch: torch.Tensor,
         batch_idx: int,
     ) -> None:
