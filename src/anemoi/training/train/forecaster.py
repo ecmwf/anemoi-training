@@ -236,7 +236,7 @@ class GraphForecaster(pl.LightningModule):
                 loss_weights_mask = pre_processor.transform_loss_mask(loss_weights_mask)
         # update scaler with loss_weights_mask retrieved from preprocessors
         if "loss_weights_mask" in self.loss.scalar:
-            self.loss.update_scalar(scalar=loss_weights_mask, name="loss_weights_mask")
+            self.loss.update_scalar(scalar=loss_weights_mask.cpu(), name="loss_weights_mask")
         self.updated_loss_mask = True
 
     @staticmethod
