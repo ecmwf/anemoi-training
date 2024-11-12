@@ -74,6 +74,7 @@ class Shape:
         return self.func(dimension)
 
 
+# TODO(Harrison Cook): Consider moving this to subclass from a pytorch object and allow for device moving completely
 class ScaleTensor:
     """Dynamically resolved tensor scaling class.
 
@@ -99,7 +100,7 @@ class ScaleTensor:
     """
 
     tensors: dict[str, TENSOR_SPEC]
-    _specified_dimensions: list[tuple[int]]
+    _specified_dimensions: dict[str, tuple[int]]
 
     def __init__(
         self,
@@ -120,7 +121,7 @@ class ScaleTensor:
             Kwargs form of {name: (dimension, tensor)} to add to the scalars
         """
         self.tensors = {}
-        self._specified_dimensions = []
+        self._specified_dimensions = {}
 
         named_tensors.update(scalars or {})
         self.add(named_tensors)
@@ -141,7 +142,7 @@ class ScaleTensor:
                 if isinstance(dim_assign, tuple) and dimension in dim_assign:
                     return tensor.shape[list(dim_assign).index(dimension)]
 
-            unique_dims = {dim for dim_assign in self._specified_dimensions for dim in dim_assign}
+            unique_dims = {dim for dim_assign in self._specified_dimensions.values() for dim in dim_assign}
             error_msg = (
                 f"Could not find shape of dimension {dimension}. "
                 f"Tensors are only specified for dimensions {list(unique_dims)}."
@@ -226,7 +227,7 @@ class ScaleTensor:
             raise ValueError(error_msg) from e
 
         self.tensors[name] = (dimension, scalar)
-        self._specified_dimensions.append(dimension)
+        self._specified_dimensions[name] = dimension
 
     def update_scalar(self, name: str, scalar: torch.Tensor, *, override: bool = False) -> None:
         """Update an existing scalar maintaining original dimensions.
@@ -253,11 +254,13 @@ class ScaleTensor:
             self.validate_scalar(dimension, scalar)
 
         original_scalar = self.tensors.pop(name)
+        original_dimension = self._specified_dimensions.pop(name)
 
         try:
             self.add_scalar(dimension, scalar, name=name)
         except ValueError:
             self.tensors[name] = original_scalar
+            self._specified_dimensions[name] = original_dimension
             raise
 
     def add(self, new_scalars: dict[str, TENSOR_SPEC] | list[TENSOR_SPEC] | None = None, **kwargs) -> None:
@@ -316,6 +319,23 @@ class ScaleTensor:
             scalars = [scalars]
         return ScaleTensor(**{name: self.tensors[name] for name in scalars})
 
+    def without(self, scalars: str | Sequence[str]) -> ScaleTensor:
+        """Get subset of the scalars, filtering out by name.
+
+        Parameters
+        ----------
+        scalars : str | Sequence[str]
+            Name/s of the scalars to exclude
+
+        Returns
+        -------
+        ScaleTensor
+            Subset of self
+        """
+        if isinstance(scalars, str):
+            scalars = [scalars]
+        return ScaleTensor(**{name: tensor for name, tensor in self.tensors.items() if name not in scalars})
+
     def subset_by_dim(self, dimensions: int | Sequence[int]) -> ScaleTensor:
         """Get subset of the scalars, filtering by dimension.
 
@@ -340,6 +360,32 @@ class ScaleTensor:
             if isinstance(dim, int):
                 dim = (dim,)
             if len(set(dimensions).intersection(dim)) > 0:
+                subset_scalars[name] = (dim, scalar)
+
+        return ScaleTensor(**subset_scalars)
+
+    def without_by_dim(self, dimensions: int | Sequence[int]) -> ScaleTensor:
+        """Get subset of the scalars, filtering out by dimension.
+
+        Parameters
+        ----------
+        dimensions : int | Sequence[int]
+            Dimensions to exclude scalars of
+
+        Returns
+        -------
+        ScaleTensor
+            Subset of self
+        """
+        subset_scalars: dict[str, TENSOR_SPEC] = {}
+
+        if isinstance(dimensions, int):
+            dimensions = (dimensions,)
+
+        for name, (dim, scalar) in self.tensors.items():
+            if isinstance(dim, int):
+                dim = (dim,)
+            if len(set(dimensions).intersection(dim)) == 0:
                 subset_scalars[name] = (dim, scalar)
 
         return ScaleTensor(**subset_scalars)
@@ -383,7 +429,7 @@ class ScaleTensor:
         torch.Tensor
             Scaled tensor
         """
-        return tensor * self.get_scalar(tensor.ndim)
+        return tensor * self.get_scalar(tensor.ndim, device=tensor.device)
 
     def get_scalar(self, ndim: int, device: str | None = None) -> torch.Tensor:
         """Get completely resolved scalar tensor.
@@ -434,16 +480,19 @@ class ScaleTensor:
     def __mul__(self, tensor: torch.Tensor) -> torch.Tensor:
         return self.scale(tensor)
 
+    def __rmul__(self, tensor: torch.Tensor) -> torch.Tensor:
+        return self.scale(tensor)
+
     def __repr__(self):
         return (
-            f"ScalarTensor:\n - With tensors: {list(self.tensors.keys())}\n"
-            f"- In dimensions: {self._specified_dimensions}"
+            f"ScalarTensor:\n - With tensors  : {list(self.tensors.keys())}\n"
+            f" - In dimensions : {list(self._specified_dimensions.values())}"
         )
 
     def __contains__(self, dimension: int | tuple[int] | str) -> bool:
         """Check if either scalar by name or dimension by int/tuple is being scaled."""
         if isinstance(dimension, tuple):
-            return dimension in self._specified_dimensions
+            return dimension in self._specified_dimensions.values()
         if isinstance(dimension, str):
             return dimension in self.tensors
 
