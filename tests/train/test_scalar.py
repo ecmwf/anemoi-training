@@ -65,12 +65,14 @@ def test_update_missing_scalar() -> None:
     scale = ScaleTensor(test=(0, torch.tensor(2.0)))
     with pytest.raises(ValueError, match=r".*not found in scalars.*"):
         scale.update_scalar("test_missing", torch.tensor(3.0))
+    assert "test" in scale
 
 
 def test_update_scalar_wrong_dim() -> None:
     scale = ScaleTensor(test=(0, torch.ones((2, 3))))
     with pytest.raises(ValueError, match=r".*does not match shape of saved scalar.*"):
         scale.update_scalar("test", torch.ones((2, 2)))
+    assert "test" in scale
 
 
 def test_update_scalar_wrong_dim_allow_override() -> None:
