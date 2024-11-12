@@ -209,6 +209,8 @@ class ScaleTensor:
                 dimension = (dimension,)
             else:
                 dimension = tuple(dimension + i for i in range(len(scalar.shape)))
+        else:
+            dimension = tuple(dimension)
 
         if name is None:
             name = str(uuid.uuid4())
