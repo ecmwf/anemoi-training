@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import AnyUrl
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import PositiveInt
@@ -55,7 +54,7 @@ class Mlflow(BaseModel):
     offline: bool
     authentication: bool
     log_model: bool
-    tracking_uri: AnyUrl | None
+    tracking_uri: str | None
     experiment_name: str
     project_name: str
     system: bool
