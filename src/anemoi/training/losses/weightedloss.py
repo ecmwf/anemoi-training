@@ -83,7 +83,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         x : torch.Tensor
             Tensor to be scaled, shape (bs, ensemble, lat*lon, n_outputs)
         scalar_indices: torch.Tensor, optional
-            feature indices (relative to full model output) of the features/variables passed in pred and target
+            Indices to subset the calculated scalar with, by default None.
         without_scalars: list[str] | list[int] | None, optional
             list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
             By default None
