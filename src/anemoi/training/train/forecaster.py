@@ -225,7 +225,6 @@ class GraphForecaster(pl.LightningModule):
         batch: torch.Tensor,
     ) -> None:
         """Update the loss weights mask for imputed variables."""
-        LOGGER.info("EXECUTE training_weights_for_imputed_variables, Should appear only once")
         loss_weights_mask = torch.ones((1, 1), device=batch.device)
         # iterate over all pre-processors and check if they have a loss_mask_training attribute
         for pre_processor in self.model.pre_processors.processors.values():
