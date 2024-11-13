@@ -457,7 +457,7 @@ class GraphForecaster(pl.LightningModule):
                     y_pred_postprocessed[..., indices],
                     y_postprocessed[..., indices],
                     feature_indices=indices,
-                    feature_scale=mkey == "all",
+                    without_scalars=["variable"] if mkey == "all" else None,
                 )
 
         return metrics

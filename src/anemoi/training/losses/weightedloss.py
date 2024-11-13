@@ -42,6 +42,7 @@ class BaseWeightedLoss(nn.Module, ABC):
 
         Registers:
         - self.node_weights: torch.Tensor of shape (N, )
+        - self.scalar: ScaleTensor modified with `add_scalar` and `update_scalar`
 
         Parameters
         ----------
@@ -72,6 +73,8 @@ class BaseWeightedLoss(nn.Module, ABC):
         self,
         x: torch.Tensor,
         feature_indices: torch.Tensor | None = None,
+        *,
+        without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
         """Scale a tensor by the variable_scaling.
 
@@ -79,19 +82,28 @@ class BaseWeightedLoss(nn.Module, ABC):
         ----------
         x : torch.Tensor
             Tensor to be scaled, shape (bs, ensemble, lat*lon, n_outputs)
-        feature_indices:
-            feature indices (relative to full model output) of the features passed in pred and target
+        feature_indices: torch.Tensor, optional
+            feature indices (relative to full model output) of the features/variables passed in pred and target
+        without_scalars: list[str] | list[int] | None, optional
+            list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
+            By default None
 
         Returns
         -------
         torch.Tensor
             Scaled error tensor
         """
-        # Use feature_weights if available
         if len(self.scalar) == 0:
             return x
 
-        scalar = self.scalar.get_scalar(x.ndim).to(x)
+        scale_tensor = self.scalar
+        if without_scalars is not None and len(without_scalars) > 0:
+            if isinstance(without_scalars[0], str):
+                scale_tensor = self.scalar.without(without_scalars)
+            else:
+                scale_tensor = self.scalar.without_by_dim(without_scalars)
+
+        scalar = scale_tensor.get_scalar(x.ndim).to(x)
 
         if feature_indices is None:
             return x * scalar
@@ -137,7 +149,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         target: torch.Tensor,
         squash: bool = True,
         feature_indices: torch.Tensor | None = None,
-        feature_scale: bool = True,
+        without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
         """Calculates the lat-weighted scaled loss.
 
@@ -151,8 +163,9 @@ class BaseWeightedLoss(nn.Module, ABC):
             Average last dimension, by default True
         feature_indices:
             feature indices (relative to full model output) of the features passed in pred and target
-        feature_scale:
-            If True, scale the loss by the feature_weights
+        without_scalars: list[str] | list[int] | None, optional
+            list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
+            By default None
 
         Returns
         -------
@@ -161,8 +174,8 @@ class BaseWeightedLoss(nn.Module, ABC):
         """
         out = pred - target
 
-        if feature_scale:
-            out = self.scale(out, feature_indices)
+        out = self.scale(out, feature_indices, without_scalars=without_scalars)
+
         return self.scale_by_node_weights(out, squash)
 
     @property
@@ -172,7 +185,19 @@ class BaseWeightedLoss(nn.Module, ABC):
 
 
 class FunctionalWeightedLoss(BaseWeightedLoss):
-    """WeightedLoss which a user can subclass and provide `calculate_difference`."""
+    """WeightedLoss which a user can subclass and provide `calculate_difference`.
+
+    `calculate_difference` should calculate the difference between the prediction and target.
+    All scaling and weighting is handled by the parent class.
+
+    Example:
+    --------
+    ```python
+    class MyLoss(FunctionalWeightedLoss):
+        def calculate_difference(self, pred, target):
+            return pred - target
+    ```
+    """
 
     def __init__(
         self,
@@ -191,7 +216,7 @@ class FunctionalWeightedLoss(BaseWeightedLoss):
         target: torch.Tensor,
         squash: bool = True,
         feature_indices: torch.Tensor | None = None,
-        feature_scale: bool = True,
+        without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
         """Calculates the lat-weighted scaled loss.
 
@@ -205,8 +230,10 @@ class FunctionalWeightedLoss(BaseWeightedLoss):
             Average last dimension, by default True
         feature_indices:
             feature indices (relative to full model output) of the features passed in pred and target
-        feature_scale:
-            If True, scale the loss by the feature_weights
+        without_scalars: list[str] | list[int] | None, optional
+            list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
+            By default None
+
 
         Returns
         -------
@@ -215,6 +242,5 @@ class FunctionalWeightedLoss(BaseWeightedLoss):
         """
         out = self.calculate_difference(pred, target)
 
-        if feature_scale:
-            out = self.scale(out, feature_indices)
+        out = self.scale(out, feature_indices, without_scalars=without_scalars)
         return self.scale_by_node_weights(out, squash)
