@@ -47,7 +47,7 @@ training_loss:
   _target_: anemoi.training.losses.mse.WeightedMSELoss
   # Scalars to include in loss calculation
   # Available scalars include, 'variable'
-  scalars: ['variable']
+  scalars: ['variable', 'loss_weights_mask']
   ignore_nans: False
 
 loss_gradient_scaling: False
