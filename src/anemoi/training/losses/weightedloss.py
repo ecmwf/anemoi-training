@@ -148,6 +148,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         pred: torch.Tensor,
         target: torch.Tensor,
         squash: bool = True,
+        *,
         scalar_indices: torch.Tensor | None = None,
         without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
@@ -215,6 +216,7 @@ class FunctionalWeightedLoss(BaseWeightedLoss):
         pred: torch.Tensor,
         target: torch.Tensor,
         squash: bool = True,
+        *,
         scalar_indices: torch.Tensor | None = None,
         without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
