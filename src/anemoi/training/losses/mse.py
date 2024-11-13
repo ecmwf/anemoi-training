@@ -51,7 +51,7 @@ class WeightedMSELoss(BaseWeightedLoss):
         pred: torch.Tensor,
         target: torch.Tensor,
         squash: bool = True,
-        feature_indices: torch.Tensor | None = None,
+        scalar_indices: torch.Tensor | None = None,
         without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
@@ -64,8 +64,8 @@ class WeightedMSELoss(BaseWeightedLoss):
             Target tensor, shape (bs, ensemble, lat*lon, n_outputs)
         squash : bool, optional
             Average last dimension, by default True
-        feature_indices:
-            feature indices (relative to full model output) of the features passed in pred and target
+        scalar_indices:
+            Indices to subset the calculated scalar with, by default None
         without_scalars: list[str] | list[int] | None, optional
             list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
             By default None
@@ -76,5 +76,5 @@ class WeightedMSELoss(BaseWeightedLoss):
             Weighted MSE loss
         """
         out = torch.square(pred - target)
-        out = self.scale(out, feature_indices, without_scalars=without_scalars)
+        out = self.scale(out, scalar_indices, without_scalars=without_scalars)
         return self.scale_by_node_weights(out, squash)
