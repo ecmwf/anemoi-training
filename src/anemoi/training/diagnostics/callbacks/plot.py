@@ -302,9 +302,12 @@ class LongRolloutPlots(BasePlotCallback):
         sample_idx: ${diagnostics.plot.sample_idx}
         parameters: ${diagnostics.plot.parameters}
     ```
+    The selected rollout steps for plots and video need to be lower or equal to dataloader.validation_rollout.
+    Increasing dataloader.validation_rollout has no effect on the rollout steps during training.
+    It ensures, that enough time steps are available for the plots and video in the validation batches.
+
     The runtime of creating one animation of one variable for 56 rollout steps is about 1 minute.
     Recommended use for video generation: Fork the run using fork_run_id for 1 additional epochs and enabled videos.
-    During the first validation epoch, the animations are created and saved.
     """
 
     def __init__(
@@ -318,6 +321,7 @@ class LongRolloutPlots(BasePlotCallback):
         cmap_accumulation: list[str] | None = None,
         per_sample: int = 6,
         every_n_epochs: int = 1,
+        animation_interval: int = 400,
     ) -> None:
         """Initialise LongRolloutPlots callback.
 
@@ -341,6 +345,8 @@ class LongRolloutPlots(BasePlotCallback):
             Number of plots per sample, by default 6
         every_n_epochs : int, optional
             Epoch frequency to plot at, by default 1
+        animation_interval : int, optional
+            Delay between frames in the animation in milliseconds, by default 400
         """
         super().__init__(config)
 
@@ -361,6 +367,7 @@ class LongRolloutPlots(BasePlotCallback):
         self.cmap_accumulation = cmap_accumulation
         self.per_sample = per_sample
         self.parameters = parameters
+        self.animation_interval = animation_interval
 
         LOGGER.info(
             (
@@ -464,6 +471,7 @@ class LongRolloutPlots(BasePlotCallback):
                     batch_idx,
                     epoch,
                     logger,
+                    animation_interval=self.animation_interval,
                 )
 
         LOGGER.info("Time taken to plot/animate samples for longer rollout: %d seconds", int(time.time() - start_time))
@@ -538,6 +546,7 @@ class LongRolloutPlots(BasePlotCallback):
         batch_idx: int,
         epoch: int,
         logger: pl.loggers.base.LightningLoggerBase,
+        animation_interval: int = 400,
     ) -> None:
         """Generate the video animation for the rollout."""
         for idx, (variable_idx, (variable_name, _)) in enumerate(plot_parameters_dict.items()):
@@ -573,7 +582,7 @@ class LongRolloutPlots(BasePlotCallback):
                 frames.append([scatter_frame])  # Each frame contains a list of artists (images)
 
             # Create the animation using ArtistAnimation
-            anim = animation.ArtistAnimation(fig, frames, interval=400, blit=True)
+            anim = animation.ArtistAnimation(fig, frames, interval=animation_interval, blit=True)
             self._output_gif(
                 logger,
                 fig,
