@@ -40,7 +40,7 @@ class GraphNodeAttribute:
 
             LOGGER.info("Loading node attribute %s from the graph", self.node_attribute)
         except KeyError:
-            attr_weight = torch.from_numpy(self.global_area_weights(graph_data))
+            attr_weight = torch.from_numpy(self.area_weights(graph_data))
 
             LOGGER.info(
                 "Node attribute %s not found in graph. Default area weighting will be used",
@@ -51,7 +51,7 @@ class GraphNodeAttribute:
 
 
 class ReweightedGraphNodeAttribute(GraphNodeAttribute):
-    """Method to reweight a subset of the target nodes defined by scaled_attributes.
+    """Method to reweight a subset of the target nodes defined by scaled_attribute.
 
     Subset nodes will be scaled such that their weight sum equals weight_frac_of_total of the sum
     over all nodes.
@@ -63,26 +63,15 @@ class ReweightedGraphNodeAttribute(GraphNodeAttribute):
         self.fraction = weight_frac_of_total
 
     def weights(self, graph_data: HeteroData) -> torch.Tensor:
-        try:
-            attr_weight = graph_data[self.target][self.node_attribute].squeeze()
-
-            LOGGER.info("Loading node attribute %s from the graph", self.node_attribute)
-        except KeyError:
-            attr_weight = torch.from_numpy(self.global_area_weights(graph_data))
-
-            LOGGER.info(
-                "Node attribute %s not found in graph. Default area weighting will be used",
-                self.node_attribute,
-            )
+        attr_weight = super().weights(graph_data)
 
         mask = graph_data[self.target][self.scaled_attribute].squeeze().bool()
-
         unmasked_sum = torch.sum(attr_weight[~mask])
         weight_per_masked_node = self.fraction / (1 - self.fraction) * unmasked_sum / sum(mask)
         attr_weight[mask] = weight_per_masked_node
         LOGGER.info(
             "Weight of nodes in %s rescaled such that their sum equals %.3f of the sum over all nodes",
-            self.node_attribute,
+            self.scaled_attribute,
             self.fraction,
         )
 
