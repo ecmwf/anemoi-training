@@ -11,7 +11,6 @@ Keep it human-readable, your future self will thank you!
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.2...HEAD)
 
 ### Fixed
-- Allow updates to scalars [#137](https://github.com/ecmwf/anemoi-training/pulls/137)
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
     - Updated docs [#115](https://github.com/ecmwf/anemoi-training/pull/115)
     - Fix enabling LearningRateMonitor [#119](https://github.com/ecmwf/anemoi-training/pull/119)
@@ -22,6 +21,8 @@ Keep it human-readable, your future self will thank you!
 ### Added
 - Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
    - Fix that applies the metric_ranges in the post-processed variable space [#116](https://github.com/ecmwf/anemoi-training/pull/116)
+- Allow updates to scalars [#137](https://github.com/ecmwf/anemoi-training/pulls/137)
+    - Add without subsetting in ScaleTensor
 - Sub-hour datasets [#63](https://github.com/ecmwf/anemoi-training/pull/63)
 - Add synchronisation workflow [#92](https://github.com/ecmwf/anemoi-training/pull/92)
 - Feat: Anemoi Profiler compatible with mlflow and using Pytorch (Kineto) Profiler for memory report [38](https://github.com/ecmwf/anemoi-training/pull/38/)
