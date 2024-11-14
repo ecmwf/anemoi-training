@@ -814,7 +814,7 @@ def plot_graph_node_features(model: nn.Module, datashader: bool = False) -> Figu
     return fig
 
 
-def plot_graph_edge_features(model: nn.Module, q_extreme_limit: float = 0.05) -> Figure:
+def plot_graph_edge_features(model: nn.Module, q_extreme_limit: float = 0.05, datashader: bool = False) -> Figure:
     """Plot trainable graph edge features.
 
     Parameters
@@ -823,6 +823,8 @@ def plot_graph_edge_features(model: nn.Module, q_extreme_limit: float = 0.05) ->
         Model object
     q_extreme_limit : float, optional
         Plot top & bottom quantile of edges trainable values, by default 0.05 (5%).
+    datashader: bool, optional
+        Scatter plot, by default False
 
     Returns
     -------
@@ -865,6 +867,7 @@ def plot_graph_edge_features(model: nn.Module, q_extreme_limit: float = 0.05) ->
                 dst_coords[edge_index[1, mask]][:, ::-1],
                 feature[mask],
                 title=f"{src} -> {dst} trainable feature #{i + 1}",
+                datashader=datashader,
             )
 
     return fig
