@@ -12,6 +12,7 @@ import logging
 import os
 from functools import cached_property
 from typing import Callable
+from typing import Union
 
 import pytorch_lightning as pl
 from anemoi.datasets.data import open_dataset
@@ -76,7 +77,10 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         )
 
         # Set the training end date if not specified
-        if self.config.dataloader.training.end is None:
+        if hasattr(self.config.dataloader.training, "end") and self.config.dataloader.training.end is None:
+            if not hasattr(self.config.dataloader.validation, "start"):
+                excep_msg = "No validation start date specified, cannot dynamically set training end date."
+                raise ValueError(excep_msg)
             LOGGER.info(
                 "No end date specified for training data, setting default before validation start date %s.",
                 self.config.dataloader.validation.start - 1,
@@ -85,6 +89,8 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
         if not self.config.dataloader.get("pin_memory", True):
             LOGGER.info("Data loader memory pinning disabled.")
+
+        self.check_dataset_slicing()
 
     def _check_resolution(self, resolution: str) -> None:
         assert (
@@ -131,6 +137,26 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         )
         return timestep // frequency
 
+    def check_dataset_slicing(self) -> None:
+        """Check that the training, validation and test datasets do not overlap."""
+
+        def get_overlap(dates1: list[str], dates2: list[str]) -> Union[list, None]:  # noqa: FA100
+            intersection = set(dates1) & set(dates2)
+            intersection = sorted(map(str, intersection))
+            if len(intersection) > 6:
+                intersection = intersection[:3] + ["..."] + intersection[-3:]
+            return intersection
+
+        if overlap := get_overlap(self.ds_train.dates, self.ds_valid.dates):
+            excep_msg = "Training and validation data overlap, dates:"
+            raise ValueError(excep_msg, overlap)
+        if overlap := get_overlap(self.ds_train.dates, self.ds_test.dates):
+            excep_msg = "Training and test data overlap, dates:"
+            raise ValueError(excep_msg, overlap)
+        if overlap := get_overlap(self.ds_valid.dates, self.ds_test.dates):
+            excep_msg = "Validation and test data overlap, dates:"
+            raise ValueError(excep_msg, overlap)
+
     @cached_property
     def ds_train(self) -> NativeGridDataset:
         return self._get_dataset(
@@ -143,10 +169,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         r = self.rollout
         r = max(r, self.config.dataloader.get("validation_rollout", 1))
 
-        assert self.config.dataloader.training.end < self.config.dataloader.validation.start, (
-            f"Training end date {self.config.dataloader.training.end} is not before"
-            f"validation start date {self.config.dataloader.validation.start}"
-        )
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.validation, resolve=True)),
             shuffle=False,
@@ -156,14 +178,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @cached_property
     def ds_test(self) -> NativeGridDataset:
-        assert self.config.dataloader.training.end < self.config.dataloader.test.start, (
-            f"Training end date {self.config.dataloader.training.end} is not before"
-            f"test start date {self.config.dataloader.test.start}"
-        )
-        assert self.config.dataloader.validation.end < self.config.dataloader.test.start, (
-            f"Validation end date {self.config.dataloader.validation.end} is not before"
-            f"test start date {self.config.dataloader.test.start}"
-        )
+
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.test, resolve=True)),
             shuffle=False,

@@ -128,6 +128,11 @@ class NativeGridDataset(IterableDataset):
         """
         return get_usable_indices(self.data.missing, len(self.data), self.rollout, self.multi_step, self.timeincrement)
 
+    @cached_property
+    def dates(self) -> list[str]:
+        """Return dataset dates."""
+        return self.data.dates
+
     def per_worker_init(self, n_workers: int, worker_id: int) -> None:
         """Called by worker_init_func on each copy of dataset.
 
