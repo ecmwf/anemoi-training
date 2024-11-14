@@ -468,7 +468,7 @@ class GraphTrainableFeaturesPlot(BasePerEpochPlotCallback):
             exp_log_tag="node_trainable_params",
         )
 
-        fig = plot_graph_edge_features(model, datashader=self.datashader_plotting)
+        fig = plot_graph_edge_features(model)
 
         self._output_figure(
             trainer.logger,
