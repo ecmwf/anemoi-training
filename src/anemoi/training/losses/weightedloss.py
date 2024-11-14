@@ -72,7 +72,7 @@ class BaseWeightedLoss(nn.Module, ABC):
     def scale(
         self,
         x: torch.Tensor,
-        scalar_indices: torch.Tensor | None = None,
+        scalar_indices: tuple[int, ...] | None = None,
         *,
         without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
@@ -82,7 +82,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         ----------
         x : torch.Tensor
             Tensor to be scaled, shape (bs, ensemble, lat*lon, n_outputs)
-        scalar_indices: torch.Tensor, optional
+        scalar_indices: tuple[int,...], optional
             Indices to subset the calculated scalar with, by default None.
         without_scalars: list[str] | list[int] | None, optional
             list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
@@ -107,7 +107,7 @@ class BaseWeightedLoss(nn.Module, ABC):
 
         if scalar_indices is None:
             return x * scalar
-        return x * scalar[*scalar_indices]
+        return x * scalar[scalar_indices]
 
     def scale_by_node_weights(self, x: torch.Tensor, squash: bool = True) -> torch.Tensor:
         """Scale a tensor by the node_weights.
@@ -149,7 +149,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         target: torch.Tensor,
         squash: bool = True,
         *,
-        scalar_indices: torch.Tensor | None = None,
+        scalar_indices: tuple[int, ...] | None = None,
         without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
         """Calculates the lat-weighted scaled loss.
@@ -162,7 +162,7 @@ class BaseWeightedLoss(nn.Module, ABC):
             Target tensor, shape (bs, ensemble, lat*lon, n_outputs)
         squash : bool, optional
             Average last dimension, by default True
-        scalar_indices:
+        scalar_indices: tuple[int,...], optional
             Indices to subset the calculated scalar with, by default None
         without_scalars: list[str] | list[int] | None, optional
             list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
@@ -217,7 +217,7 @@ class FunctionalWeightedLoss(BaseWeightedLoss):
         target: torch.Tensor,
         squash: bool = True,
         *,
-        scalar_indices: torch.Tensor | None = None,
+        scalar_indices: tuple[int, ...] | None = None,
         without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
         """Calculates the lat-weighted scaled loss.
@@ -230,7 +230,7 @@ class FunctionalWeightedLoss(BaseWeightedLoss):
             Target tensor, shape (bs, ensemble, lat*lon, n_outputs)
         squash : bool, optional
             Average last dimension, by default True
-        scalar_indices:
+        scalar_indices: tuple[int,...], optional
             Indices to subset the calculated scalar with, by default None
         without_scalars: list[str] | list[int] | None, optional
             list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
