@@ -173,7 +173,7 @@ class BasePlotCallback(Callback, ABC):
             trainer,
             args,
             kwargs,
-        )  # One because loop.run_in_executor expects positional arguments, not keyword arguments
+        )  # because loop.run_in_executor expects positional arguments, not keyword arguments
 
     @rank_zero_only
     def _async_plot(
