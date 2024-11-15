@@ -467,7 +467,7 @@ class LongRolloutPlots(BasePlotCallback):
                     plot_parameters_dict,
                     vmin,
                     vmax,
-                    rollout_step,
+                    self.video_rollout,
                     batch_idx,
                     epoch,
                     logger,
