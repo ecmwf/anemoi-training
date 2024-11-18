@@ -33,7 +33,7 @@ def get_mlflow_logger(config: DictConfig) -> None:
     forked = config.training.fork_run_id is not None
 
     save_dir = config.hardware.paths.logs.mlflow
-    
+
     offline = config.diagnostics.log.mlflow.offline
     if not offline:
         tracking_uri = config.diagnostics.log.mlflow.tracking_uri
