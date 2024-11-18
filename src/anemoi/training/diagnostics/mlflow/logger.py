@@ -447,22 +447,17 @@ class AnemoiMLflowLogger(MLFlowLogger):
 
                 self.monitors = [CPUMonitor(), DiskMonitor(), NetworkMonitor()]
 
-                # I dont know any way to check if the GPU is red or green
-                # So, try init both and catch the error when one init fails
+                # Try init both and catch the error when one init fails
                 try:
                     gpu_monitor = GreenGPUMonitor()
                     self.monitors.append(gpu_monitor)
-                except RuntimeError as e:
-                    LOGGER.warning("Failed to init Green GPU Monitor: %s", e)
-                except ImportError as e:
-                    LOGGER.warning("Failed to init Green GPU Monitor: %s", e)
+                except (ImportError, RuntimeError) as e:
+                    LOGGER.warning("Failed to init Nvidia GPU Monitor: %s", e)
                 try:
                     gpu_monitor = RedGPUMonitor()
                     self.monitors.append(gpu_monitor)
-                except RuntimeError as e:
-                    LOGGER.warning("Failed to init Red GPU Monitor: %s", e)
-                except ImportError as e:
-                    LOGGER.warning("Failed to init Red GPU Monitor: %s", e)
+                except (ImportError, RuntimeError) as e:
+                    LOGGER.warning("Failed to init AMD GPU Monitor: %s", e)
 
         mlflow.enable_system_metrics_logging()
         system_monitor = CustomSystemMetricsMonitor(

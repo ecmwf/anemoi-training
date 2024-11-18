@@ -19,7 +19,7 @@ with contextlib.suppress(ImportError):
 
 
 class GreenGPUMonitor(BaseMetricsMonitor):
-    """Class for monitoring green GPU stats.
+    """Class for monitoring Nvidia GPU stats.
 
     Requires pynvml to be installed.
     Extends default GPUMonitor, to also measure total \
@@ -30,13 +30,14 @@ class GreenGPUMonitor(BaseMetricsMonitor):
     def __init__(self):
         if "pynvml" not in sys.modules:
             # Only instantiate if `pynvml` is installed.
-            import_error_msg = "`pynvml` is not installed, to log green GPU metrics please run `pip install pynvml`."
+            import_error_msg = "`pynvml` is not installed, if you are running on an Nvidia GPU \
+                and want to log GPU metrics please run `pip install pynvml`."
             raise ImportError(import_error_msg)
         try:
             # `nvmlInit()` will fail if no GPU is found.
             pynvml.nvmlInit()
         except pynvml.NVMLError as e:
-            runtime_error_msg = "Failed to initalize Red GPU monitor: "
+            runtime_error_msg = "Failed to initalize Nvidia GPU monitor: "
             raise RuntimeError(runtime_error_msg) from e
 
         super().__init__()
@@ -78,7 +79,7 @@ class GreenGPUMonitor(BaseMetricsMonitor):
 
 
 class RedGPUMonitor(BaseMetricsMonitor):
-    """Class for monitoring red GPU stats.
+    """Class for monitoring AMD GPU stats.
 
     Requires that pyrsmi is installed
     Logs utilization and memory usage.
@@ -87,14 +88,15 @@ class RedGPUMonitor(BaseMetricsMonitor):
 
     def __init__(self):
         if "pyrsmi" not in sys.modules:
-            import_error_msg = "`pyrsmi` is not installed, to log red GPU metrics please run `pip install pyrsmi`."
+            import_error_msg = "`pyrsmi` is not installed, if you are running on an AMD GPU \
+                and want to log GPU metrics please run `pip install pyrsmi`."
             # Only instantiate if `pyrsmi` is installed.
             raise ImportError(import_error_msg)
         try:
             # `rocml.smi_initialize()()` will fail if no GPU is found.
             rocml.smi_initialize()
         except RuntimeError as e:
-            runtime_error_msg = "Failed to initalize Red GPU monitor: "
+            runtime_error_msg = "Failed to initalize AMD GPU monitor: "
             raise RuntimeError(runtime_error_msg) from e
 
         super().__init__()
