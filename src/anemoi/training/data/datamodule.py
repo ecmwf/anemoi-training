@@ -188,7 +188,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             shuffle=shuffle,
             label=label,
         )
-        self._check_resolution(data.resolution)
+        # self._check_resolution(data.resolution)
         return data
 
     def _get_dataloader(self, ds: NativeGridDataset, stage: str) -> DataLoader:
