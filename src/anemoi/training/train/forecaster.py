@@ -78,8 +78,6 @@ class GraphForecaster(pl.LightningModule):
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
 
-        self.model = torch.compile(self.model)
-
         self.data_indices = data_indices
 
         self.save_hyperparameters()
@@ -248,7 +246,8 @@ class GraphForecaster(pl.LightningModule):
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss += checkpoint(self.loss, y_pred, y, use_reentrant=False)
+            tmp_loss = checkpoint(self.loss, y_pred, y, use_reentrant=False)
+            loss += tmp_loss
 
             x = self.advance_input(x, y_pred, batch, rollout_step)
 
@@ -275,9 +274,21 @@ class GraphForecaster(pl.LightningModule):
     ) -> tuple[dict, list]:
         metrics = {}
         y_preds = []
+        
+        # Added to impute nans
+        nan_locations = torch.isnan(y[..., self.data_indices.internal_data.output.full])
+        self.model.post_processors.processors['imputer'].set_nan_locations(nan_locations)
+
+        print("y in val")
+        print(y.shape, nan_locations.shape)
+        
         y_postprocessed = self.model.post_processors(y, in_place=False)
         y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
         for mkey, indices in self.metric_ranges_validation.items():
+            print(indices, y_pred_postprocessed.shape, y_postprocessed.shape)
+            for idx in indices:
+                print("trying: ", idx, y_pred_postprocessed[..., idx].shape)
+            print(y_postprocessed[..., indices].shape)
             metrics[f"{mkey}_{rollout_step + 1}"] = self.metrics(
                 y_pred_postprocessed[..., indices],
                 y_postprocessed[..., indices],

@@ -683,12 +683,22 @@ class PlotSample(BasePlotCallback):
         local_rank = pl_module.local_rank
 
         batch = pl_module.model.pre_processors(batch, in_place=False)
+        nan_locations = pl_module.model.pre_processors.processors['imputer'].nan_locations 
+        nan_locations = nan_locations[
+                self.sample_idx,
+                pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
+                ...,
+                pl_module.data_indices.internal_data.output.full,
+            ]
+        self.post_processors.processors['imputer'].set_nan_locations(nan_locations)
+        
         input_tensor = batch[
             self.sample_idx,
             pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
             ...,
             pl_module.data_indices.internal_data.output.full,
         ].cpu()
+        
         data = self.post_processors(input_tensor)
 
         output_tensor = self.post_processors(

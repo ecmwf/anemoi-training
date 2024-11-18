@@ -42,7 +42,6 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
-
 class AnemoiTrainer:
     """Utility class for training the model."""
 
@@ -83,6 +82,9 @@ class AnemoiTrainer:
         """DataModule instance and DataSets."""
         datamodule = AnemoiDatasetsDataModule(self.config)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
+        LOGGER.info(
+            f"Data has {len(datamodule.ds_train.data.variables)} variables: {datamodule.ds_train.data.variables}"
+        )
         return datamodule
 
     @cached_property
@@ -198,8 +200,9 @@ class AnemoiTrainer:
         checkpoint = Path(
             self.config.hardware.paths.checkpoints.parent,
             fork_id or self.lineage_run,
-            self.config.hardware.files.warm_start or "last.ckpt",
+            self.config.hardware.files.warm_start or "transfer.ckpt" or "last.ckpt",
         )
+        
         # Check if the last checkpoint exists
         if Path(checkpoint).exists():
             LOGGER.info("Resuming training from last checkpoint: %s", checkpoint)
@@ -386,7 +389,8 @@ class AnemoiTrainer:
 
 @hydra.main(version_base=None, config_path="../config", config_name="config")
 def main(config: DictConfig) -> None:
-    AnemoiTrainer(config).train()
+    trainer = AnemoiTrainer(config)
+    trainer.train()
 
 
 if __name__ == "__main__":
