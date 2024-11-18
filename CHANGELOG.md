@@ -30,6 +30,7 @@ Keep it human-readable, your future self will thank you!
 - Feat: Anemoi Profiler compatible with mlflow and using Pytorch (Kineto) Profiler for memory report [38](https://github.com/ecmwf/anemoi-training/pull/38/)
 - New limited area config file added, limited_area.yaml. [#134](https://github.com/ecmwf/anemoi-training/pull/134/)
 - New stretched grid config added, stretched_grid.yaml [#133](https://github.com/ecmwf/anemoi-training/pull/133)
+- Add reader groups to reduce CPU memory usage and increase dataloader throughput [#76](https://github.com/ecmwf/anemoi-training/pull/76)
 
 ### Changed
 - Renamed frequency keys in callbacks configuration. [#118](https://github.com/ecmwf/anemoi-training/pull/118)
@@ -78,7 +79,6 @@ Keep it human-readable, your future self will thank you!
 - Add anemoi-transform link to documentation
 - Codeowners file (#56)
 - Changelog merge strategy (#56)
-- Feature: Add reader groups to reduce CPU memory usage [#76](https://github.com/ecmwf/anemoi-training/pull/76)
 - Contributors file (#106)
 
 #### Miscellaneous

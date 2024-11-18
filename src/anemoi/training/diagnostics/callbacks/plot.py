@@ -210,7 +210,6 @@ class BasePerBatchPlotCallback(BasePlotCallback):
         super().__init__(config)
         self.every_n_batches = every_n_batches or self.config.diagnostics.plot.frequency.batch
 
-    @rank_zero_only
     def on_validation_batch_end(
         self,
         trainer: pl.Trainer,
@@ -220,6 +219,9 @@ class BasePerBatchPlotCallback(BasePlotCallback):
         batch_idx: int,
         **kwargs,
     ) -> None:
+        if self.config.diagnostics.plot.asynchronous and self.config.dataloader.read_group_size > 1:
+            LOGGER.warning("Asynchronous plotting can result in NCCL timeouts with reader_group_size > 1.")
+
         if batch_idx % self.every_n_batches == 0:
             batch = pl_module.allgather_batch(batch)
 

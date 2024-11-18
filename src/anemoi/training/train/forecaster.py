@@ -442,6 +442,18 @@ class GraphForecaster(pl.LightningModule):
         return loss, metrics, y_preds
 
     def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
+        """Allgather the batch-shards across the reader group.
+
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Batch-shard of current reader rank
+
+        Returns
+        -------
+        torch.Tensor
+            Allgathered (full) batch
+        """
         grid_size = self.model.metadata["dataset"]["shape"][-1]
 
         if grid_size == batch.shape[-2]:
