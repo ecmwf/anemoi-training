@@ -234,8 +234,8 @@ class GraphForecaster(pl.LightningModule):
                 # if transform_loss_mask function exists for preprocessor apply it
                 if hasattr(pre_processor, "transform_loss_mask"):
                     loss_weights_mask = pre_processor.transform_loss_mask(loss_weights_mask)
-                # update scaler with loss_weights_mask retrieved from preprocessors
-                self.loss.update_scalar(scalar=loss_weights_mask.cpu(), name="loss_weights_mask")
+            # update scaler with loss_weights_mask retrieved from preprocessors
+            self.loss.update_scalar(scalar=loss_weights_mask.cpu(), name="loss_weights_mask")
         self.updated_loss_mask = True
 
     @staticmethod
