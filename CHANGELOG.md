@@ -19,7 +19,6 @@ Keep it human-readable, your future self will thank you!
     - Enable longer validation rollout than training
 - Expand iterables in logging [#91](https://github.com/ecmwf/anemoi-training/pull/91)
     - Save entire config in mlflow
-- No longer require tracking URI when running offline [#147](https://github.com/ecmwf/anemoi-training/pull/147)
 ### Added
 - Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
 - Include option to use datashader and optimised asyncronohous callbacks [#102](https://github.com/ecmwf/anemoi-training/pull/102)
@@ -31,6 +30,7 @@ Keep it human-readable, your future self will thank you!
 - Feat: Anemoi Profiler compatible with mlflow and using Pytorch (Kineto) Profiler for memory report [38](https://github.com/ecmwf/anemoi-training/pull/38/)
 - New limited area config file added, limited_area.yaml. [#134](https://github.com/ecmwf/anemoi-training/pull/134/)
 - New stretched grid config added, stretched_grid.yaml [#133](https://github.com/ecmwf/anemoi-training/pull/133)
+- Custom System monitor for Nvidia and AMD GPUs [#147](https://github.com/ecmwf/anemoi-training/pull/147)
 
 ### Changed
 - Renamed frequency keys in callbacks configuration. [#118](https://github.com/ecmwf/anemoi-training/pull/118)
