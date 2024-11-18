@@ -19,6 +19,7 @@ Keep it human-readable, your future self will thank you!
     - Enable longer validation rollout than training
 - Expand iterables in logging [#91](https://github.com/ecmwf/anemoi-training/pull/91)
     - Save entire config in mlflow
+- No longer require tracking URI when running offline [#147](https://github.com/ecmwf/anemoi-training/pull/147)
 ### Added
 - Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
 - Include option to use datashader and optimised asyncronohous callbacks [#102](https://github.com/ecmwf/anemoi-training/pull/102)
