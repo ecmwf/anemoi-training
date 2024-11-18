@@ -171,7 +171,7 @@ def plot_power_spectrum(
     non_zero_delta_lat = delta_lat[delta_lat != 0]
 
     # Define a regular grid for interpolation
-    n_pix_lat = int(np.floor(abs(pc_lat.max() - pc_lat.min()) / abs(np.min(non_zero_delta_lat)))) 
+    n_pix_lat = int(np.floor(abs(pc_lat.max() - pc_lat.min()) / abs(np.min(non_zero_delta_lat))))
     n_pix_lon = (n_pix_lat - 1) * 2 + 1  # 2*lmax + 1
     regular_pc_lon = np.linspace(pc_lon.min(), pc_lon.max(), n_pix_lon)
     regular_pc_lat = np.linspace(pc_lat.min(), pc_lat.max(), n_pix_lat)
