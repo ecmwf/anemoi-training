@@ -8,9 +8,9 @@ pin_memory: True
 #   which is then all-gathered between the group.
 #   This can reduce CPU memory usage as well as increase dataloader throughput.
 #   The number of GPUs per model must be divisible by read_group_size.
-#   Good values are num_gpus_per_model or num_gpus_per_node.
+#   To disable, set to 1.
 # ============
-read_group_size: 1
+read_group_size: ${hardware.num_gpus_per_model}
 
 num_workers:
   training: 8
