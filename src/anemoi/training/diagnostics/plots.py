@@ -164,9 +164,7 @@ def plot_power_spectrum(
     pc_lon, pc_lat = pc(lon, lat)
     pc_lon = np.array(pc_lon)
     pc_lat = np.array(pc_lat)
-    # Calculate delta_lon and delta_lat on the projected grid
-    delta_lon = abs(np.diff(pc_lon))
-    non_zero_delta_lon = delta_lon[delta_lon != 0]
+    # Calculate delta_lat on the projected grid
     delta_lat = abs(np.diff(pc_lat))
     non_zero_delta_lat = delta_lat[delta_lat != 0]
 
