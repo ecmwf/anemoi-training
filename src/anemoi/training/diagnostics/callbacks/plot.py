@@ -219,7 +219,11 @@ class BasePerBatchPlotCallback(BasePlotCallback):
         batch_idx: int,
         **kwargs,
     ) -> None:
-        if self.config.diagnostics.plot.asynchronous and self.config.dataloader.read_group_size > 1:
+        if (
+            self.config.diagnostics.plot.asynchronous
+            and self.config.dataloader.read_group_size > 1
+            and pl_module.local_rank == 0
+        ):
             LOGGER.warning("Asynchronous plotting can result in NCCL timeouts with reader_group_size > 1.")
 
         if batch_idx % self.every_n_batches == 0:
