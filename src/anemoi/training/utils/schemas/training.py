@@ -9,8 +9,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import NonNegativeFloat
@@ -72,16 +70,10 @@ class PressureLevelScaler(BaseModel):
     slope: float = 0.001
 
 
-class TrainingLossSchema(BaseModel):
+class MetricLossSchema(BaseModel):
     target_: str = Field("anemoi.training.losses.mse.WeightedMSELoss", alias="_target_")
-    scalers: Any | None = None  # list[str]
+    scalars: list[str] = Field(default_factory=[])
     ignore_nans: bool = False
-
-
-class ValidationMetricsSchema(BaseModel):
-    target_: str = Field("anemoi.training.losses.mse.WeightedMSELoss", alias="_target_")
-    scalers: Any | None = None  # list[str] | None = None
-    ignore_nans: bool = True
 
 
 class TrainingSchema(BaseModel):
@@ -98,9 +90,9 @@ class TrainingSchema(BaseModel):
     gradient_clip: GradientClip = Field(default_factory=GradientClip)
     swa: SWA = Field(default_factory=SWA)
     zero_optimizer: bool = False
-    training_loss: TrainingLossSchema
+    training_loss: MetricLossSchema
     loss_gradient_scaling: bool = False
-    validation_metrics: list[ValidationMetricsSchema] = Field(default_factory=ValidationMetricsSchema)
+    validation_metrics: list[MetricLossSchema] = Field(default_factory=MetricLossSchema)
     rollout: Rollout = Field(default_factory=Rollout)
     max_epochs: PositiveInt | None = None
     max_steps: PositiveInt = 150000
