@@ -10,6 +10,9 @@ Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.2.2...HEAD)
 
+### Changed
+- Perform full shuffle of training dataset [#153](https://github.com/ecmwf/anemoi-training/pull/153)
+
 ### Fixed
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
     - Updated docs [#115](https://github.com/ecmwf/anemoi-training/pull/115)
