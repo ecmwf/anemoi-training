@@ -98,12 +98,20 @@ class GraphForecaster(pl.LightningModule):
 
         variable_scaling = self.get_variable_scaling(config, data_indices)
 
+        # Check if the model is a stretched grid
+        if "lam_resolution" in getattr(config.graph.nodes.hidden, "node_builder", []):
+            mask_name = config.graph.nodes.hidden.node_builder.mask_attr_name
+            limited_area_mask = graph_data[config.graph.data][mask_name].squeeze().bool()
+        else:
+            limited_area_mask = 1
+
         _, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
 
         # Kwargs to pass to the loss function
         loss_kwargs = {"node_weights": self.node_weights}
         # Scalars to include in the loss function, must be of form (dim, scalar)
-        scalars = {"variable": (-1, variable_scaling)}
+        scalars = {"variable": (-1, variable_scaling),
+                   "limited_area_mask": (2, limited_area_mask)}
 
         self.loss = self.get_loss_function(config.training.training_loss, scalars=scalars, **loss_kwargs)
 
