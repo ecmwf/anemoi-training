@@ -197,10 +197,13 @@ def get_callbacks(config: DictConfig) -> list[Callback]:
     trainer_callbacks.extend(_get_config_enabled_callbacks(config))
 
     # Parent UUID callback
-    trainer_callbacks.append(ParentUUIDCallback(config))
-
     # Check variable order callback
-    trainer_callbacks.append(CheckVariableOrder())
+    trainer_callbacks.extend(
+        (
+            ParentUUIDCallback(config),
+            CheckVariableOrder(),
+        ),
+    )
 
     return trainer_callbacks
 
