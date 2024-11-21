@@ -8,7 +8,7 @@ defaults:
  - model: graphtransformer
  - training: default
  - _self_
- 
+
 diagnostics:
   log:
     mlflow:
@@ -81,7 +81,7 @@ hardware:
   files:
     dataset: aifs-ea-an-oper-0001-mars-o96-1979-2022-6h-v6.zarr
     dataset_lam: cerra-rr-an-oper-0001-mars-5p5km-1984-2008-6h-v1-smhi.zarr
-    graph: test-anemoi-training_CERRA.pt
+    graph: test-anemoi-training_CERRA-2.pt
     warm_start: null #specific checkpoint to start from, defaults to last.ckpt
 
 data:
@@ -141,7 +141,7 @@ training:
     rate: 5e-4  #8 * 0.625e-4
     min: 2.4e-6 #8 * 3e-7
     iterations: 150000
-  
+
   validation_metrics:
     # loss class to initialise
     - _target_: anemoi.training.losses.mse.WeightedMSELoss
