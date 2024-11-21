@@ -391,7 +391,6 @@ class LongRolloutPlots(BasePlotCallback):
             every_n_epochs,
         )
 
-    @rank_zero_only
     def _plot(
         self,
         trainer: pl.Trainer,
@@ -488,6 +487,7 @@ class LongRolloutPlots(BasePlotCallback):
 
         LOGGER.info("Time taken to plot/animate samples for longer rollout: %d seconds", int(time.time() - start_time))
 
+    @rank_zero_only
     def _plot_rollout_step(
         self,
         pl_module: pl.LightningModule,
@@ -547,6 +547,7 @@ class LongRolloutPlots(BasePlotCallback):
         vmax[:] = np.maximum(vmax, np.nanmax(data_over_time[-1], axis=1))
         return data_over_time, vmin, vmax
 
+    @rank_zero_only
     def _generate_video_rollout(
         self,
         data_0: np.ndarray,
