@@ -282,7 +282,12 @@ class NativeGridDataset(IterableDataset):
             end = i + (self.rollout + 1) * self.timeincrement
 
             if self.reader_group_size > 1:  # read only a subset of the grid
-                x = self.data[start : end : self.timeincrement, :, :, self.grid_start : self.grid_end]
+                if any("cutout" in s for s in self.metadata["supporting_arrays"]):  # LAM/stretched_grid:
+                    # slicing from data not supported, open the full grid and slice in memory
+                    x = self.data[start : end : self.timeincrement, :, :, :]
+                    x = x[:, :, :, self.grid_start : self.grid_end]
+                else:
+                    x = self.data[start : end : self.timeincrement, :, :, self.grid_start : self.grid_end]
             else:  # read the full grid
                 x = self.data[start : end : self.timeincrement, :, :, :]
 
