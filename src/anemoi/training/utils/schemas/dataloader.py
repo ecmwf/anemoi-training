@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import datetime  # noqa: TCH003
-from pathlib import Path  # noqa: TCH003
 from typing import Any
 
 from anemoi.utils.dates import frequency_to_timedelta
@@ -26,7 +25,8 @@ class Frequency(BaseModel):
     as_timedelta: datetime.timedelta
 
     @field_validator("as_timedelta", mode="before")
-    def transform(self, frequency: Any) -> Any:
+    @classmethod
+    def transform(cls, frequency: Any) -> Any:
         return frequency_to_timedelta(frequency)
 
     @computed_field
@@ -70,24 +70,11 @@ class Frequency(BaseModel):
 class DatasetSchema(BaseModel):
     """Dataset configuration schema."""
 
-    dataset: Path
+    dataset: str  # TODO(Helen): Should be a Path
     start: int | None = None
     end: int | None = None
-    frequency: Frequency = "6h"  # check anemoi-datasets
-    timestep: str = "6h"
-    drop: list = Field(default_factory=[])
-
-    def __post_init__(self):
-        self.validate_frequency(self.frequency)
-        self.validate_timestep_is_multiple_of_frequnecy(self.frequency)
-
-    def validate_frequency(self, frequency: str) -> None:
-        assert isinstance(frequency, str) and frequency[-1] == "h", f"Error in format of data frequency, {frequency}"
-
-    def validate_timestep_is_multiple_of_frequnecy(self, frequency: str) -> None:
-        assert (
-            int(self.timestep[:-1]) % int(frequency[:-1]) == 0
-        ), f"Timestep isn't a multiple of data frequency, {self.timestep}, or data frequency, {frequency}"
+    frequency: str  # Frequency = "6h"  # check anemoi-datasets
+    drop: list | None = None
 
 
 class LoaderSet(BaseModel):
@@ -107,3 +94,6 @@ class DataLoaderSchema(BaseModel):
     training: DatasetSchema
     validation: DatasetSchema
     test: DatasetSchema
+    validation_rollout: PositiveInt = Field(
+        1,
+    )  # TODO(Helen): Ccheck that this equal or greater than the number of rollouts expected by callbacks

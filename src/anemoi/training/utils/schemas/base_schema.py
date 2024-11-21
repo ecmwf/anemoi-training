@@ -10,8 +10,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from omegaconf import OmegaConf
 from pydantic import BaseModel
 from pydantic import Field
@@ -19,6 +17,7 @@ from pydantic import Field
 # to make these available at runtime for pydantic, bug should be resolved in
 # future versions (see https://github.com/astral-sh/ruff/issues/7866)
 from .data import DataSchema  # noqa: TCH001
+from .dataloader import DataLoaderSchema  # noqa: TCH001
 from .diagnostics import DiagnosticsSchema  # noqa: TCH001
 from .graphs.base_graph import BaseGraphSchema  # noqa: TCH001
 from .hardware import HardwareSchema  # noqa: TCH001
@@ -35,7 +34,7 @@ class HydraInstantiable(BaseModel):
 
 class BaseSchema(BaseModel):
     data: DataSchema
-    dataloader: Any
+    dataloader: DataLoaderSchema
     diagnostics: DiagnosticsSchema
     hardware: HardwareSchema
     graph: BaseGraphSchema
@@ -52,7 +51,7 @@ def convert_to_omegaconf(config: BaseSchema) -> dict:
 
     config = {
         "data": config.data.model_dump(by_alias=True),
-        "dataloader": config.dataloader,
+        "dataloader": config.dataloader.model_dump(),
         "diagnostics": config.diagnostics.model_dump(),
         "hardware": config.hardware.model_dump(),
         "graph": config.graph.model_dump(by_alias=True),
