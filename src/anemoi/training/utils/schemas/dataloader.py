@@ -17,17 +17,16 @@ from anemoi.utils.dates import frequency_to_timedelta
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import PositiveInt
+from pydantic import RootModel
 from pydantic import computed_field
-from pydantic import field_validator
 
 
-class Frequency(BaseModel):
-    as_timedelta: datetime.timedelta
+class Frequency(RootModel):
+    root: Any
 
-    @field_validator("as_timedelta", mode="before")
-    @classmethod
-    def transform(cls, frequency: Any) -> Any:
-        return frequency_to_timedelta(frequency)
+    @computed_field
+    def as_timedelta(self) -> datetime.timedelta:
+        return frequency_to_timedelta(self.root)
 
     @computed_field
     def as_string(self) -> str:
@@ -73,7 +72,7 @@ class DatasetSchema(BaseModel):
     dataset: str  # TODO(Helen): Should be a Path
     start: int | None = None
     end: int | None = None
-    frequency: str  # Frequency = "6h"  # check anemoi-datasets
+    frequency: Frequency
     drop: list | None = None
 
 
