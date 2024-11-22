@@ -11,6 +11,8 @@ Keep it human-readable, your future self will thank you!
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.3.0...HEAD)
 ### Fixed
 
+Fixed bug in power spectra plotting for the n320 resolution.
+
 ### Added
 
 - Add reader groups to reduce CPU memory usage and increase dataloader throughput [#76](https://github.com/ecmwf/anemoi-training/pull/76)
