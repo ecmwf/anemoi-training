@@ -10,10 +10,8 @@
 
 import logging
 
-import numpy as np
 import torch
-from anemoi.graphs.generate.transforms import latlon_rad_to_cartesian
-from scipy.spatial import SphericalVoronoi
+from anemoi.graphs.nodes.attributes import AreaWeights
 from torch_geometric.data import HeteroData
 
 LOGGER = logging.getLogger(__name__)
@@ -49,7 +47,7 @@ class GraphNodeAttribute:
         self.target = target_nodes
         self.node_attribute = node_attribute
 
-    def area_weights(self, graph_data: HeteroData) -> np.ndarray:
+    def area_weights(self, graph_data: HeteroData) -> torch.Tensor:
         """Nodes weighted by the size of the geographical area they represent.
 
         Parameters
@@ -59,15 +57,10 @@ class GraphNodeAttribute:
 
         Returns
         -------
-        np.ndarray
+        torch.Tensor
             area weights of the target nodes
         """
-        lats, lons = graph_data[self.target].x[:, 0], graph_data[self.target].x[:, 1]
-        points = latlon_rad_to_cartesian((np.asarray(lats), np.asarray(lons)))
-        sv = SphericalVoronoi(points, radius=1.0, center=[0.0, 0.0, 0.0])
-        area_weights = sv.calculate_areas()
-
-        return area_weights / np.max(area_weights)
+        return AreaWeights(norm="unit-max", fill_value=0).compute(graph_data, self.target)
 
     def weights(self, graph_data: HeteroData) -> torch.Tensor:
         """Returns weight of type self.node_attribute for nodes self.target.
@@ -90,7 +83,7 @@ class GraphNodeAttribute:
 
             LOGGER.info("Loading node attribute %s from the graph", self.node_attribute)
         else:
-            attr_weight = torch.from_numpy(self.area_weights(graph_data))
+            attr_weight = self.area_weights(graph_data).squeeze()
 
             LOGGER.info(
                 "Node attribute %s not found in graph. Default area weighting will be used",

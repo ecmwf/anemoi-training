@@ -8,11 +8,9 @@
 # nor does it submit to any jurisdiction.
 
 
-import numpy as np
 import pytest
 import torch
-from anemoi.graphs.generate.transforms import latlon_rad_to_cartesian
-from scipy.spatial import SphericalVoronoi
+from anemoi.graphs.nodes.attributes import AreaWeights
 from torch_geometric.data import HeteroData
 
 from anemoi.training.losses.nodeweights import GraphNodeAttribute
@@ -33,12 +31,7 @@ def fake_graph() -> HeteroData:
 
 
 def fake_sv_area_weights() -> torch.Tensor:
-    lats, lons = fake_graph()["data"]["x"][:, 0], fake_graph()["data"]["x"][:, 1]
-    points = latlon_rad_to_cartesian((np.asarray(lats), np.asarray(lons)))
-    sv = SphericalVoronoi(points, radius=1.0, center=[0.0, 0.0, 0.0])
-    area_weights = sv.calculate_areas()
-
-    return torch.from_numpy(area_weights / np.max(area_weights))
+    return AreaWeights(norm="unit-max", fill_value=0).compute(fake_graph(), "data").squeeze()
 
 
 def fake_reweighted_sv_area_weights(frac: float) -> torch.Tensor:
