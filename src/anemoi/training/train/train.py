@@ -16,6 +16,7 @@ import os
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
+import importlib
 
 import hydra
 import numpy as np
@@ -33,7 +34,6 @@ from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
-from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
 
@@ -135,7 +135,7 @@ class AnemoiTrainer:
         )
 
     @cached_property
-    def model(self) -> GraphForecaster:
+    def model(self) -> pl.LightningModule:
         """Provide the model instance."""
         kwargs = {
             "config": self.config,
@@ -144,10 +144,13 @@ class AnemoiTrainer:
             "metadata": self.metadata,
             "statistics": self.datamodule.statistics,
         }
+        train_module = importlib.import_module(getattr(self.config.training, "train_module", "anemoi.training.train.forecaster"))
+        train_func = getattr(train_module, getattr(self.config.training, "train_function", "GraphForecaster"))
+        #NOTE: instantiate would be preferable, but I run into issues with "config" being the first kwarg of instantiate itself.
         if self.load_weights_only:
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-            return GraphForecaster.load_from_checkpoint(self.last_checkpoint, **kwargs)
-        return GraphForecaster(**kwargs)
+            return train_func.load_from_checkpoint(self.last_checkpoint, **kwargs)
+        return train_func(**kwargs)
 
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:

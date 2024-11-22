@@ -16,9 +16,7 @@ import numpy as np
 def get_usable_indices(
     missing_indices: set[int] | None,
     series_length: int,
-    rollout: int,
-    multistep: int,
-    timeincrement: int = 1,
+    relative_indices: np.ndarray,
 ) -> np.ndarray:
     """Get the usable indices of a series whit missing indices.
 
@@ -28,32 +26,24 @@ def get_usable_indices(
         Dataset to be used.
     series_length : int
         Length of the series.
-    rollout : int
-        Number of steps to roll out.
-    multistep : int
-        Number of previous indices to include as predictors.
-    timeincrement : int
-        Time increment, by default 1.
+    relative_indices:
+        Array of relative indices requested at each index i.
 
     Returns
     -------
     usable_indices : np.array
         Array of usable indices.
     """
-    prev_invalid_dates = (multistep - 1) * timeincrement
-    next_invalid_dates = rollout * timeincrement
-
     usable_indices = np.arange(series_length)  # set of all indices
 
     if missing_indices is None:
         missing_indices = set()
 
-    missing_indices |= {-1, series_length}  # to filter initial and final indices
+    missing_indices |= {series_length} #filter final index
 
     # Missing indices
     for i in missing_indices:
-        usable_indices = usable_indices[
-            (usable_indices < i - next_invalid_dates) + (usable_indices > i + prev_invalid_dates)
-        ]
+        rel_missing = i - relative_indices #indices which have their relative indices match the missing.
+        usable_indices = usable_indices[np.all(usable_indices != rel_missing[:,np.newaxis], axis = 0)]
 
     return usable_indices

@@ -68,13 +68,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             self.model_comm_group_rank,
         )
 
-        # Set the maximum rollout to be expected
-        self.rollout = (
-            self.config.training.rollout.max
-            if self.config.training.rollout.epoch_increment > 0
-            else self.config.training.rollout.start
-        )
-
         # Set the training end date if not specified
         if self.config.dataloader.training.end is None:
             LOGGER.info(
@@ -102,6 +95,23 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     @cached_property
     def data_indices(self) -> IndexCollection:
         return IndexCollection(self.config, self.ds_train.name_to_index)
+    
+    @cached_property
+    def relative_date_indices(self) -> list:
+        """Determine a list of relative time indices to load for each batch"""
+        if hasattr(self.config.training, "explicit_times"):
+            return sorted(self.config.training.explicit_times.input + self.config.training.explicit_times.target)
+        
+        else: #uses the old default of multistep, timeincrement and rollout.
+            # Use the maximum rollout to be expected
+            rollout = (
+            self.config.training.rollout.max
+            if self.config.training.rollout.epoch_increment > 0
+            else self.config.training.rollout.start
+            )#NOTE: --> for gradual rollout, max rollout dates is always fetched. But this was always the case in datamodule.py
+
+            multi_step = self.config.training.multistep_input
+            return [self.timeincrement * mstep for mstep in range(multi_step + rollout)]
 
     @cached_property
     def timeincrement(self) -> int:
@@ -140,7 +150,8 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @cached_property
     def ds_valid(self) -> NativeGridDataset:
-        r = max(self.rollout, self.config.dataloader.get("validation_rollout", 1))
+        #r = max(self.rollout, self.config.dataloader.get("validation_rollout", 1))
+        #NOTE: temporary left unimplemented until I figure out how to best do this with the new time_indices object
 
         assert self.config.dataloader.training.end < self.config.dataloader.validation.start, (
             f"Training end date {self.config.dataloader.training.end} is not before"
@@ -149,7 +160,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.validation, resolve=True)),
             shuffle=False,
-            rollout=r,
+            #rollout=r, #NOTE: see the above
             label="validation",
         )
 
@@ -173,15 +184,11 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         self,
         data_reader: Callable,
         shuffle: bool = True,
-        rollout: int = 1,
         label: str = "generic",
     ) -> NativeGridDataset:
-        r = max(rollout, self.rollout)
         data = NativeGridDataset(
             data_reader=data_reader,
-            rollout=r,
-            multistep=self.config.training.multistep_input,
-            timeincrement=self.timeincrement,
+            relative_date_indices = self.relative_date_indices,
             model_comm_group_rank=self.model_comm_group_rank,
             model_comm_group_id=self.model_comm_group_id,
             model_comm_num_groups=self.model_comm_num_groups,

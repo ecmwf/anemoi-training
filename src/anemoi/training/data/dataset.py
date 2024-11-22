@@ -33,9 +33,7 @@ class NativeGridDataset(IterableDataset):
     def __init__(
         self,
         data_reader: Callable,
-        rollout: int = 1,
-        multistep: int = 1,
-        timeincrement: int = 1,
+        relative_date_indices: list = [0,1,2],
         model_comm_group_rank: int = 0,
         model_comm_group_id: int = 0,
         model_comm_num_groups: int = 1,
@@ -48,12 +46,8 @@ class NativeGridDataset(IterableDataset):
         ----------
         data_reader : Callable
             user function that opens and returns the zarr array data
-        rollout : int, optional
-            length of rollout window, by default 12
-        timeincrement : int, optional
-            time increment between samples, by default 1
-        multistep : int, optional
-            collate (t-1, ... t - multistep) into the input state vector, by default 1
+        relative_date_indices : list
+            list of time indices to load from the data relative to the current sample i in __iter__
         model_comm_group_rank : int, optional
             process rank in the torch.distributed group (important when running on multiple GPUs), by default 0
         model_comm_group_id: int, optional
@@ -69,9 +63,6 @@ class NativeGridDataset(IterableDataset):
         self.label = label
 
         self.data = data_reader
-
-        self.rollout = rollout
-        self.timeincrement = timeincrement
 
         # lazy init
         self.n_samples_per_epoch_total: int = 0
@@ -89,10 +80,11 @@ class NativeGridDataset(IterableDataset):
         self.shuffle = shuffle
 
         # Data dimensions
-        self.multi_step = multistep
-        assert self.multi_step > 0, "Multistep value must be greater than zero."
         self.ensemble_dim: int = 2
         self.ensemble_size = self.data.shape[self.ensemble_dim]
+
+        # relative index of dates to extract
+        self.relative_date_indices = relative_date_indices #np.array(date_indices, dtype = np.int32)
 
     @cached_property
     def statistics(self) -> dict:
@@ -126,7 +118,7 @@ class NativeGridDataset(IterableDataset):
         dataset length minus rollout minus additional multistep inputs
         (if time_increment is 1).
         """
-        return get_usable_indices(self.data.missing, len(self.data), self.rollout, self.multi_step, self.timeincrement)
+        return get_usable_indices(self.data.missing, len(self.data), np.array(self.relative_date_indices, dtype=np.int32))
 
     def per_worker_init(self, n_workers: int, worker_id: int) -> None:
         """Called by worker_init_func on each copy of dataset.
@@ -230,10 +222,9 @@ class NativeGridDataset(IterableDataset):
         )
 
         for i in shuffled_chunk_indices:
-            start = i - (self.multi_step - 1) * self.timeincrement
-            end = i + (self.rollout + 1) * self.timeincrement
-
-            x = self.data[start : end : self.timeincrement]
+            #TODO: self.data[relative_date_indices + i] is intended here, but it seems like array indices are not supported in
+            #anemoi-datasets, and I couldn't get a tuple of indices that may not have a regular structure to work either 
+            x = self.data[slice(self.relative_date_indices[0]+i, i+ self.relative_date_indices[-1]+1, 1)]
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
 
@@ -243,9 +234,7 @@ class NativeGridDataset(IterableDataset):
         return f"""
             {super().__repr__()}
             Dataset: {self.data}
-            Rollout: {self.rollout}
-            Multistep: {self.multi_step}
-            Timeincrement: {self.timeincrement}
+            Relative dates: {self.relative_date_indices}
         """
 
 
