@@ -117,7 +117,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         r = max(self.rollout, self.config.dataloader.get("validation_rollout", 1))
 
         if not self.config.dataloader.training.end < self.config.dataloader.validation.start:
-            LOGGER.info(
+            LOGGER.warning(
                 "Training end date %s is not before validation start date %s.",
                 self.config.dataloader.training.end,
                 self.config.dataloader.validation.start,
