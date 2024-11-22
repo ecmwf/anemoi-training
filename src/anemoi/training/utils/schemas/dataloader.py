@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import datetime  # noqa: TCH003
+from pathlib import Path  # noqa: TCH003
 from typing import Any
 
 from anemoi.utils.dates import frequency_to_timedelta
@@ -69,7 +70,7 @@ class Frequency(RootModel):
 class DatasetSchema(BaseModel):
     """Dataset configuration schema."""
 
-    dataset: str  # TODO(Helen): Should be a Path
+    dataset: str | dict | Path  # TODO(Helen): Should be a Path or a dict
     start: int | None = None
     end: int | None = None
     frequency: Frequency

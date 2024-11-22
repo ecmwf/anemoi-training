@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import NonNegativeInt
 from pydantic import PositiveInt
 
 
@@ -75,13 +76,26 @@ class Logging(BaseModel):
     interval: PositiveInt
 
 
+class Memory(BaseModel):
+    enabled: bool = Field(default=False)
+    steps: PositiveInt = Field(default=5)
+    warmup: NonNegativeInt = Field(default=2)
+    extra_plots: bool = Field(default=False)
+    trace_rank0_only: bool = Field(default=False)
+
+
+class Profiling(BaseModel):
+    enabled: bool = Field(default=False)
+    verbose: bool | None = None
+
+
 class BenchmarkProfilerSchema(BaseModel):
-    memory: Any
-    time: Any
-    speed: Any
-    system: Any
-    model_summary: Any
-    snapshot: Any
+    memory: Memory = Field(default_factory=lambda: Memory())
+    time: Profiling = Field(default_factory=lambda: Profiling(True))
+    speed: Profiling = Field(default_factory=lambda: Profiling(True))
+    system: Profiling = Field(default_factory=lambda: Profiling())
+    model_summary: Profiling = Field(default_factory=lambda: Profiling())
+    snapshot: dict = {"enabled": bool, "steps": PositiveInt, "warmup": NonNegativeInt}
 
 
 class DiagnosticsSchema(BaseModel):
