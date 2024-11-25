@@ -110,9 +110,11 @@ class GraphForecaster(pl.LightningModule):
         # Scalars to include in the loss function, must be of form (dim, scalar)
         # Add mask multiplying NaN locations with zero. At this stage at [[1]].
         # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
-        scalars = {"variable": (-1, variable_scaling),
-                   "loss_weights_mask": ((-2, -1), torch.ones((1, 1))),
-                   "limited_area_mask": (2, limited_area_mask)}
+        scalars = {
+            "variable": (-1, variable_scaling),
+            "loss_weights_mask": ((-2, -1), torch.ones((1, 1))),
+            "limited_area_mask": (2, limited_area_mask),
+        }
         self.updated_loss_mask = False
 
         self.loss = self.get_loss_function(config.training.training_loss, scalars=scalars, **loss_kwargs)
@@ -650,4 +652,3 @@ class GraphForecaster(pl.LightningModule):
             warmup_t=1000,
         )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
-    

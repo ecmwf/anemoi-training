@@ -87,7 +87,7 @@ class WeightedMSELossLimitedArea(BaseWeightedLoss):
         """
         out = torch.square(pred - target)
 
-        limited_area_mask = self.scalar.subset('limited_area_mask').get_scalar(out.ndim, "cuda")
+        limited_area_mask = self.scalar.subset("limited_area_mask").get_scalar(out.ndim, "cuda")
 
         if not self.inside_lam:
             limited_area_mask = ~limited_area_mask
@@ -97,6 +97,6 @@ class WeightedMSELossLimitedArea(BaseWeightedLoss):
 
         out *= limited_area_mask
 
-        out = self.scale(out, scalar_indices, without_scalars = ['limited_area_mask'])
+        out = self.scale(out, scalar_indices, without_scalars=["limited_area_mask"])
 
         return self.scale_by_node_weights(out, squash)
