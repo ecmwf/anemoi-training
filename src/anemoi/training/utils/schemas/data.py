@@ -10,9 +10,12 @@
 
 from __future__ import annotations
 
+from enum import Enum
+
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic import field_validator
+from pydantic import ValidationError
+from pydantic import model_validator
 
 
 class NormalizerSchema(BaseModel):
@@ -30,34 +33,25 @@ class RemapperSchema(BaseModel):
     default: str
 
 
+class Target(Enum):
+    normalizer = "anemoi.models.preprocessing.normalizer.InputNormalizer"
+    imputer = "anemoi.models.preprocessing.imputer.InputImputer"
+    remapper = "anemoi.models.preprocessing.remapper.Remapper"
+
+
+target_to_schema = {Target.normalizer: NormalizerSchema, Target.imputer: ImputerSchema, Target.remapper: RemapperSchema}
+
+
 class Processor(BaseModel):
-    target_: str = Field(..., alias="_target_")
+    target_: Target = Field(..., alias="_target_")
     config: NormalizerSchema | ImputerSchema | RemapperSchema
 
-    @field_validator("target_")
-    @classmethod
-    def check_valid_target(cls, target: str) -> str:
-        assert target in [
-            "anemoi.models.preprocessing.normalizer.InputNormalizer",
-            "anemoi.models.preprocessing.imputer.InputImputer",
-            "anemoi.models.preprocessing.remapper.Remapper",
-        ]
-        return target
-
-    @field_validator("config")
-    @classmethod
-    def check_config_matches_target(
-        cls,
-        config: NormalizerSchema | ImputerSchema | RemapperSchema,
-        target: str,
-    ) -> dict:
-        if target == "anemoi.training.utils.processors.normalizer.Normalizer":
-            assert isinstance(config, NormalizerSchema)
-        elif target == "anemoi.training.utils.processors.imputer.Imputer":
-            assert isinstance(config, ImputerSchema)
-        elif target == "anemoi.training.utils.processors.remapper.Remapper":
-            assert isinstance(config, RemapperSchema)
-        return config
+    @model_validator(mode="after")
+    def schema_consistent_with_target(self) -> Processor:
+        if self.target_ not in target_to_schema or target_to_schema[self.target_] != self.config.__class__:
+            error_msg = f"Schema {self.config.__class__} does not match target {self.target_}"
+            raise ValidationError(error_msg)
+        return self
 
 
 class DataSchema(BaseModel):
