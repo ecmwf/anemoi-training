@@ -319,7 +319,7 @@ class GraphForecaster(pl.LightningModule):
         node_weighting = instantiate(config.training.node_loss_weights)
 
         return node_weighting.weights(graph_data)
-    
+
     def set_model_comm_group(
         self,
         model_comm_group: ProcessGroup,
