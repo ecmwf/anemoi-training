@@ -82,9 +82,13 @@ class AnemoiTrainer:
         """DataModule instance and DataSets."""
         spatial_indices = None
         if self.config.dataloader.get("spatial_indices", None) is not None:
-            LOGGER.info("The graph attribute %s of the %s nodes will be used to masking the spatial dimension.")
             nodes_name = self.config.dataloader.spatial_indices.nodes_name
             index_attr_name = self.config.dataloader.spatial_indices.indices_attribute_name
+            LOGGER.info(
+                "The graph attribute %s of the %s nodes will be used to masking the spatial dimension.",
+                index_attr_name,
+                nodes_name,
+            )
             spatial_indices = self.graph_data[nodes_name][index_attr_name].squeeze().tolist()
 
         datamodule = AnemoiDatasetsDataModule(self.config, spatial_indices=spatial_indices)
