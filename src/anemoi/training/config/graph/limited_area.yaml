@@ -44,13 +44,6 @@ edges:
   attributes: ${graph.attributes.edges}
 
 
-post_processors:
-  - _target_: anemoi.graphs.processors.RemoveUnconnectedNodes
-    nodes_name: data
-    ignore: cutout # optional
-    save_mask_indices_to_attr: indices_connected_nodes # optional
-
-
 attributes:
   nodes:
     area_weight:
