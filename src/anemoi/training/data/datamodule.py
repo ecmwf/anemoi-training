@@ -29,7 +29,7 @@ LOGGER = logging.getLogger(__name__)
 class AnemoiDatasetsDataModule(pl.LightningDataModule):
     """Anemoi Datasets data module for PyTorch Lightning."""
 
-    def __init__(self, config: DictConfig) -> None:
+    def __init__(self, config: DictConfig, spatial_indices: list[int] = None) -> None:
         """Initialize Anemoi Datasets data module.
 
         Parameters
@@ -41,6 +41,8 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         super().__init__()
 
         self.config = config
+
+        self.spatial_indices = spatial_indices
 
         # Set the maximum rollout to be expected
         self.rollout = (
@@ -157,6 +159,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             multistep=self.config.training.multistep_input,
             timeincrement=self.timeincrement,
             shuffle=shuffle,
+            spatial_indices=self.spatial_indices,
             label=label,
         )
         self._check_resolution(data.resolution)

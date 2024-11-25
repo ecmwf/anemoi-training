@@ -36,6 +36,7 @@ class NativeGridDataset(IterableDataset):
         rollout: int = 1,
         multistep: int = 1,
         timeincrement: int = 1,
+        spatial_indices: list[int] | None = None,
         shuffle: bool = True,
         label: str = "generic",
     ) -> None:
@@ -51,6 +52,8 @@ class NativeGridDataset(IterableDataset):
             time increment between samples, by default 1
         multistep : int, optional
             collate (t-1, ... t - multistep) into the input state vector, by default 1
+        spatial_indices : list[int], optional
+            indices of the spatial indices to keep. Defaults to None, which keeps all spatial indices.
         shuffle : bool, optional
             Shuffle batches, by default True
         label : str, optional
@@ -63,6 +66,7 @@ class NativeGridDataset(IterableDataset):
 
         self.rollout = rollout
         self.timeincrement = timeincrement
+        self.spatial_indices = spatial_indices
 
         # lazy init
         self.n_samples_per_epoch_total: int = 0
@@ -88,7 +92,7 @@ class NativeGridDataset(IterableDataset):
         self.ensemble_dim: int = 2
         self.ensemble_size = self.data.shape[self.ensemble_dim]
         self.grid_dim: int = -1
-        self.grid_size = self.data.shape[self.grid_dim]
+        self.grid_size = self.data.shape[self.grid_dim] if spatial_indices is None else len(spatial_indices)
 
     @cached_property
     def statistics(self) -> dict:
@@ -157,14 +161,14 @@ class NativeGridDataset(IterableDataset):
         self.reader_group_rank = reader_group_rank
         self.reader_group_size = reader_group_size
 
-        if self.reader_group_size > 1:
-            # get the grid shard size and start/end indices
-            grid_shard_size = self.grid_size // self.reader_group_size
-            self.grid_start = self.reader_group_rank * grid_shard_size
-            if self.reader_group_rank == self.reader_group_size - 1:
-                self.grid_end = self.grid_size
-            else:
-                self.grid_end = (self.reader_group_rank + 1) * grid_shard_size
+        assert self.reader_group_size >= 1, "reader_group_size must be postive"
+        # get the grid shard size and start/end indices
+        grid_shard_size = self.grid_size // self.reader_group_size
+        self.grid_start = self.reader_group_rank * grid_shard_size
+        if self.reader_group_rank == self.reader_group_size - 1:
+            self.grid_end = self.grid_size
+        else:
+            self.grid_end = (self.reader_group_rank + 1) * grid_shard_size
 
         LOGGER.debug(
             "NativeGridDataset.set_group_info(): global_rank %d, model_comm_group_id %d, "
@@ -281,10 +285,11 @@ class NativeGridDataset(IterableDataset):
             start = i - (self.multi_step - 1) * self.timeincrement
             end = i + (self.rollout + 1) * self.timeincrement
 
-            if self.reader_group_size > 1:  # read only a subset of the grid
+            if self.spatial_indices is None:
                 x = self.data[start : end : self.timeincrement, :, :, self.grid_start : self.grid_end]
-            else:  # read the full grid
+            else:
                 x = self.data[start : end : self.timeincrement, :, :, :]
+                x = x[..., self.spatial_indices[self.grid_start : self.grid_end]]
 
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
