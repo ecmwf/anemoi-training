@@ -83,9 +83,12 @@ def sanify_checkpoint(model: torch.nn.Module, ckpt_path: Path | str, save_path: 
     for key in state_dict.copy():
         if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
             LOGGER.debug(
-                "Skipping loading parameter: ", key, 
-                ", checkpoint shape: ", state_dict[key].shape, 
-                ", model shape: ", model_state_dict[key].shape,
+                "Skipping loading parameter: ",
+                key,
+                ", checkpoint shape: ",
+                state_dict[key].shape,
+                ", model shape: ",
+                model_state_dict[key].shape,
             )
             del state_dict[key]  # Remove the mismatched key
 
