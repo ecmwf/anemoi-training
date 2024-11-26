@@ -100,7 +100,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     def relative_date_indices(self) -> list:
         """Determine a list of relative time indices to load for each batch"""
         if hasattr(self.config.training, "explicit_times"):
-            return sorted(self.config.training.explicit_times.input + self.config.training.explicit_times.target)
+            return sorted(set(self.config.training.explicit_times.input + self.config.training.explicit_times.target))
         
         else: #uses the old default of multistep, timeincrement and rollout.
             # Use the maximum rollout to be expected
