@@ -20,6 +20,7 @@ import hydra
 import numpy as np
 import pytorch_lightning as pl
 import torch
+from anemoi.utils.config import DotDict
 from anemoi.utils.provenance import gather_provenance_info
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
@@ -35,7 +36,6 @@ from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
-from anemoi.utils.config import DotDict
 
 if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
