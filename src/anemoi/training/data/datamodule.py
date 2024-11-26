@@ -82,7 +82,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
                 self.config.dataloader.validation.start - 1,
             )
             self.config.dataloader.training.end = self.config.dataloader.validation.start - 1
-        
 
         if not self.config.dataloader.get("pin_memory", True):
             LOGGER.info("Data loader memory pinning disabled.")
@@ -177,15 +176,17 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         rollout: int = 1,
         label: str = "generic",
     ) -> NativeGridDataset:
-        
+
         r = max(rollout, self.rollout)
 
-        # Compute effective batch size 
-        effective_bs = self.config.dataloader.batch_size['training'] *\
-            self.config.hardware.num_gpus_per_node *\
-            self.config.hardware.num_nodes //\
-            self.config.hardware.num_gpus_per_model
-        
+        # Compute effective batch size
+        effective_bs = (
+            self.config.dataloader.batch_size["training"]
+            * self.config.hardware.num_gpus_per_node
+            * self.config.hardware.num_nodes
+            // self.config.hardware.num_gpus_per_model
+        )
+
         data = NativeGridDataset(
             data_reader=data_reader,
             rollout=r,
@@ -196,9 +197,9 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             model_comm_num_groups=self.model_comm_num_groups,
             shuffle=shuffle,
             label=label,
-            effective_bs=effective_bs
+            effective_bs=effective_bs,
         )
-        # self._check_resolution(data.resolution)
+        self._check_resolution(data.resolution)
         return data
 
     def _get_dataloader(self, ds: NativeGridDataset, stage: str) -> DataLoader:

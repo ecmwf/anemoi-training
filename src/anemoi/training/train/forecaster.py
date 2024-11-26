@@ -120,8 +120,13 @@ class GraphForecaster(pl.LightningModule):
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
         self.multi_step = config.training.multistep_input
-        self.lr = config.hardware.num_nodes * config.hardware.num_gpus_per_node * config.training.lr.rate / config.hardware.num_gpus_per_model
-        
+        self.lr = (
+            config.hardware.num_nodes
+            * config.hardware.num_gpus_per_node
+            * config.training.lr.rate
+            / config.hardware.num_gpus_per_model
+        )
+
         self.lr_iterations = config.training.lr.iterations
         self.lr_min = config.training.lr.min
         self.rollout = config.training.rollout.start
@@ -376,8 +381,7 @@ class GraphForecaster(pl.LightningModule):
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            tmp_loss = checkpoint(self.loss, y_pred, y, use_reentrant=False)
-            loss += tmp_loss
+            loss = checkpoint(self.loss, y_pred, y, use_reentrant=False) if training_mode else None
 
             x = self.advance_input(x, y_pred, batch, rollout_step)
 
@@ -437,11 +441,10 @@ class GraphForecaster(pl.LightningModule):
                 validation metrics and predictions
         """
         metrics = {}
-        y_preds = []
-        
+
         # Added to impute nans
         nan_locations = torch.isnan(y[..., self.data_indices.internal_data.output.full])
-        self.model.post_processors.processors['imputer'].set_nan_locations(nan_locations)
+        self.model.post_processors.processors["imputer"].set_nan_locations(nan_locations)
 
         y_postprocessed = self.model.post_processors(y, in_place=False)
         y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
@@ -514,7 +517,7 @@ class GraphForecaster(pl.LightningModule):
         self.rollout = min(self.rollout, self.rollout_max)
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
-        
+
         with torch.no_grad():
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
 
@@ -529,7 +532,7 @@ class GraphForecaster(pl.LightningModule):
             sync_dist=True,
         )
 
-        for i, (mname, mvalue) in enumerate(metrics.items()):
+        for mname, mvalue in metrics.items():
             self.log(
                 "val_" + mname,
                 mvalue,

@@ -34,6 +34,7 @@ from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.train.forecaster import GraphForecaster
+from anemoi.training.utils.checkpoint import sanify_checkpoint
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
 
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
 
 LOGGER = logging.getLogger(__name__)
+
 
 class AnemoiTrainer:
     """Utility class for training the model."""
@@ -61,8 +63,13 @@ class AnemoiTrainer:
         OmegaConf.resolve(config)
         self.config = config
 
-        # Default to not warm-starting from a checkpoint
-        self.start_from_checkpoint = (bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)) and self.config.training.resume
+        # Set Transfer Learning based on the other if not provided
+        if self.config.training.transfer_learning is None:
+            self.config.training.transfer_learning = (
+                bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
+            ) and self.load_weights_only
+
+        self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
         self.load_weights_only = config.training.load_weights_only
         self.parent_uuid = None
 
@@ -82,9 +89,7 @@ class AnemoiTrainer:
         """DataModule instance and DataSets."""
         datamodule = AnemoiDatasetsDataModule(self.config)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
-        LOGGER.info(
-            f"Data has {len(datamodule.ds_train.data.variables)} variables: {datamodule.ds_train.data.variables}"
-        )
+        LOGGER.info("Data has ", len(datamodule.ds_train.data.variables), " variables: ", datamodule.ds_train.data.variables)
         return datamodule
 
     @cached_property
@@ -146,11 +151,22 @@ class AnemoiTrainer:
             "metadata": self.metadata,
             "statistics": self.datamodule.statistics,
         }
-        if self.load_weights_only:
-            LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-            return GraphForecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
-        return GraphForecaster(**kwargs)
+        model = GraphForecaster(**kwargs)
+
+        if self.load_weights_only:
+            # Sanify the checkpoint for transfer learning
+            if self.config.training.transfer_learning:
+                save_path = Path(
+                    self.config.hardware.paths.checkpoints.parent,
+                    (self.fork_run_server2server or self.config.training.fork_run_id) or self.lineage_run,
+                )
+                self.last_checkpoint = sanify_checkpoint(model, self.last_checkpoint, save_path)
+
+            LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
+            return model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+
+        return model
 
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:
@@ -200,9 +216,9 @@ class AnemoiTrainer:
         checkpoint = Path(
             self.config.hardware.paths.checkpoints.parent,
             fork_id or self.lineage_run,
-            self.config.hardware.files.warm_start or "transfer.ckpt" or "last.ckpt",
+            self.config.hardware.files.warm_start or "last.ckpt",
         )
-        
+
         # Check if the last checkpoint exists
         if Path(checkpoint).exists():
             LOGGER.info("Resuming training from last checkpoint: %s", checkpoint)
@@ -297,7 +313,7 @@ class AnemoiTrainer:
         total_number_of_model_instances = int(
             self.config.hardware.num_nodes
             * self.config.hardware.num_gpus_per_node
-            / self.config.hardware.num_gpus_per_model
+            / self.config.hardware.num_gpus_per_model,
         )
 
         LOGGER.debug(
@@ -355,8 +371,7 @@ class AnemoiTrainer:
 
     def train(self) -> None:
         """Training entry point."""
-        
-        print('Setting up trainer..')
+        LOGGER.debug("Setting up trainer..")
 
         trainer = pl.Trainer(
             accelerator=self.accelerator,
@@ -384,7 +399,7 @@ class AnemoiTrainer:
             enable_progress_bar=self.config.diagnostics.enable_progress_bar,
         )
 
-        print('Starting training..')
+        LOGGER.debug("Starting training..")
 
         trainer.fit(
             self.model,

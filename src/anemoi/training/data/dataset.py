@@ -14,7 +14,6 @@ import os
 import random
 from functools import cached_property
 from typing import Callable
-from omegaconf import DictConfig
 
 import numpy as np
 import torch
@@ -42,7 +41,7 @@ class NativeGridDataset(IterableDataset):
         model_comm_num_groups: int = 1,
         shuffle: bool = True,
         label: str = "generic",
-        effective_bs: int = 1
+        effective_bs: int = 1,
     ) -> None:
         """Initialize (part of) the dataset state.
 
@@ -66,7 +65,8 @@ class NativeGridDataset(IterableDataset):
             Shuffle batches, by default True
         label : str, optional
             label for the dataset, by default "generic"
-
+        effective_bs : int, default 1
+            effective batch size useful to compute the lenght of the dataset
         """
         self.label = label
         self.effective_bs = effective_bs
@@ -250,7 +250,7 @@ class NativeGridDataset(IterableDataset):
             Multistep: {self.multi_step}
             Timeincrement: {self.timeincrement}
         """
-    
+
     def __len__(self) -> int:
         """Estimate the total number of samples based on valid indices."""
         return len(self.valid_date_indices) // self.effective_bs

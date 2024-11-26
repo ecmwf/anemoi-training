@@ -10,12 +10,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import torch
 from anemoi.utils.checkpoints import save_metadata
 
 from anemoi.training.train.forecaster import GraphForecaster
+
+LOGGER = logging.getLogger(__name__)
 
 
 def load_and_prepare_model(lightning_checkpoint_path: str) -> tuple[torch.nn.Module, dict]:
@@ -65,3 +68,28 @@ def save_inference_checkpoint(model: torch.nn.Module, metadata: dict, save_path:
     torch.save(model, inference_filepath)
     save_metadata(inference_filepath, metadata)
     return inference_filepath
+
+
+def sanify_checkpoint(model: torch.nn.Module, ckpt_path: Path | str, save_path: Path | str) -> Path:
+
+    # Load the checkpoint
+    checkpoint = torch.load(ckpt_path, map_location=model.device)
+
+    # Filter out layers with size mismatch
+    state_dict = checkpoint["state_dict"]
+
+    model_state_dict = model.state_dict()
+
+    for key in state_dict.copy():
+        if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
+            LOGGER.debug("Skipping loading parameter: {}, checkpoint shape: {}, model shape: {}".format(
+                key, state_dict[key].shape, model_state_dict[key].shape
+                )
+            )
+            del state_dict[key]  # Remove the mismatched key
+
+    new_ckpt_path = Path(save_path, "transfer.ckpt")
+    LOGGER.info("Saved modified checkpoint at", new_ckpt_path)
+    torch.save(checkpoint, new_ckpt_path)
+
+    return new_ckpt_path
