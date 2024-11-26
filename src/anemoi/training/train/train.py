@@ -35,6 +35,7 @@ from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
+from anemoi.utils.config import DotDict
 
 if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
