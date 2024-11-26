@@ -13,9 +13,14 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import datashader as dsh
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
+import pandas as pd
+from anemoi.models.layers.mapper import GraphEdgeMixin
+from datashader.mpl_ext import dsshow
+from matplotlib.collections import LineCollection
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import ListedColormap
 from matplotlib.colors import TwoSlopeNorm
@@ -28,12 +33,14 @@ from anemoi.training.diagnostics.maps import EquirectangularProjection
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
+    from torch import nn
 
 from dataclasses import dataclass
 
 LOGGER = logging.getLogger(__name__)
 
 continents = Coastlines()
+LAYOUT = "tight"
 
 
 @dataclass
@@ -102,7 +109,7 @@ def plot_loss(
     # create plot
     # more space for legend
     figsize = (8, 3) if legend_patches else (4, 3)
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    fig, ax = plt.subplots(1, 1, figsize=figsize, layout=LAYOUT)
     # histogram plot
     ax.bar(np.arange(x.size), x, color=colors, log=1)
 
@@ -111,8 +118,7 @@ def plot_loss(
         ax.set_xticks(list(xticks.values()), list(xticks.keys()), rotation=60)
     if legend_patches:
         # legend outside and to the right of the plot
-        plt.legend(handles=legend_patches, bbox_to_anchor=(1.01, 1), loc="upper left")
-    plt.tight_layout()
+        ax.legend(handles=legend_patches, bbox_to_anchor=(1.01, 1), loc="upper left")
 
     return fig
 
@@ -151,7 +157,7 @@ def plot_power_spectrum(
     n_plots_x, n_plots_y = len(parameters), 1
 
     figsize = (n_plots_y * 4, n_plots_x * 3)
-    fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize)
+    fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize, layout=LAYOUT)
 
     pc = EquirectangularProjection()
     lat, lon = latlons[:, 0], latlons[:, 1]
@@ -214,7 +220,6 @@ def plot_power_spectrum(
         ax[plot_idx].set_xlabel("$k$")
         ax[plot_idx].set_ylabel("$P(k)$")
         ax[plot_idx].set_aspect("auto", adjustable=None)
-    fig.tight_layout()
     return fig
 
 
@@ -282,7 +287,7 @@ def plot_histogram(
     n_plots_x, n_plots_y = len(parameters), 1
 
     figsize = (n_plots_y * 4, n_plots_x * 3)
-    fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize)
+    fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize, layout=LAYOUT)
 
     for plot_idx, (variable_idx, (variable_name, output_only)) in enumerate(parameters.items()):
         yt = y_true[..., variable_idx].squeeze()
@@ -322,7 +327,6 @@ def plot_histogram(
         ax[plot_idx].legend()
         ax[plot_idx].set_aspect("auto", adjustable=None)
 
-    fig.tight_layout()
     return fig
 
 
@@ -335,6 +339,7 @@ def plot_predicted_multilevel_flat_sample(
     x: np.ndarray,
     y_true: np.ndarray,
     y_pred: np.ndarray,
+    datashader: bool = False,
     precip_and_related_fields: list | None = None,
 ) -> Figure:
     """Plots data for one multilevel latlon-"flat" sample.
@@ -360,6 +365,8 @@ def plot_predicted_multilevel_flat_sample(
         Expected data of shape (lat*lon, nvar*level)
     y_pred : np.ndarray
         Predicted data of shape (lat*lon, nvar*level)
+    datashader: bool, optional
+        Scatter plot, by default False
     precip_and_related_fields : list, optional
         List of precipitation-like variables, by default []
 
@@ -372,7 +379,7 @@ def plot_predicted_multilevel_flat_sample(
     n_plots_x, n_plots_y = len(parameters), n_plots_per_sample
 
     figsize = (n_plots_y * 4, n_plots_x * 3)
-    fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize)
+    fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize, layout=LAYOUT)
 
     pc = EquirectangularProjection()
     lat, lon = latlons[:, 0], latlons[:, 1]
@@ -394,6 +401,7 @@ def plot_predicted_multilevel_flat_sample(
                 variable_name,
                 clevels,
                 cmap_precip,
+                datashader,
                 precip_and_related_fields,
             )
         else:
@@ -408,6 +416,7 @@ def plot_predicted_multilevel_flat_sample(
                 variable_name,
                 clevels,
                 cmap_precip,
+                datashader,
                 precip_and_related_fields,
             )
 
@@ -425,6 +434,7 @@ def plot_flat_sample(
     vname: str,
     clevels: float,
     cmap_precip: str,
+    datashader: bool = False,
     precip_and_related_fields: list | None = None,
 ) -> None:
     """Plot a "flat" 1D sample.
@@ -433,7 +443,7 @@ def plot_flat_sample(
 
     Parameters
     ----------
-    fig : _type_
+    fig : Figure
         Figure object handle
     ax : matplotlib.axes
         Axis object handle
@@ -453,9 +463,14 @@ def plot_flat_sample(
         Accumulation levels used for precipitation related plots
     cmap_precip: str
         Colors used for each accumulation level
+    datashader: bool, optional
+        Datashader plott, by default True
     precip_and_related_fields : list, optional
         List of precipitation-like variables, by default []
 
+    Returns
+    -------
+    None
     """
     precip_and_related_fields = precip_and_related_fields or []
     if vname in precip_and_related_fields:
@@ -470,17 +485,38 @@ def plot_flat_sample(
         # converting to mm from m
         truth *= 1000.0
         pred *= 1000.0
-        scatter_plot(fig, ax[1], lon=lon, lat=lat, data=truth, cmap=precip_colormap, norm=norm, title=f"{vname} target")
-        scatter_plot(fig, ax[2], lon=lon, lat=lat, data=pred, cmap=precip_colormap, norm=norm, title=f"{vname} pred")
-        scatter_plot(
+        single_plot(
+            fig,
+            ax[1],
+            lon,
+            lat,
+            truth,
+            cmap=precip_colormap,
+            norm=norm,
+            title=f"{vname} target",
+            datashader=datashader,
+        )
+        single_plot(
+            fig,
+            ax[2],
+            lon,
+            lat,
+            pred,
+            cmap=precip_colormap,
+            norm=norm,
+            title=f"{vname} pred",
+            datashader=datashader,
+        )
+        single_plot(
             fig,
             ax[3],
-            lon=lon,
-            lat=lat,
-            data=truth - pred,
+            lon,
+            lat,
+            truth - pred,
             cmap="bwr",
             norm=TwoSlopeNorm(vcenter=0.0),
             title=f"{vname} pred err",
+            datashader=datashader,
         )
     elif vname == "mwd":
         cyclic_colormap = "twilight"
@@ -492,10 +528,28 @@ def plot_flat_sample(
 
         sample_shape = truth.shape
         pred = np.maximum(np.zeros(sample_shape), np.minimum(360 * np.ones(sample_shape), (pred)))
-        scatter_plot(fig, ax[1], lon=lon, lat=lat, data=truth, cmap=cyclic_colormap, title=f"{vname} target")
-        scatter_plot(fig, ax[2], lon=lon, lat=lat, data=pred, cmap=cyclic_colormap, title=f"capped {vname} pred")
+        single_plot(
+            fig,
+            ax[1],
+            lon=lon,
+            lat=lat,
+            data=truth,
+            cmap=cyclic_colormap,
+            title=f"{vname} target",
+            datashader=datashader,
+        )
+        single_plot(
+            fig,
+            ax[2],
+            lon=lon,
+            lat=lat,
+            data=pred,
+            cmap=cyclic_colormap,
+            title=f"capped {vname} pred",
+            datashader=datashader,
+        )
         err_plot = error_plot_in_degrees(truth, pred)
-        scatter_plot(
+        single_plot(
             fig,
             ax[3],
             lon=lon,
@@ -504,26 +558,37 @@ def plot_flat_sample(
             cmap="bwr",
             norm=TwoSlopeNorm(vcenter=0.0),
             title=f"{vname} pred err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
+            datashader=datashader,
         )
     else:
-        scatter_plot(fig, ax[1], lon=lon, lat=lat, data=truth, title=f"{vname} target")
-        scatter_plot(fig, ax[2], lon=lon, lat=lat, data=pred, title=f"{vname} pred")
-        scatter_plot(
+        single_plot(fig, ax[1], lon, lat, truth, title=f"{vname} target", datashader=datashader)
+        single_plot(fig, ax[2], lon, lat, pred, title=f"{vname} pred", datashader=datashader)
+        single_plot(
             fig,
             ax[3],
-            lon=lon,
-            lat=lat,
-            data=truth - pred,
+            lon,
+            lat,
+            truth - pred,
             cmap="bwr",
             norm=TwoSlopeNorm(vcenter=0.0),
             title=f"{vname} pred err",
+            datashader=datashader,
         )
 
     if sum(input_) != 0:
         if vname == "mwd":
-            scatter_plot(fig, ax[0], lon=lon, lat=lat, data=input_, cmap=cyclic_colormap, title=f"{vname} input")
+            single_plot(
+                fig,
+                ax[0],
+                lon=lon,
+                lat=lat,
+                data=input_,
+                cmap=cyclic_colormap,
+                title=f"{vname} input",
+                datashader=datashader,
+            )
             err_plot = error_plot_in_degrees(pred, input_)
-            scatter_plot(
+            single_plot(
                 fig,
                 ax[4],
                 lon=lon,
@@ -532,9 +597,10 @@ def plot_flat_sample(
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} increment [pred - input] % 360",
+                datashader=datashader,
             )
             err_plot = error_plot_in_degrees(truth, input_)
-            scatter_plot(
+            single_plot(
                 fig,
                 ax[5],
                 lon=lon,
@@ -543,28 +609,31 @@ def plot_flat_sample(
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} persist err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
+                datashader=datashader,
             )
         else:
-            scatter_plot(fig, ax[0], lon=lon, lat=lat, data=input_, title=f"{vname} input")
-            scatter_plot(
+            single_plot(fig, ax[0], lon, lat, input_, title=f"{vname} input", datashader=datashader)
+            single_plot(
                 fig,
                 ax[4],
-                lon=lon,
-                lat=lat,
-                data=pred - input_,
+                lon,
+                lat,
+                pred - input_,
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} increment [pred - input]",
+                datashader=datashader,
             )
-            scatter_plot(
+            single_plot(
                 fig,
                 ax[5],
-                lon=lon,
-                lat=lat,
-                data=truth - input_,
+                lon,
+                lat,
+                truth - input_,
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} persist err",
+                datashader=datashader,
             )
     else:
         ax[0].axis("off")
@@ -572,22 +641,25 @@ def plot_flat_sample(
         ax[5].axis("off")
 
 
-def scatter_plot(
+def single_plot(
     fig: Figure,
-    ax: plt.Axes,
-    *,
+    ax: plt.axes,
     lon: np.array,
     lat: np.array,
     data: np.array,
     cmap: str = "viridis",
     norm: str | None = None,
     title: str | None = None,
+    datashader: bool = False,
 ) -> None:
-    """Lat-lon scatter plot: can work with arbitrary grids.
+    """Plot a single lat-lon map.
+
+    Plotting can be made either using datashader plot or Datashader(bin) plots.
+    By default it uses Datashader since it is faster and more efficient.
 
     Parameters
     ----------
-    fig : _type_
+    fig : Figure
         Figure object handle
     ax : matplotlib.axes
         Axis object handle
@@ -595,7 +667,7 @@ def scatter_plot(
         longitude coordinates array, shape (lon,)
     lat : np.ndarray
         latitude coordinates array, shape (lat,)
-    data : _type_
+    data : np.ndarray
         Data to plot
     cmap : str, optional
         Colormap string from matplotlib, by default "viridis"
@@ -603,18 +675,42 @@ def scatter_plot(
         Normalization string from matplotlib, by default None
     title : str, optional
         Title for plot, by default None
+    datashader: bool, optional
+        Scatter plot, by default False
 
+    Returns
+    -------
+    None
     """
-    psc = ax.scatter(
-        lon,
-        lat,
-        c=data,
-        cmap=cmap,
-        s=1,
-        alpha=1.0,
-        norm=norm,
-        rasterized=True,
-    )
+    if not datashader:
+        psc = ax.scatter(
+            lon,
+            lat,
+            c=data,
+            cmap=cmap,
+            s=1,
+            alpha=1.0,
+            norm=norm,
+            rasterized=False,
+        )
+    else:
+        df = pd.DataFrame({"val": data, "x": lon, "y": lat})
+        # Adjust binning to match the resolution of the data
+        n_pixels = int(np.floor(data.shape[0] / 212))
+        psc = dsshow(
+            df,
+            dsh.Point("x", "y"),
+            dsh.mean("val"),
+            vmin=data.min(),
+            vmax=data.max(),
+            cmap=cmap,
+            plot_width=n_pixels,
+            plot_height=n_pixels,
+            norm=norm,
+            aspect="auto",
+            ax=ax,
+        )
+
     ax.set_xlim((-np.pi, np.pi))
     ax.set_ylim((-np.pi / 2, np.pi / 2))
 
@@ -628,36 +724,147 @@ def scatter_plot(
     fig.colorbar(psc, ax=ax)
 
 
-def plot_graph_features(
-    latlons: np.ndarray,
-    features: np.ndarray,
-) -> Figure:
-    """Plot trainable graph features.
+def edge_plot(
+    fig: Figure,
+    ax: plt.Axes,
+    src_coords: np.ndarray,
+    dst_coords: np.ndarray,
+    data: np.ndarray,
+    cmap: str = "coolwarm",
+    title: str | None = None,
+) -> None:
+    """Lat-lon line plot.
 
     Parameters
     ----------
-    latlons : np.ndarray
-        Latitudes and longitudes
-    features : np.ndarray
-        Trainable Features
+    fig : Figure
+        Figure object handle
+    ax : matplotlib.axes
+        Axis object handle
+    src_coords : np.ndarray of shape (num_edges, 2)
+        Source latitudes and longitudes.
+    dst_coords : np.ndarray of shape (num_edges, 2)
+        Destination latitudes and longitudes.
+    data : np.ndarray of shape (num_edges, 1)
+        Data to plot
+    cmap : str, optional
+        Colormap string from matplotlib, by default "viridis".
+    title : str, optional
+        Title for plot, by default None
+    """
+    edge_lines = np.stack([src_coords, dst_coords], axis=1)
+    lc = LineCollection(edge_lines, cmap=cmap, linewidths=1)
+    lc.set_array(data)
+
+    psc = ax.add_collection(lc)
+
+    xmin, xmax = edge_lines[:, 0, 0].min(), edge_lines[:, 0, 0].max()
+    ymin, ymax = edge_lines[:, 1, 1].min(), edge_lines[:, 1, 1].max()
+    ax.set_xlim((xmin - 0.1, xmax + 0.1))
+    ax.set_ylim((ymin - 0.1, ymax + 0.1))
+
+    continents.plot_continents(ax)
+
+    if title is not None:
+        ax.set_title(title)
+
+    ax.set_aspect("auto", adjustable=None)
+    _hide_axes_ticks(ax)
+    fig.colorbar(psc, ax=ax)
+
+
+def plot_graph_node_features(model: nn.Module, datashader: bool = False) -> Figure:
+    """Plot trainable graph node features.
+
+    Parameters
+    ----------
+    model: AneomiModelEncProcDec
+        Model object
+    datashader: bool, optional
+        Scatter plot, by default False
 
     Returns
     -------
     Figure
         Figure object handle
-
     """
-    nplots = features.shape[-1]
-    figsize = (nplots * 4, 3)
-    fig, ax = plt.subplots(1, nplots, figsize=figsize)
+    nrows = len(nodes_name := model._graph_data.node_types)
+    ncols = min(model.node_attributes.trainable_tensors[m].trainable.shape[1] for m in nodes_name)
+    figsize = (ncols * 4, nrows * 3)
+    fig, ax = plt.subplots(nrows, ncols, figsize=figsize, layout=LAYOUT)
 
-    lat, lon = latlons[:, 0], latlons[:, 1]
+    for row, (mesh, trainable_tensor) in enumerate(model.node_attributes.trainable_tensors.items()):
+        latlons = model.node_attributes.get_coordinates(mesh).cpu().numpy()
+        node_features = trainable_tensor.trainable.cpu().detach().numpy()
 
-    pc = EquirectangularProjection()
-    pc_lon, pc_lat = pc(lon, lat)
+        lat, lon = latlons[:, 0], latlons[:, 1]
 
-    for i in range(nplots):
-        ax_ = ax[i] if nplots > 1 else ax
-        scatter_plot(fig, ax_, lon=pc_lon, lat=pc_lat, data=features[..., i])
+        for i in range(ncols):
+            ax_ = ax[row, i] if ncols > 1 else ax[row]
+            single_plot(
+                fig,
+                ax_,
+                lon=lon,
+                lat=lat,
+                data=node_features[..., i],
+                title=f"{mesh} trainable feature #{i + 1}",
+                datashader=datashader,
+            )
+
+    return fig
+
+
+def plot_graph_edge_features(model: nn.Module, q_extreme_limit: float = 0.05) -> Figure:
+    """Plot trainable graph edge features.
+
+    Parameters
+    ----------
+    model: AneomiModelEncProcDec
+        Model object
+    q_extreme_limit : float, optional
+        Plot top & bottom quantile of edges trainable values, by default 0.05 (5%).
+
+    Returns
+    -------
+    Figure
+        Figure object handle
+    """
+    trainable_modules = {
+        (model._graph_name_data, model._graph_name_hidden): model.encoder,
+        (model._graph_name_hidden, model._graph_name_data): model.decoder,
+    }
+
+    if isinstance(model.processor, GraphEdgeMixin):
+        trainable_modules[model._graph_name_hidden, model._graph_name_hidden] = model.processor
+
+    ncols = min(module.trainable.trainable.shape[1] for module in trainable_modules.values())
+    nrows = len(trainable_modules)
+    figsize = (ncols * 4, nrows * 3)
+    fig, ax = plt.subplots(nrows, ncols, figsize=figsize, layout=LAYOUT)
+
+    for row, ((src, dst), graph_mapper) in enumerate(trainable_modules.items()):
+        src_coords = model.node_attributes.get_coordinates(src).cpu().numpy()
+        dst_coords = model.node_attributes.get_coordinates(dst).cpu().numpy()
+        edge_index = graph_mapper.edge_index_base.cpu().numpy()
+        edge_features = graph_mapper.trainable.trainable.cpu().detach().numpy()
+
+        for i in range(ncols):
+            ax_ = ax[row, i] if ncols > 1 else ax[row]
+            feature = edge_features[..., i]
+
+            # Get mask of feature values over top and bottom percentiles
+            top_perc = np.quantile(feature, 1 - q_extreme_limit)
+            bottom_perc = np.quantile(feature, q_extreme_limit)
+
+            mask = (feature >= top_perc) | (feature <= bottom_perc)
+
+            edge_plot(
+                fig,
+                ax_,
+                src_coords[edge_index[0, mask]][:, ::-1],
+                dst_coords[edge_index[1, mask]][:, ::-1],
+                feature[mask],
+                title=f"{src} -> {dst} trainable feature #{i + 1}",
+            )
 
     return fig
