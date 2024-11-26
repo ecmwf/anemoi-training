@@ -39,7 +39,7 @@ def get_usable_indices(
     if missing_indices is None:
         missing_indices = set()
 
-    missing_indices |= {series_length} #filter final index
+    missing_indices |= set(range(series_length, series_length + max(relative_indices) + 1)) #filter indices larger than series length
 
     # Missing indices
     for i in missing_indices:
