@@ -24,6 +24,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.collections import PathCollection
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import ListedColormap
+from matplotlib.colors import Normalize
 from matplotlib.colors import TwoSlopeNorm
 from pyshtools.expand import SHGLQ
 from pyshtools.expand import SHExpandGLQ
@@ -567,8 +568,6 @@ def plot_flat_sample(
         combined_data = np.concatenate((input_, truth, pred))
         # For 'errors', only persistence and increments need identical colorbar-limits
         combined_error = np.concatenate(((pred - input_), (truth - input_)))
-        from matplotlib.colors import Normalize
-
         norm = Normalize(vmin=np.nanmin(combined_data), vmax=np.nanmax(combined_data))
         single_plot(fig, ax[1], lon, lat, truth, norm=norm, title=f"{vname} target", datashader=datashader)
         single_plot(fig, ax[2], lon, lat, pred, norm=norm, title=f"{vname} pred", datashader=datashader)
