@@ -9,8 +9,6 @@
 
 
 import logging
-import math
-import os
 from collections import defaultdict
 from collections.abc import Generator
 from collections.abc import Mapping
@@ -96,14 +94,17 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        variable_scaling = self.get_feature_weights(config, data_indices)
+        variable_scaling = self.get_variable_scaling(config, data_indices)
 
         _, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
 
         # Kwargs to pass to the loss function
         loss_kwargs = {"node_weights": self.node_weights}
         # Scalars to include in the loss function, must be of form (dim, scalar)
-        scalars = {"variable": (-1, variable_scaling)}
+        # Add mask multiplying NaN locations with zero. At this stage at [[1]].
+        # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
+        scalars = {"variable": (-1, variable_scaling), "loss_weights_mask": ((-2, -1), torch.ones((1, 1)))}
+        self.updated_loss_mask = False
 
         self.loss = self.get_loss_function(config.training.training_loss, scalars=scalars, **loss_kwargs)
 
@@ -126,6 +127,7 @@ class GraphForecaster(pl.LightningModule):
             * config.training.lr.rate
             / config.hardware.num_gpus_per_model
         )
+        self.warmup_t = getattr(config.training.lr, "warmup_t", 1000)
         self.lr_iterations = config.training.lr.iterations
         self.lr_min = config.training.lr.min
         self.rollout = config.training.rollout.start
@@ -135,17 +137,20 @@ class GraphForecaster(pl.LightningModule):
         self.use_zero_optimizer = config.training.zero_optimizer
 
         self.model_comm_group = None
+        self.reader_groups = None
 
         LOGGER.debug("Rollout window length: %d", self.rollout)
         LOGGER.debug("Rollout increase every : %d epochs", self.rollout_epoch_increment)
         LOGGER.debug("Rollout max : %d", self.rollout_max)
         LOGGER.debug("Multistep: %d", self.multi_step)
 
-        self.model_comm_group_id = int(os.environ.get("SLURM_PROCID", "0")) // config.hardware.num_gpus_per_model
-        self.model_comm_group_rank = int(os.environ.get("SLURM_PROCID", "0")) % config.hardware.num_gpus_per_model
-        self.model_comm_num_groups = math.ceil(
-            config.hardware.num_gpus_per_node * config.hardware.num_nodes / config.hardware.num_gpus_per_model,
-        )
+        # lazy init model and reader group info, will be set by the DDPGroupStrategy:
+        self.model_comm_group_id = 0
+        self.model_comm_group_rank = 0
+        self.model_comm_num_groups = 1
+
+        self.reader_group_id = 0
+        self.reader_group_rank = 0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x, self.model_comm_group)
@@ -217,6 +222,24 @@ class GraphForecaster(pl.LightningModule):
 
         return loss_function
 
+    def training_weights_for_imputed_variables(
+        self,
+        batch: torch.Tensor,
+    ) -> None:
+        """Update the loss weights mask for imputed variables."""
+        if "loss_weights_mask" in self.loss.scalar:
+            loss_weights_mask = torch.ones((1, 1), device=batch.device)
+            # iterate over all pre-processors and check if they have a loss_mask_training attribute
+            for pre_processor in self.model.pre_processors.processors.values():
+                if hasattr(pre_processor, "loss_mask_training"):
+                    loss_weights_mask = loss_weights_mask * pre_processor.loss_mask_training
+                # if transform_loss_mask function exists for preprocessor apply it
+                if hasattr(pre_processor, "transform_loss_mask"):
+                    loss_weights_mask = pre_processor.transform_loss_mask(loss_weights_mask)
+            # update scaler with loss_weights_mask retrieved from preprocessors
+            self.loss.update_scalar(scalar=loss_weights_mask.cpu(), name="loss_weights_mask")
+        self.updated_loss_mask = True
+
     @staticmethod
     def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, dict]:
 
@@ -254,13 +277,13 @@ class GraphForecaster(pl.LightningModule):
         return metric_ranges, metric_ranges_validation
 
     @staticmethod
-    def get_feature_weights(
+    def get_variable_scaling(
         config: DictConfig,
         data_indices: IndexCollection,
     ) -> torch.Tensor:
-        loss_scaling = (
+        variable_loss_scaling = (
             np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32)
-            * config.training.loss_scaling.default
+            * config.training.variable_loss_scaling.default
         )
         pressure_level = instantiate(config.training.pressure_level_scaler)
 
@@ -275,24 +298,48 @@ class GraphForecaster(pl.LightningModule):
             split = key.split("_")
             if len(split) > 1 and split[-1].isdigit():
                 # Apply pressure level scaling
-                if split[0] in config.training.loss_scaling.pl:
-                    loss_scaling[idx] = config.training.loss_scaling.pl[split[0]] * pressure_level.scaler(
+                if split[0] in config.training.variable_loss_scaling.pl:
+                    variable_loss_scaling[idx] = config.training.variable_loss_scaling.pl[
+                        split[0]
+                    ] * pressure_level.scaler(
                         int(split[-1]),
                     )
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
             else:
                 # Apply surface variable scaling
-                if key in config.training.loss_scaling.sfc:
-                    loss_scaling[idx] = config.training.loss_scaling.sfc[key]
+                if key in config.training.variable_loss_scaling.sfc:
+                    variable_loss_scaling[idx] = config.training.variable_loss_scaling.sfc[key]
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
 
-        return torch.from_numpy(loss_scaling)
+        return torch.from_numpy(variable_loss_scaling)
 
-    def set_model_comm_group(self, model_comm_group: ProcessGroup) -> None:
-        LOGGER.debug("set_model_comm_group: %s", model_comm_group)
+    def set_model_comm_group(
+        self,
+        model_comm_group: ProcessGroup,
+        model_comm_group_id: int,
+        model_comm_group_rank: int,
+        model_comm_num_groups: int,
+        model_comm_group_size: int,
+    ) -> None:
         self.model_comm_group = model_comm_group
+        self.model_comm_group_id = model_comm_group_id
+        self.model_comm_group_rank = model_comm_group_rank
+        self.model_comm_num_groups = model_comm_num_groups
+        self.model_comm_group_size = model_comm_group_size
+
+    def set_reader_groups(
+        self,
+        reader_groups: list[ProcessGroup],
+        reader_group_id: int,
+        reader_group_rank: int,
+        reader_group_size: int,
+    ) -> None:
+        self.reader_groups = reader_groups
+        self.reader_group_id = reader_group_id
+        self.reader_group_rank = reader_group_rank
+        self.reader_group_size = reader_group_size
 
     def advance_input(
         self,
@@ -359,6 +406,10 @@ class GraphForecaster(pl.LightningModule):
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch = self.model.pre_processors(batch, in_place=not validation_mode)
 
+        if not self.updated_loss_mask:
+            # update loss scalar after first application and initialization of preprocessors
+            self.training_weights_for_imputed_variables(batch)
+
         # start rollout of preprocessed batch
         x = batch[
             :,
@@ -398,6 +449,8 @@ class GraphForecaster(pl.LightningModule):
         validation_mode: bool = False,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         del batch_idx
+        batch = self.allgather_batch(batch)
+
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}
         y_preds = []
@@ -414,6 +467,44 @@ class GraphForecaster(pl.LightningModule):
 
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
+
+    def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
+        """Allgather the batch-shards across the reader group.
+
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Batch-shard of current reader rank
+
+        Returns
+        -------
+        torch.Tensor
+            Allgathered (full) batch
+        """
+        grid_size = self.model.metadata["dataset"]["shape"][-1]
+
+        if grid_size == batch.shape[-2]:
+            return batch  # already have the full grid
+
+        grid_shard_size = grid_size // self.reader_group_size
+        last_grid_shard_size = grid_size - (grid_shard_size * (self.reader_group_size - 1))
+
+        # prepare tensor list with correct shapes for all_gather
+        shard_shape = list(batch.shape)
+        shard_shape[-2] = grid_shard_size
+        last_shard_shape = list(batch.shape)
+        last_shard_shape[-2] = last_grid_shard_size
+
+        tensor_list = [torch.empty(tuple(shard_shape), device=self.device) for _ in range(self.reader_group_size - 1)]
+        tensor_list.append(torch.empty(last_shard_shape, device=self.device))
+
+        torch.distributed.all_gather(
+            tensor_list,
+            batch,
+            group=self.reader_groups[self.reader_group_id],
+        )
+
+        return torch.cat(tensor_list, dim=-2)
 
     def calculate_val_metrics(
         self,
@@ -456,8 +547,7 @@ class GraphForecaster(pl.LightningModule):
                 metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
                     y_pred_postprocessed[..., indices],
                     y_postprocessed[..., indices],
-                    feature_indices=indices,
-                    feature_scale=mkey == "all",
+                    scalar_indices=[..., indices] if -1 in metric.scalar else None,
                 )
 
         return metrics
@@ -549,6 +639,6 @@ class GraphForecaster(pl.LightningModule):
             optimizer,
             lr_min=self.lr_min,
             t_initial=self.lr_iterations,
-            warmup_t=1000,
+            warmup_t=self.warmup_t,
         )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
