@@ -704,7 +704,7 @@ def single_plot(
     else:
         df = pd.DataFrame({"val": data, "x": lon, "y": lat})
         # Adjust binning to match the resolution of the data
-        lower_limit = 35
+        lower_limit = 25
         upper_limit = 500
         n_pixels = max(min(int(np.floor(data.shape[0] * 0.004)), upper_limit), lower_limit)
         psc = dsshow(
