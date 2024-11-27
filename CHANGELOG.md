@@ -13,6 +13,7 @@ Keep it human-readable, your future self will thank you!
 
 - Fixed bug in power spectra plotting for the n320 resolution.
 - Allow histogram and spectrum plot for one variable [#165](https://github.com/ecmwf/anemoi-training/pull/165)
+- Allow datashader plotting variables that contain NaNs [[#162](https://github.com/ecmwf/anemoi-training/issues/162)]
 
 ### Added
 - Introduce variable to configure (Cosine Annealing) optimizer warm up [#155](https://github.com/ecmwf/anemoi-training/pull/155)
