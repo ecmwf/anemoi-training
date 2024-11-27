@@ -13,7 +13,8 @@ Keep it human-readable, your future self will thank you!
 - Update `n_pixel` used by datashader to better adapt across resolutions #152
 
 
-Fixed bug in power spectra plotting for the n320 resolution.
+- Fixed bug in power spectra plotting for the n320 resolution.
+- Allow histogram and spectrum plot for one variable [#165](https://github.com/ecmwf/anemoi-training/pull/165)
 
 ### Added
 - Introduce variable to configure (Cosine Annealing) optimizer warm up [#155](https://github.com/ecmwf/anemoi-training/pull/155)

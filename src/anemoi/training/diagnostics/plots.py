@@ -167,6 +167,8 @@ def plot_power_spectrum(
 
     figsize = (n_plots_y * 4, n_plots_x * 3)
     fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize, layout=LAYOUT)
+    if n_plots_x == 1:
+        ax = [ax]
 
     pc_lat, pc_lon = equirectangular_projection(latlons)
 
@@ -294,6 +296,8 @@ def plot_histogram(
 
     figsize = (n_plots_y * 4, n_plots_x * 3)
     fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize, layout=LAYOUT)
+    if n_plots_x == 1:
+        ax = [ax]
 
     for plot_idx, (variable_idx, (variable_name, output_only)) in enumerate(parameters.items()):
         yt = y_true[..., variable_idx].squeeze()
