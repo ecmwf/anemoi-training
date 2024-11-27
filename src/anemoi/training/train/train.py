@@ -150,19 +150,21 @@ class AnemoiTrainer:
             checkpoint = torch.load(self.last_checkpoint)
             checkpoint_state_dict = checkpoint["state_dict"]
             model_state_dict = model.state_dict()
-            for layer in model_state_dict:
-                if layer in checkpoint_state_dict:
-                    checkpoint_param = checkpoint_state_dict[layer]
-                    model_param = model_state_dict[layer]
-                    if checkpoint_param.size() == model_param.size():
-                        model_state_dict[layer] = checkpoint_param
-                    else:
-                        LOGGER.info(
-                            "Skipping layer %s due to size mismatch: %s vs %s.",
-                            layer,
-                            checkpoint_param.size(),
-                            model_param.size(),
-                        )
+            if self.config.training.transfer_learning:
+                LOGGER.info ("Loading checkpoint in transfer learning mode")
+                for layer in model_state_dict:
+                    if layer in checkpoint_state_dict:
+                        checkpoint_param = checkpoint_state_dict[layer]
+                        model_param = model_state_dict[layer]
+                        if checkpoint_param.size() == model_param.size():
+                            model_state_dict[layer] = checkpoint_param
+                        else:
+                            LOGGER.info(
+                                "Skipping layer %s due to size mismatch: %s vs %s.",
+                                layer,
+                                checkpoint_param.size(),
+                                model_param.size(),
+                            )
             model.load_state_dict(model_state_dict)
 
         return model
