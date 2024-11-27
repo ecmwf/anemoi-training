@@ -151,7 +151,7 @@ class AnemoiTrainer:
             checkpoint_state_dict = checkpoint["state_dict"]
             model_state_dict = model.state_dict()
             if self.config.training.transfer_learning:
-                LOGGER.info ("Loading checkpoint in transfer learning mode")
+                LOGGER.info("Loading checkpoint in transfer learning mode")
                 for layer in model_state_dict:
                     if layer in checkpoint_state_dict:
                         checkpoint_param = checkpoint_state_dict[layer]
