@@ -33,7 +33,7 @@ from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.train.forecaster import GraphForecaster
-from anemoi.training.utils.checkpoint import sanify_checkpoint
+from anemoi.training.utils.checkpoint import transfer_learning_loading
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
 
@@ -89,10 +89,8 @@ class AnemoiTrainer:
         datamodule = AnemoiDatasetsDataModule(self.config)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
         LOGGER.info(
-            "Data has ",
-            len(datamodule.ds_train.data.variables),
-            " variables: ",
-            datamodule.ds_train.data.variables,
+            "Data has {} variables: {}".format(len(datamodule.ds_train.data.variables), 
+                                               datamodule.ds_train.data.variables),
         )
         return datamodule
 
@@ -165,9 +163,12 @@ class AnemoiTrainer:
                     self.config.hardware.paths.checkpoints.parent,
                     (self.fork_run_server2server or self.config.training.fork_run_id) or self.lineage_run,
                 )
-                self.last_checkpoint = sanify_checkpoint(model, self.last_checkpoint, save_path)
+                LOGGER.info("Learning weights with Transfer Learning from %s", self.last_checkpoint)
+
+                return transfer_learning_loading(model, self.last_checkpoint)
 
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
+
             return model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
         return model
@@ -314,7 +315,7 @@ class AnemoiTrainer:
         LOGGER.debug("Total number of auxiliary variables: %d", len(self.config.data.forcing))
 
         # Log learning rate multiplier when running single-node, multi-GPU and/or multi-node
-        total_number_of_model_instances = int(
+        total_number_of_model_instances = (
             self.config.hardware.num_nodes
             * self.config.hardware.num_gpus_per_node
             / self.config.hardware.num_gpus_per_model,
@@ -420,8 +421,7 @@ class AnemoiTrainer:
 
 @hydra.main(version_base=None, config_path="../config", config_name="config")
 def main(config: DictConfig) -> None:
-    trainer = AnemoiTrainer(config)
-    trainer.train()
+    AnemoiTrainer(config).train()
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 from anemoi.utils.checkpoints import save_metadata
 
 from anemoi.training.train.forecaster import GraphForecaster
@@ -70,7 +71,7 @@ def save_inference_checkpoint(model: torch.nn.Module, metadata: dict, save_path:
     return inference_filepath
 
 
-def sanify_checkpoint(model: torch.nn.Module, ckpt_path: Path | str, save_path: Path | str) -> Path:
+def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> nn.Module:
 
     # Load the checkpoint
     checkpoint = torch.load(ckpt_path, map_location=model.device)
@@ -92,8 +93,5 @@ def sanify_checkpoint(model: torch.nn.Module, ckpt_path: Path | str, save_path: 
             )
             del state_dict[key]  # Remove the mismatched key
 
-    new_ckpt_path = Path(save_path, "transfer.ckpt")
-    LOGGER.info("Saved modified checkpoint at", new_ckpt_path)
-    torch.save(checkpoint, new_ckpt_path)
-
-    return new_ckpt_path
+    # Load the filtered state_dict into the model
+    return model.load_state_dict(state_dict, strict=False)
