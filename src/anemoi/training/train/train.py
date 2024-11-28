@@ -26,6 +26,7 @@ from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
+from hydra.utils import instantiate
 
 from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
 from anemoi.training.diagnostics.callbacks import get_callbacks
@@ -81,17 +82,7 @@ class AnemoiTrainer:
     @cached_property
     def datamodule(self) -> AnemoiDatasetsDataModule:
         """DataModule instance and DataSets."""
-        spatial_indices = None
-        if self.config.dataloader.get("spatial_indices", None) is not None:
-            nodes_name = self.config.dataloader.spatial_indices.nodes_name
-            index_attr_name = self.config.dataloader.spatial_indices.indices_attribute_name
-            LOGGER.info(
-                "The graph attribute %s of the %s nodes will be used to masking the spatial dimension.",
-                index_attr_name,
-                nodes_name,
-            )
-            spatial_indices = self.graph_data[nodes_name][index_attr_name].squeeze().tolist()
-
+        spatial_indices = instantiate(self.config.dataloader.spatial_indices).get_indices(self.graph_data)
         datamodule = AnemoiDatasetsDataModule(self.config, spatial_indices=spatial_indices)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
         return datamodule

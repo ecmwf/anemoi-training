@@ -40,6 +40,11 @@ limit_batches:
   test: 20
   predict: 20
 
+# set a custom spatial indices.
+# Useful for LAM (dropping unconnected nodes from forcing dataset)
+spatial_indices:
+  _target_: anemoi.training.utils.spatial_indices.NoSpatialIndices
+
 # ============
 # Dataloader definitions
 # These follow the anemoi-datasets patterns
