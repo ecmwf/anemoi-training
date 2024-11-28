@@ -144,6 +144,7 @@ class AnemoiTrainer:
             "graph_data": self.graph_data,
             "metadata": self.metadata,
             "statistics": self.datamodule.statistics,
+            "supporting_arrays": self.supporting_arrays,
         }
         if self.load_weights_only:
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
@@ -230,6 +231,10 @@ class AnemoiTrainer:
                 "timestamp": datetime.datetime.now(tz=datetime.timezone.utc),
             },
         )
+
+    @cached_property
+    def supporting_arrays(self) -> dict:
+        return self.datamodule.supporting_arrays
 
     @cached_property
     def profiler(self) -> PyTorchProfiler | None:
