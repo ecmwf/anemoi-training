@@ -60,6 +60,13 @@ class WeightedMSELossLimitedArea(BaseWeightedLoss):
         self.inside_lam = inside_lam
         self.wmse_contribution = wmse_contribution
 
+        if inside_lam:
+            self.name += "_inside_lam"
+        else:
+            self.name += "_outside_lam"
+        if wmse_contribution:
+            self.name += "_contribution"
+
     def forward(
         self,
         pred: torch.Tensor,
