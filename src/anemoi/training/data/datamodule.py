@@ -7,6 +7,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+from __future__ import annotations
 
 import logging
 from functools import cached_property
@@ -29,7 +30,7 @@ LOGGER = logging.getLogger(__name__)
 class AnemoiDatasetsDataModule(pl.LightningDataModule):
     """Anemoi Datasets data module for PyTorch Lightning."""
 
-    def __init__(self, config: DictConfig, spatial_indices: list[int] = None) -> None:
+    def __init__(self, config: DictConfig, spatial_indices: list[int] | None = None) -> None:
         """Initialize Anemoi Datasets data module.
 
         Parameters
