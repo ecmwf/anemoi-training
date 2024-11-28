@@ -29,7 +29,7 @@ dataloader:
 #    spatial:
 #      _target_: anemoi.training.data.scaling.StretchedGridCutoutAreaWeights
 #      target_nodes: ${graph.data}
-#      cutout_weight_frac_of_global: ??? 
+#      cutout_weight_frac_of_global: ???
 hardware:
   files:
     dataset: ???
