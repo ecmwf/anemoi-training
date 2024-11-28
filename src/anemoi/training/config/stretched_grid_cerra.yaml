@@ -136,7 +136,7 @@ data:
     - "lsm"
 
 model:
-  num_channels: 512
+  num_channels: 256
   trainable_parameters:
     data: 0
     hidden: 0
@@ -170,4 +170,19 @@ training:
       scalars: ['limited_area_mask']
       inside_lam: True
       wmse_contribution: False
+      ignore_nans: True
+    - _target_: anemoi.training.losses.limitedarea.WeightedMSELossLimitedArea
+      scalars: ['limited_area_mask']
+      inside_lam: False
+      wmse_contribution: False
+      ignore_nans: True
+    - _target_: anemoi.training.losses.limitedarea.WeightedMSELossLimitedArea
+      scalars: ['limited_area_mask']
+      inside_lam: True
+      wmse_contribution: True
+      ignore_nans: True
+    - _target_: anemoi.training.losses.limitedarea.WeightedMSELossLimitedArea
+      scalars: ['limited_area_mask']
+      inside_lam: False
+      wmse_contribution: True
       ignore_nans: True
