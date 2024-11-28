@@ -8,8 +8,10 @@
 # nor does it submit to any jurisdiction.
 
 import logging
+from abc import ABC
+from abc import abstractmethod
+
 from torch_geometric.data import HeteroData
-from abc import ABC, abstractmethod
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,11 +32,11 @@ class NoSpatialIndices(BaseSpatialIndices):
 
 class GraphNodeAttribute(BaseSpatialIndices):
     """Get graph node attribute."""
-        
+
     def __init__(self, nodes_name: str, node_attribute_name: str):
         self.nodes_name = nodes_name
         self.node_attribute_name = node_attribute_name
-    
+
     def get_indices(self, graph: HeteroData) -> list[int]:
         LOGGER.info(
             "The graph attribute %s of the %s nodes will be used to masking the spatial dimension.",

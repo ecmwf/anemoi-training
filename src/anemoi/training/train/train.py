@@ -22,11 +22,11 @@ import pytorch_lightning as pl
 import torch
 from anemoi.utils.config import DotDict
 from anemoi.utils.provenance import gather_provenance_info
+from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
-from hydra.utils import instantiate
 
 from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
 from anemoi.training.diagnostics.callbacks import get_callbacks
