@@ -37,9 +37,9 @@ edges:
 # Decoder configuration
 - source_name: ${graph.hidden}
   target_name: ${graph.data}
-  target_mask_attr_name: cutout
   edge_builders:
   - _target_: anemoi.graphs.edges.KNNEdges # options: KNNEdges, CutOffEdges
+    target_mask_attr_name: cutout
     num_nearest_neighbours: 3 # only for knn method
   attributes: ${graph.attributes.edges}
 
