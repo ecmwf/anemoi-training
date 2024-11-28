@@ -480,7 +480,7 @@ class GraphForecaster(pl.LightningModule):
         torch.Tensor
             Allgathered (full) batch
         """
-        grid_size = len(self.latlons_data) # number of points
+        grid_size = len(self.latlons_data)  # number of points
 
         if grid_size == batch.shape[-2]:
             return batch  # already have the full grid
