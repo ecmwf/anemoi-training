@@ -60,10 +60,10 @@ attributes:
       _target_: anemoi.graphs.nodes.attributes.AreaWeights # options: Area, Uniform
       norm: unit-max # options: l1, l2, unit-max, unit-sum, unit-std
     cutout_mask:
-      _target_: anemoi.graphs.nodes.attributes.CutOutMask     
+      _target_: anemoi.graphs.nodes.attributes.CutOutMask
     boundary_mask:
       _target_: anemoi.graphs.nodes.attributes.BooleanNot
-      masks: 
+      masks:
         _target_: anemoi.graphs.nodes.attributes.CutOutMask
   edges:
     edge_length:
