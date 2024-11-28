@@ -833,13 +833,18 @@ def plot_graph_node_features(model: nn.Module, datashader: bool = False) -> Figu
         Figure object handle
     """
     nrows = len(nodes_name := model._graph_data.node_types)
-    ncols = min(model.node_attributes.trainable_tensors[m].trainable.shape[1] for m in nodes_name)
+    trainable_tensors = {nodes_name: model.node_attributes.trainable_tensors[m].trainable for m in nodes_name}
+    ncols = min(0 if tt is None else tt.shape[0] for tt in trainable_tensors.values())
+    if ncols == 0:
+        LOGGER.warning("There are no trainable node attributes to plot.")
+        return None
+
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize, layout=LAYOUT)
 
-    for row, (mesh, trainable_tensor) in enumerate(model.node_attributes.trainable_tensors.items()):
+    for row, (mesh, trainable_tensor) in enumerate(trainable_tensors.items()):
         latlons = model.node_attributes.get_coordinates(mesh).cpu().numpy()
-        node_features = trainable_tensor.trainable.cpu().detach().numpy()
+        node_features = trainable_tensor.cpu().detach().numpy()
 
         lat, lon = latlons[:, 0], latlons[:, 1]
 
@@ -881,7 +886,12 @@ def plot_graph_edge_features(model: nn.Module, q_extreme_limit: float = 0.05) ->
     if isinstance(model.processor, GraphEdgeMixin):
         trainable_modules[model._graph_name_hidden, model._graph_name_hidden] = model.processor
 
-    ncols = min(module.trainable.trainable.shape[1] for module in trainable_modules.values())
+    trainable_tensors = {name: module.trainable.trainable for name, module in trainable_modules.items()}
+    ncols = min(0 if tt is None else tt.shape[1] for tt in trainable_tensors.values())
+    if ncols == 0:
+        LOGGER.warning("There are no trainable edge attributes to plot.")
+        return None
+
     nrows = len(trainable_modules)
     figsize = (ncols * 4, nrows * 3)
     fig, ax = plt.subplots(nrows, ncols, figsize=figsize, layout=LAYOUT)
