@@ -17,7 +17,7 @@ nodes:
       _target_: anemoi.graphs.nodes.LimitedAreaTriNodes # options: ZarrDatasetNodes, NPZFileNodes, TriNodes
       resolution: 5 # grid resolution for npz (o32, o48, ...)
       reference_node_name: ${graph.data}
-      mask_attr_name: cutout
+      mask_attr_name: cutout_mask
 
 edges:
 # Encoder configuration
@@ -39,7 +39,7 @@ edges:
   target_name: ${graph.data}
   edge_builders:
   - _target_: anemoi.graphs.edges.KNNEdges # options: KNNEdges, CutOffEdges
-    target_mask_attr_name: cutout
+    target_mask_attr_name: cutout_mask
     num_nearest_neighbours: 3 # only for knn method
   attributes: ${graph.attributes.edges}
 
@@ -49,7 +49,7 @@ attributes:
     area_weight:
       _target_: anemoi.graphs.nodes.attributes.AreaWeights # options: Area, Uniform
       norm: unit-max # options: l1, l2, unit-max, unit-sum, unit-std
-    cutout:
+    cutout_mask:
       _target_: anemoi.graphs.nodes.attributes.CutOutMask
   edges:
     edge_length:
