@@ -530,11 +530,7 @@ class GraphForecaster(pl.LightningModule):
         """
         metrics = {}
         # Added to impute nans
-        print(self.data_indices.internal_data.output.full)
-        print(y.shape)
-        print(y[..., self.data_indices.internal_data.output.full].shape)
-        nan_locations = torch.isnan(y[..., self.data_indices.internal_data.output.full])
-        print(nan_locations)
+        nan_locations = torch.isnan(y)
         self.model.post_processors.processors["imputer"].set_nan_locations(nan_locations)
         y_postprocessed = self.model.post_processors(y, in_place=False)
         y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
@@ -551,13 +547,10 @@ class GraphForecaster(pl.LightningModule):
                 continue
 
             for mkey, indices in self.val_metric_ranges.items():
-                print(indices)
-                print(y_pred_postprocessed)
-                indices.to(y_postprocessed.device)
                 metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
-                    y_pred_postprocessed[..., indices],
-                    y_postprocessed[..., indices],
-                    scalar_indices=[..., indices] if -1 in metric.scalar else None,
+                    y_pred_postprocessed[...,],
+                    y_postprocessed[...],
+                    scalar_indices=[...] if -1 in metric.scalar else None,
                 )
 
         return metrics

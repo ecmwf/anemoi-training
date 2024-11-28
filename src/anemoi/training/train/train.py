@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
 
 LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)  # Change DEBUG to INFO, WARNING, etc., as needed
 
 
 class AnemoiTrainer:
@@ -66,10 +67,10 @@ class AnemoiTrainer:
         if self.config.training.transfer_learning is None:
             self.config.training.transfer_learning = (
                 bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
-            ) and self.load_weights_only
+            ) and self.config.training.load_weights_only
 
         self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
-        self.load_weights_only = config.training.load_weights_only
+        self.load_weights_only = self.config.training.load_weights_only
         self.parent_uuid = None
 
         self.config.training.run_id = self.run_id
@@ -138,6 +139,8 @@ class AnemoiTrainer:
 
         from anemoi.graphs.create import GraphCreator
 
+        LOGGER.info("Generating graph data from scratch..")
+
         return GraphCreator(config=self.config.graph).create(
             save_path=graph_filename,
             overwrite=self.config.graph.overwrite,
@@ -159,19 +162,16 @@ class AnemoiTrainer:
         if self.load_weights_only:
             # Sanify the checkpoint for transfer learning
             if self.config.training.transfer_learning:
-                save_path = Path(
-                    self.config.hardware.paths.checkpoints.parent,
-                    (self.fork_run_server2server or self.config.training.fork_run_id) or self.lineage_run,
-                )
                 LOGGER.info("Learning weights with Transfer Learning from %s", self.last_checkpoint)
-
                 return transfer_learning_loading(model, self.last_checkpoint)
 
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
 
             return model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
-        return model
+        else:
+            LOGGER.info("Model initialised from scratch.")
+            return model
 
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:
@@ -315,17 +315,13 @@ class AnemoiTrainer:
         LOGGER.debug("Total number of auxiliary variables: %d", len(self.config.data.forcing))
 
         # Log learning rate multiplier when running single-node, multi-GPU and/or multi-node
-        total_number_of_model_instances = (
-            self.config.hardware.num_nodes
-            * self.config.hardware.num_gpus_per_node
-            / self.config.hardware.num_gpus_per_model,
-        )
+        total_number_of_model_instances = self.config.hardware.num_nodes * self.config.hardware.num_gpus_per_node / self.config.hardware.num_gpus_per_model
 
         LOGGER.debug(
             "Total GPU count / model group size: %d - NB: the learning rate will be scaled by this factor!",
             total_number_of_model_instances,
         )
-        LOGGER.debug("Effective learning rate: %.3e", total_number_of_model_instances * self.config.training.lr.rate)
+        LOGGER.debug("Effective learning rate: %.3e", int(total_number_of_model_instances) * self.config.training.lr.rate)
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
         if self.config.training.max_epochs is not None and self.config.training.max_steps not in (None, -1):
