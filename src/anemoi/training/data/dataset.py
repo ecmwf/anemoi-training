@@ -84,7 +84,7 @@ class NativeGridDataset(IterableDataset):
         self.ensemble_size = self.data.shape[self.ensemble_dim]
 
         # relative index of dates to extract
-        self.relative_date_indices = relative_date_indices #np.array(date_indices, dtype = np.int32)
+        self.relative_date_indices = relative_date_indices
 
     @cached_property
     def statistics(self) -> dict:
@@ -118,7 +118,7 @@ class NativeGridDataset(IterableDataset):
         dataset length minus rollout minus additional multistep inputs
         (if time_increment is 1).
         """
-        return get_usable_indices(self.data.missing, len(self.data), np.array(self.relative_date_indices, dtype=np.int32))
+        return get_usable_indices(self.data.missing, len(self.data), np.array(self.relative_date_indices, dtype=np.int64), self.data.model_run_ids)
 
     def per_worker_init(self, n_workers: int, worker_id: int) -> None:
         """Called by worker_init_func on each copy of dataset.

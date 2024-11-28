@@ -12,6 +12,7 @@ import logging
 import os
 from functools import cached_property
 from typing import Callable
+import numpy as np
 
 import pytorch_lightning as pl
 from anemoi.datasets.data import open_dataset
@@ -113,6 +114,22 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             multi_step = self.config.training.multistep_input
             return [self.timeincrement * mstep for mstep in range(multi_step + rollout)]
 
+    def add_model_run_ids(self, data_reader):
+        """Determine the model run id of each time index of the data and add to a data_reader object
+        NOTE/TODO: This is only relevant when training on non-analysis and should be replaced with
+        a property of the dataset stored in data_reader.
+        Until then, assumes regular interval of changed model runs
+        """
+        if not hasattr(self.config.dataloader, "model_run_info"):
+            return data_reader
+
+        mr_start = np.datetime64(self.config.dataloader.model_run_info.start)
+        mr_len = self.config.dataloader.model_run_info.length # model run length in number of date indices
+        assert max(self.relative_date_indices) <= mr_len, f"Requested data length {max(self.relative_date_indices)} longer than model run length {mr_len}"
+
+        data_reader.model_run_ids = (data_reader.dates - mr_start)//np.timedelta64(mr_len*frequency_to_seconds(self.config.data.frequency), 's')
+        return data_reader
+
     @cached_property
     def timeincrement(self) -> int:
         """Determine the step size relative to the data frequency."""
@@ -186,6 +203,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         shuffle: bool = True,
         label: str = "generic",
     ) -> NativeGridDataset:
+        data_reader = self.add_model_run_ids(data_reader) # NOTE: Temporary
         data = NativeGridDataset(
             data_reader=data_reader,
             relative_date_indices = self.relative_date_indices,
