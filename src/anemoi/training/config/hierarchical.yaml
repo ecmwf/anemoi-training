@@ -1,10 +1,10 @@
 defaults:
 - data: zarr
 - dataloader: native_grid
-- diagnostics: eval_rollout
+- diagnostics: evaluation
 - hardware: example
 - graph: hierarchical_3level
-- model: graphtransformer
+- model: gnn
 - training: default
 - _self_
 
@@ -16,21 +16,8 @@ defaults:
 # hardware:
 #   num_gpus_per_node: 1
 
-diagnostics:
-  plot:
-    enabled: False
-hardware:
-  files:
-    dataset: ???
-    graph: ???
 model:
-  num_channels: 128
   model:
-    __target__: anemoi.models.models.AnemoiModelEncHierProcDec
-  process_hierarchy_levels: True
-dataloader:
-  limit_batches:
-    training: 100
-    validation: 100
-training:
-  max_epochs: 5
+    _target_: anemoi.models.models.AnemoiModelEncProcDecHierarchical
+  enable_hierarchical_level_processing: True
+  level_process_num_layers: 2
