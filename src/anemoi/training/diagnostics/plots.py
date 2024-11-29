@@ -900,7 +900,7 @@ def plot_graph_edge_features(model: nn.Module, q_extreme_limit: float = 0.05) ->
         src_coords = model.node_attributes.get_coordinates(src).cpu().numpy()
         dst_coords = model.node_attributes.get_coordinates(dst).cpu().numpy()
         edge_index = graph_mapper.edge_index_base.cpu().numpy()
-        edge_features = trainable_tensors[(src, dst)].cpu().detach().numpy()
+        edge_features = trainable_tensors[src, dst].cpu().detach().numpy()
 
         for i in range(ncols):
             ax_ = ax[row, i] if ncols > 1 else ax[row]
