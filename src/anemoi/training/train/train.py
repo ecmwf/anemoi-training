@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import datetime
 import logging
-import os
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -21,6 +20,7 @@ import hydra
 import numpy as np
 import pytorch_lightning as pl
 import torch
+from anemoi.utils.config import DotDict
 from anemoi.utils.provenance import gather_provenance_info
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
@@ -106,7 +106,7 @@ class AnemoiTrainer:
         (torch.rand(1), np_rng.random())
         LOGGER.debug(
             "Initial seed: Rank %d, initial seed %d, running with random seed: %d",
-            int(os.environ.get("SLURM_PROCID", "0")),
+            self.strategy.global_rank,
             initial_seed,
             rnd_seed,
         )
@@ -129,7 +129,8 @@ class AnemoiTrainer:
 
         from anemoi.graphs.create import GraphCreator
 
-        return GraphCreator(config=self.config.graph).create(
+        graph_config = DotDict(OmegaConf.to_container(self.config.graph, resolve=True))
+        return GraphCreator(config=graph_config).create(
             save_path=graph_filename,
             overwrite=self.config.graph.overwrite,
         )
@@ -203,8 +204,12 @@ class AnemoiTrainer:
         if Path(checkpoint).exists():
             LOGGER.info("Resuming training from last checkpoint: %s", checkpoint)
             return checkpoint
-        msg = "Could not find last checkpoint: %s", checkpoint
-        raise RuntimeError(msg)
+
+        if rank_zero_only.rank == 0:
+            msg = "Could not find last checkpoint: %s", checkpoint
+            raise RuntimeError(msg)
+
+        return None
 
     @cached_property
     def callbacks(self) -> list[pl.callbacks.Callback]:
@@ -298,6 +303,16 @@ class AnemoiTrainer:
         LOGGER.debug("Effective learning rate: %.3e", total_number_of_model_instances * self.config.training.lr.rate)
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
+        if self.config.training.max_epochs is not None and self.config.training.max_steps not in (None, -1):
+            LOGGER.info(
+                "Training limits: max_epochs=%d, max_steps=%d. "
+                "Training will stop when either limit is reached first. "
+                "Learning rate scheduler will run for %d steps.",
+                self.config.training.max_epochs,
+                self.config.training.max_steps,
+                self.config.training.lr.iterations,
+            )
+
     def _get_server2server_lineage(self) -> None:
         """Get the server2server lineage."""
         self.parent_run_server2server = None
@@ -331,6 +346,7 @@ class AnemoiTrainer:
         """Training strategy."""
         return DDPGroupStrategy(
             self.config.hardware.num_gpus_per_model,
+            self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model),
             static_graph=not self.config.training.accum_grad_batches > 1,
         )
 
@@ -346,12 +362,13 @@ class AnemoiTrainer:
             num_nodes=self.config.hardware.num_nodes,
             precision=self.config.training.precision,
             max_epochs=self.config.training.max_epochs,
+            max_steps=self.config.training.max_steps or -1,
             logger=self.loggers,
             log_every_n_steps=self.config.diagnostics.log.interval,
             # run a fixed no of batches per epoch (helpful when debugging)
             limit_train_batches=self.config.dataloader.limit_batches.training,
             limit_val_batches=self.config.dataloader.limit_batches.validation,
-            num_sanity_val_steps=4,
+            num_sanity_val_steps=self.config.training.num_sanity_val_steps,
             accumulate_grad_batches=self.config.training.accum_grad_batches,
             gradient_clip_val=self.config.training.gradient_clip.val,
             gradient_clip_algorithm=self.config.training.gradient_clip.algorithm,

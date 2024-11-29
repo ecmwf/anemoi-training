@@ -30,6 +30,7 @@ from pytorch_lightning.loggers.mlflow import _flatten_dict
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 from anemoi.training.diagnostics.mlflow.auth import TokenAuth
+from anemoi.training.diagnostics.mlflow.utils import expand_iterables
 from anemoi.training.diagnostics.mlflow.utils import health_check
 from anemoi.training.utils.jsonify import map_config_to_primitives
 
@@ -297,15 +298,6 @@ class AnemoiMLflowLogger(MLFlowLogger):
         on_resume_create_child: bool | None, optional
             Whether to create a child run when resuming a run, by default False
         """
-        if offline:
-            # OFFLINE - When we run offline we can pass a save_dir pointing to a local path
-            tracking_uri = None
-
-        else:
-            # ONLINE - When we pass a tracking_uri to mlflow then it will ignore the
-            # saving dir and save all artifacts/metrics to the remote server database
-            save_dir = None
-
         self._resumed = resumed
         self._forked = forked
         self._flag_log_hparams = log_hyperparams
@@ -313,10 +305,10 @@ class AnemoiMLflowLogger(MLFlowLogger):
         self._fork_run_server2server = None
         self._parent_run_server2server = None
 
-        if rank_zero_only.rank == 0:
-            enabled = authentication and not offline
-            self.auth = TokenAuth(tracking_uri, enabled=enabled)
+        enabled = authentication and not offline
+        self.auth = TokenAuth(tracking_uri, enabled=enabled)
 
+        if rank_zero_only.rank == 0:
             if offline:
                 LOGGER.info("MLflow is logging offline.")
             else:
@@ -332,6 +324,15 @@ class AnemoiMLflowLogger(MLFlowLogger):
             tracking_uri=tracking_uri,
             on_resume_create_child=on_resume_create_child,
         )
+        # Before creating the run we need to overwrite the tracking_uri and save_dir if offline
+        if offline:
+            # OFFLINE - When we run offline we can pass a save_dir pointing to a local path
+            tracking_uri = None
+
+        else:
+            # ONLINE - When we pass a tracking_uri to mlflow then it will ignore the
+            # saving dir and save all artifacts/metrics to the remote server database
+            save_dir = None
 
         super().__init__(
             experiment_name=experiment_name,
@@ -388,6 +389,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
             "Either run_id or fork_run_id must be provided to resume a run."
             import mlflow
 
+            self.auth.authenticate()
             mlflow_client = mlflow.MlflowClient(tracking_uri)
 
             if config_run_id and on_resume_create_child:
@@ -431,10 +433,34 @@ class AnemoiMLflowLogger(MLFlowLogger):
     def log_system_metrics(self) -> None:
         """Log system metrics (CPU, GPU, etc)."""
         import mlflow
+        from mlflow.system_metrics.metrics.disk_monitor import DiskMonitor
+        from mlflow.system_metrics.metrics.network_monitor import NetworkMonitor
         from mlflow.system_metrics.system_metrics_monitor import SystemMetricsMonitor
 
+        from anemoi.training.diagnostics.mlflow.system_metrics.cpu_monitor import CPUMonitor
+        from anemoi.training.diagnostics.mlflow.system_metrics.gpu_monitor import GreenGPUMonitor
+        from anemoi.training.diagnostics.mlflow.system_metrics.gpu_monitor import RedGPUMonitor
+
+        class CustomSystemMetricsMonitor(SystemMetricsMonitor):
+            def __init__(self, run_id: str, resume_logging: bool = False):
+                super().__init__(run_id, resume_logging=resume_logging)
+
+                self.monitors = [CPUMonitor(), DiskMonitor(), NetworkMonitor()]
+
+                # Try init both and catch the error when one init fails
+                try:
+                    gpu_monitor = GreenGPUMonitor()
+                    self.monitors.append(gpu_monitor)
+                except (ImportError, RuntimeError) as e:
+                    LOGGER.warning("Failed to init Nvidia GPU Monitor: %s", e)
+                try:
+                    gpu_monitor = RedGPUMonitor()
+                    self.monitors.append(gpu_monitor)
+                except (ImportError, RuntimeError) as e:
+                    LOGGER.warning("Failed to init AMD GPU Monitor: %s", e)
+
         mlflow.enable_system_metrics_logging()
-        system_monitor = SystemMetricsMonitor(
+        system_monitor = CustomSystemMetricsMonitor(
             self.run_id,
             resume_logging=self.run_id is not None,
         )
@@ -475,15 +501,55 @@ class AnemoiMLflowLogger(MLFlowLogger):
         dict[str, Any]
             Cleaned up params ready for MlFlow.
         """
-        prefixes_to_remove = ["hardware", "data", "dataloader", "model", "training", "diagnostics", "metadata.config"]
+        prefixes_to_remove = [
+            "hardware",
+            "data",
+            "dataloader",
+            "model",
+            "training",
+            "diagnostics",
+            "metadata.config",
+            "metadata.dataset.variables_metadata",
+        ]
         keys_to_remove = [key for key in params if any(key.startswith(prefix) for prefix in prefixes_to_remove)]
         for key in keys_to_remove:
             del params[key]
         return params
 
     @rank_zero_only
-    def log_hyperparams(self, params: dict[str, Any] | Namespace) -> None:
-        """Overwrite the log_hyperparams method to flatten config params using '.'."""
+    def log_hyperparams_as_artifact(self, params: dict[str, Any] | Namespace) -> None:
+        """Log hyperparameters as an artifact."""
+        import json
+        import tempfile
+        from json import JSONEncoder
+
+        class StrEncoder(JSONEncoder):
+            def default(self, o: Any) -> str:
+                return str(o)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "config.json"
+            with Path.open(path, "w") as f:
+                json.dump(params, f, cls=StrEncoder)
+            self.experiment.log_artifact(run_id=self.run_id, local_path=path)
+
+    @rank_zero_only
+    def log_hyperparams(self, params: dict[str, Any] | Namespace, *, expand_keys: list[str] | None = None) -> None:
+        """Overwrite the log_hyperparams method.
+
+        - flatten config params using '.'.
+        - expand keys within params to avoid truncation.
+        - log hyperparameters as an artifact.
+
+        Parameters
+        ----------
+        params : dict[str, Any] | Namespace
+            params to log
+        expand_keys : list[str] | None, optional
+            keys to expand within params. Any key being expanded will
+            have lists converted according to `expand_iterables`,
+            by default None.
+        """
         if self._flag_log_hparams:
             params = _convert_params(params)
 
@@ -491,17 +557,34 @@ class AnemoiMLflowLogger(MLFlowLogger):
             if config := params.get("config"):
                 params["config"] = map_config_to_primitives(config)
 
-            params = _flatten_dict(params, delimiter=".")  # Flatten dict with '.' to not break API queries
-            params = self._clean_params(params)
-
             import mlflow
             from mlflow.entities import Param
 
-            # Truncate parameter values.
             truncation_length = 250
+
             if Version(mlflow.VERSION) >= Version("1.28.0"):
                 truncation_length = 500
-            params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in params.items()]
+
+            self.log_hyperparams_as_artifact(params)
+
+            expanded_params = {}
+            params = params.copy()
+
+            for key in expand_keys or []:
+                if key in params:
+                    expanded_params.update(
+                        expand_iterables(params.pop(key), size_threshold=None, delimiter="."),
+                    )
+            expanded_params.update(params)
+
+            expanded_params = _flatten_dict(
+                expanded_params,
+                delimiter=".",
+            )  # Flatten dict with '.' to not break API queries
+            expanded_params = self._clean_params(expanded_params)
+
+            # Truncate parameter values.
+            params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in expanded_params.items()]
 
             for idx in range(0, len(params_list), 100):
                 self.experiment.log_batch(run_id=self.run_id, params=params_list[idx : idx + 100])
