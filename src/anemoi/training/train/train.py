@@ -41,6 +41,8 @@ from anemoi.training.utils.seeding import get_base_seed
 if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
 
+    from anemoi.training.data.grid_indices import BaseGridIndices
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -82,10 +84,16 @@ class AnemoiTrainer:
     @cached_property
     def datamodule(self) -> AnemoiDatasetsDataModule:
         """DataModule instance and DataSets."""
-        spatial_indices = instantiate(self.config.dataloader.spatial_indices).get_indices(self.graph_data)
-        datamodule = AnemoiDatasetsDataModule(self.config, spatial_indices=spatial_indices)
+        datamodule = AnemoiDatasetsDataModule(self.config, grid_indices=self.grid_indices)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
         return datamodule
+
+    @cached_property
+    def grid_indices(self) -> type[BaseGridIndices]:
+        """Grid indices to sample from Dataset."""
+        spatial_indices = instantiate(self.config.dataloader.grid_indices)
+        spatial_indices.setup(self.graph_data)
+        return spatial_indices
 
     @cached_property
     def data_indices(self) -> dict:

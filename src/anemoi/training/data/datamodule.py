@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from functools import cached_property
+from typing import TYPE_CHECKING
 from typing import Callable
 
 import pytorch_lightning as pl
@@ -26,11 +27,14 @@ from anemoi.training.data.dataset import worker_init_func
 
 LOGGER = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from anemoi.training.data.grid_indices import BaseGridIndices
+
 
 class AnemoiDatasetsDataModule(pl.LightningDataModule):
     """Anemoi Datasets data module for PyTorch Lightning."""
 
-    def __init__(self, config: DictConfig, spatial_indices: list[int] | None = None) -> None:
+    def __init__(self, config: DictConfig, grid_indices: type[BaseGridIndices]) -> None:
         """Initialize Anemoi Datasets data module.
 
         Parameters
@@ -43,7 +47,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
         self.config = config
 
-        self.spatial_indices = spatial_indices
+        self.grid_indices = grid_indices
 
         # Set the maximum rollout to be expected
         self.rollout = (
@@ -162,7 +166,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             multistep=self.config.training.multistep_input,
             timeincrement=self.timeincrement,
             shuffle=shuffle,
-            spatial_indices=self.spatial_indices,
+            grid_indices=self.grid_indices,
             label=label,
         )
         self._check_resolution(data.resolution)
