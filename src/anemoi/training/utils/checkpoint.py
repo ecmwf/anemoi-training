@@ -20,7 +20,7 @@ from anemoi.utils.checkpoints import save_metadata
 from anemoi.training.train.forecaster import GraphForecaster
 
 LOGGER = logging.getLogger(__name__)
-
+LOGGER.setLevel("DEBUG")
 
 def load_and_prepare_model(lightning_checkpoint_path: str) -> tuple[torch.nn.Module, dict]:
     """Load the lightning checkpoint and extract the pytorch model and its metadata.
@@ -74,7 +74,25 @@ def save_inference_checkpoint(model: torch.nn.Module, metadata: dict, save_path:
 def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> nn.Module:
 
     # Load the checkpoint
-    checkpoint = torch.load(ckpt_path, map_location=model.device)
+    try:
+        checkpoint = torch.load(ckpt_path, map_location=model.device)
+
+    # TODO: this is a patch for issue #57
+    except RuntimeError:
+        LOGGER.debug("Need to remove metadata from the checkpoint file due to issue #57..")
+        import subprocess
+        file_to_delete = "archive/anemoi-metadata/ai-models.json"
+        # Construct and execute the command
+        command = ["zip", "-d", ckpt_path, file_to_delete]
+        result = subprocess.run(command, capture_output=True, text=True)
+
+        # Check the result
+        if result.returncode == 0:
+            LOGGER.debug("File successfully removed from the zip archive.")
+        else:
+            LOGGER.debug("Error occurred: {}".format(result.stderr))
+
+        checkpoint = torch.load(ckpt_path, map_location=model.device)
 
     # Filter out layers with size mismatch
     state_dict = checkpoint["state_dict"]
@@ -83,15 +101,9 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
 
     for key in state_dict.copy():
         if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
-            LOGGER.debug(
-                "Skipping loading parameter: ",
-                key,
-                ", checkpoint shape: ",
-                state_dict[key].shape,
-                ", model shape: ",
-                model_state_dict[key].shape,
-            )
+            LOGGER.debug("Skipping loading parameter: {}, checkpoint shape: {}, model shape: {}".format(str(key), str(state_dict[key].shape), str(model_state_dict[key].shape)))
             del state_dict[key]  # Remove the mismatched key
 
-    # Load the filtered state_dict into the model
-    return model.load_state_dict(state_dict, strict=False)
+    # Load the filtered st-ate_dict into the model
+    model.load_state_dict(state_dict, strict=False)
+    return model
