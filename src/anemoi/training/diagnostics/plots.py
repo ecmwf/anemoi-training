@@ -833,7 +833,7 @@ def plot_graph_node_features(model: nn.Module, datashader: bool = False) -> Figu
         Figure object handle
     """
     nrows = len(nodes_name := model._graph_data.node_types)
-    trainable_tensors = {nodes_name: model.node_attributes.trainable_tensors[m].trainable for m in nodes_name}
+    trainable_tensors = {name: model.node_attributes.trainable_tensors[name].trainable for name in nodes_name}
     ncols = min(0 if tt is None else tt.shape[0] for tt in trainable_tensors.values())
     if ncols == 0:
         LOGGER.warning("There are no trainable node attributes to plot.")
@@ -900,7 +900,7 @@ def plot_graph_edge_features(model: nn.Module, q_extreme_limit: float = 0.05) ->
         src_coords = model.node_attributes.get_coordinates(src).cpu().numpy()
         dst_coords = model.node_attributes.get_coordinates(dst).cpu().numpy()
         edge_index = graph_mapper.edge_index_base.cpu().numpy()
-        edge_features = graph_mapper.trainable.trainable.cpu().detach().numpy()
+        edge_features = trainable_tensors[(src, dst)].cpu().detach().numpy()
 
         for i in range(ncols):
             ax_ = ax[row, i] if ncols > 1 else ax[row]
