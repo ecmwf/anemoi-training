@@ -10,11 +10,19 @@ Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.3.1...HEAD)
 
+### Added
+
+- Added default configuration files for stretched grid and limited area model experiments [173](https://github.com/ecmwf/anemoi-training/pull/173)
+
+### Fixed
+
+- GraphTrainableParameters callback will log a warning when no trainable parameters are specified  [#173](https://github.com/ecmwf/anemoi-training/pull/173)
+
 ## [0.3.1 - AIFS v0.3 Compatibility](https://github.com/ecmwf/anemoi-training/compare/0.3.0...0.3.1) - 2024-11-28
 
 ### Fixed
 
-- Update `n_pixel` used by datashader to better adapt across resolutions #152
+- Update `n_pixel` used by datashader to better adapt across resolutions [#152](https://github.com/ecmwf/anemoi-training/pull/152)
 
 - Fixed bug in power spectra plotting for the n320 resolution.
 
