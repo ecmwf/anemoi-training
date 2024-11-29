@@ -2,7 +2,7 @@
 overwrite: True
 
 data: "data"
-hidden: 
+hidden:
  - "hidden_1"
  - "hidden_2"
 
@@ -35,7 +35,7 @@ edges:
     # Decoder configuration
   - source_name: "hidden_1"
     target_name: "data"
-    edge_builder: 
+    edge_builder:
       _target_: anemoi.graphs.edges.KNNEdges
       num_nearest_neighbours: 3
     attributes: ${graph.attributes.edges}
@@ -57,7 +57,7 @@ edges:
     target_name: "hidden_1"
     edge_builder: ${graph.edge_builders.process}
     attributes: ${graph.attributes.edges}
-  
+
   - source_name: "hidden_2"
     target_name: "hidden_2"
     edge_builder: ${graph.edge_builders.process}

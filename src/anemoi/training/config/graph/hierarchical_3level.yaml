@@ -2,7 +2,7 @@
 overwrite: True
 
 data: "data"
-hidden: 
+hidden:
  - "hidden_1"
  - "hidden_2"
  - "hidden_3"
@@ -72,7 +72,7 @@ edges:
     target_name: "hidden_1"
     edge_builder: ${graph.edge_builders.process}
     attributes: ${graph.attributes.edges}
-  
+
   - source_name: "hidden_2"
     target_name: "hidden_2"
     edge_builder: ${graph.edge_builders.process}
