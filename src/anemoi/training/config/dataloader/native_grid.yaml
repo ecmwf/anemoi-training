@@ -43,7 +43,7 @@ limit_batches:
 # set a custom spatial indices.
 # Useful for LAM (dropping unconnected nodes from forcing dataset)
 spatial_indices:
-  _target_: anemoi.training.utils.spatial_indices.NoSpatialIndices
+  _target_: anemoi.training.utils.spatial_indices.FullGrid
 
 # ============
 # Dataloader definitions
