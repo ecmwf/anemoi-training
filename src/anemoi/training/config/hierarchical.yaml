@@ -4,7 +4,7 @@ defaults:
 - diagnostics: evaluation
 - hardware: example
 - graph: hierarchical_3level
-- model: gnn
+- model: graphtransformer
 - training: default
 - _self_
 
