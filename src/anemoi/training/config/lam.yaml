@@ -4,7 +4,7 @@ defaults:
 - diagnostics: evaluation
 - hardware: example
 - graph: limited_area
-- model: gnn
+- model: graphtransformer
 - training: default
 - _self_
 
@@ -23,7 +23,7 @@ dataloader:
         thinning: ???
       - dataset: ${hardware.paths.data}/${hardware.files.forcing_dataset}
     adjust: all
-    min_distance_km: ???
+    min_distance_km: 0
 #  spatial_indices:
 #    _target_: anemoi.training.utils.spatial_indices.GraphNodeAttribute
 #    nodes_name: data

@@ -4,7 +4,7 @@ defaults:
 - diagnostics: evaluation
 - hardware: example
 - graph: stretched_grid
-- model: gnn
+- model: graphtransformer
 - training: default
 - _self_
 
@@ -23,11 +23,11 @@ dataloader:
         thinning: ???
       - dataset: ${hardware.paths.data}/${hardware.files.forcing_dataset}
     adjust: all
-    min_distance_km: ???
+    min_distance_km: 0
 #training:
 #  loss_scaling:
 #    spatial:
-#      _target_: anemoi.training.data.scaling.StretchedGridCutoutAreaWeights
+#      _target_: anemoi.training.data.scaling.ReweightedGraphAttribute
 #      target_nodes: ${graph.data}
 #      cutout_weight_frac_of_global: ???
 hardware:
