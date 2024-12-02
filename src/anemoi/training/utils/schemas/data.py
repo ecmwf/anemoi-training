@@ -77,12 +77,19 @@ class DataSchema(BaseModel):
         The number of features in the forecast state. To be set in the code.
     """
 
-    format: str
-    resolution: str
-    frequency: str
-    timestep: str
+    format: str = Field(None, description="Format of the data.")
+    resolution: str = Field(None, description="Grid type and resolution.", examples=["o96", "n320", "o48"])
+    frequency: str = Field(None, description="Time frequency requested from the dataset.")
+    timestep: str = Field(None, description="Time step of model (must be multiple of frequency).")
     processors: dict[str, Processor]
-    forcing: list[str] = Field(default_factory=list)
-    diagnostic: list[str] = Field(default_factory=list)
-    num_features: int | None = None
+    forcing: list[str] = Field(
+        default_factory=list,
+        description="Features that are not part of the forecast state but are used as forcing to generate the \
+                     forecast state.",
+    )
+    diagnostic: list[str] = Field(
+        default_factory=list,
+        description="Features that are only part of the forecast state and are not used as an input to the model.",
+    )
+    num_features: int | None = Field(None, description="Number of features in the forecast state.")
     remapped: dict | None = None

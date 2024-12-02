@@ -70,30 +70,38 @@ class Frequency(RootModel):
 class DatasetSchema(BaseModel):
     """Dataset configuration schema."""
 
-    dataset: str | dict | Path  # TODO(Helen): Should be a Path or a dict
-    start: int | None = None
-    end: int | None = None
-    frequency: Frequency
-    drop: list | None = None
+    dataset: dict | Path = Field(description="Path to dataset.")
+    start: int | None = Field(None, description="Starting year for sample of the dataset.")
+    end: int | None = Field(None, description="Ending year [inclusive] for sample of the dataset.")
+    frequency: Frequency = Field(description="Temporal resolution, frequency must be >= to dataset frequency.")
+    drop: list | None = Field(None, description="???")
 
 
 class LoaderSet(BaseModel):
-    training: PositiveInt | None = None
-    validation: PositiveInt | None = None
-    test: PositiveInt | None = None
+    training: PositiveInt | None = Field(None, description="Value for training dataset")
+    validation: PositiveInt | None = Field(None, description="Value for validation dataset")
+    test: PositiveInt | None = Field(None, description="Value for test dataset")
 
 
 class DataLoaderSchema(BaseModel):
-    prefetch_factor: int = 2
-    pin_memory: bool = True
+    prefetch_factor: int = Field(2, description="Number of batches loaded in advance by each worker.", ge=0)
+    pin_memory: bool = Field(
+        True,
+        description="If True, the data loader will copy Tensors into device/CUDA pinned memory before returning them.",
+    )
 
-    num_workers: LoaderSet
-    batch_size: LoaderSet
-    limit_batches: LoaderSet
+    num_workers: LoaderSet = Field(description="Number of process per-GPU for batch distribution.")
+    batch_size: LoaderSet = Field(description="Per-GPU batch size.")
+    limit_batches: LoaderSet = Field(
+        None,
+        description="Limit number of batches to run. Default value null, will run on all the batches.",
+    )
 
-    training: DatasetSchema
-    validation: DatasetSchema
-    test: DatasetSchema
+    training: DatasetSchema = Field(None, description="Training DatasetSchema.")
+    validation: DatasetSchema = Field(None, description="Validation DatasetSchema.")
+    test: DatasetSchema = Field(None, description="Test DatasetSchema.")
     validation_rollout: PositiveInt = Field(
         1,
-    )  # TODO(Helen): Ccheck that this equal or greater than the number of rollouts expected by callbacks
+        description="Number of rollouts to use for validation, must be equal or greater than rollout expected \
+                     by callbacks.",
+    )  # TODO(Helen): Ccheck that this equal or greater than the number of rollouts expected by callbacks ???
