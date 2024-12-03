@@ -40,10 +40,10 @@ limit_batches:
   test: 20
   predict: 20
 
-# set a custom spatial indices.
+# set a custom mask for grid points.
 # Useful for LAM (dropping unconnected nodes from forcing dataset)
-spatial_indices:
-  _target_: anemoi.training.utils.spatial_indices.FullGrid
+grid_indices:
+  _target_: anemoi.training.data.grid_indices.FullGrid
 
 # ============
 # Dataloader definitions
