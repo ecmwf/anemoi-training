@@ -90,10 +90,8 @@ class AnemoiTrainer:
         """DataModule instance and DataSets."""
         datamodule = AnemoiDatasetsDataModule(self.config)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
-        LOGGER.info(
-            "Data has {} variables: {}".format(len(datamodule.ds_train.data.variables), 
-                                               datamodule.ds_train.data.variables),
-        )
+        LOGGER.info("Number of data variables: ", len(datamodule.ds_train.data.variables))
+        LOGGER.debug("Variables: ", datamodule.ds_train.data.variables)
         return datamodule
 
     @cached_property
@@ -169,9 +167,8 @@ class AnemoiTrainer:
 
             return model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
-        else:
-            LOGGER.info("Model initialised from scratch.")
-            return model
+        LOGGER.info("Model initialised from scratch.")
+        return model
 
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:
@@ -315,13 +312,20 @@ class AnemoiTrainer:
         LOGGER.debug("Total number of auxiliary variables: %d", len(self.config.data.forcing))
 
         # Log learning rate multiplier when running single-node, multi-GPU and/or multi-node
-        total_number_of_model_instances = self.config.hardware.num_nodes * self.config.hardware.num_gpus_per_node / self.config.hardware.num_gpus_per_model
+        total_number_of_model_instances = (
+            self.config.hardware.num_nodes
+            * self.config.hardware.num_gpus_per_node
+            / self.config.hardware.num_gpus_per_model
+        )
 
         LOGGER.debug(
             "Total GPU count / model group size: %d - NB: the learning rate will be scaled by this factor!",
             total_number_of_model_instances,
         )
-        LOGGER.debug("Effective learning rate: %.3e", int(total_number_of_model_instances) * self.config.training.lr.rate)
+        LOGGER.debug(
+            "Effective learning rate: %.3e",
+            int(total_number_of_model_instances) * self.config.training.lr.rate,
+        )
         LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
         if self.config.training.max_epochs is not None and self.config.training.max_steps not in (None, -1):

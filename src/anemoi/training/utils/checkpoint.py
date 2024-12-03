@@ -7,10 +7,10 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-
 from __future__ import annotations
 
 import logging
+import zipfile
 from pathlib import Path
 
 import torch
@@ -20,7 +20,36 @@ from anemoi.utils.checkpoints import save_metadata
 from anemoi.training.train.forecaster import GraphForecaster
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel("DEBUG")
+
+
+def remove_file_from_zip(zip_path: Path | str, file_to_remove: Path | str) -> None:
+    try:
+        temp_zip_path = f"{zip_path}.temp"
+        file_removed = False
+
+        # Open the existing ZIP file and create a new one
+        with zipfile.ZipFile(zip_path, "r") as src_zip, zipfile.ZipFile(temp_zip_path, "w") as dest_zip:
+            for item in src_zip.infolist():
+                if item.filename != file_to_remove:
+                    dest_zip.writestr(item, src_zip.read(item.filename))
+                else:
+                    file_removed = True
+
+        # Replace the old ZIP file with the new one
+        Path.replace(temp_zip_path, zip_path)
+
+        # Check the result
+        if file_removed:
+            LOGGER.debug("File successfully removed from the zip archive.")
+        else:
+            LOGGER.debug("File not found in the zip archive.")
+
+    except FileNotFoundError:
+        LOGGER.exception("Error occurred while modifying the zip archive.")
+        # Clean up the temporary file in case of an error
+        if Path.exists(temp_zip_path):
+            Path.unlink(temp_zip_path)
+
 
 def load_and_prepare_model(lightning_checkpoint_path: str) -> tuple[torch.nn.Module, dict]:
     """Load the lightning checkpoint and extract the pytorch model and its metadata.
@@ -77,20 +106,13 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
     try:
         checkpoint = torch.load(ckpt_path, map_location=model.device)
 
-    # TODO: this is a patch for issue #57
+    # TODO @icedoom888: this is a patch for issue #57
     except RuntimeError:
         LOGGER.debug("Need to remove metadata from the checkpoint file due to issue #57..")
-        import subprocess
+
         file_to_delete = "archive/anemoi-metadata/ai-models.json"
         # Construct and execute the command
-        command = ["zip", "-d", ckpt_path, file_to_delete]
-        result = subprocess.run(command, capture_output=True, text=True)
-
-        # Check the result
-        if result.returncode == 0:
-            LOGGER.debug("File successfully removed from the zip archive.")
-        else:
-            LOGGER.debug("Error occurred: {}".format(result.stderr))
+        remove_file_from_zip(ckpt_path, file_to_delete)
 
         checkpoint = torch.load(ckpt_path, map_location=model.device)
 
@@ -101,7 +123,10 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
 
     for key in state_dict.copy():
         if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
-            LOGGER.debug("Skipping loading parameter: {}, checkpoint shape: {}, model shape: {}".format(str(key), str(state_dict[key].shape), str(model_state_dict[key].shape)))
+            LOGGER.debug("Skipping loading parameter: ", key)
+            LOGGER.debug("Checkpoint shape: ", state_dict[key].shape)
+            LOGGER.debug("Model shape: ", model_state_dict[key].shape)
+
             del state_dict[key]  # Remove the mismatched key
 
     # Load the filtered st-ate_dict into the model
