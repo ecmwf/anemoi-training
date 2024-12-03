@@ -44,6 +44,7 @@ limit_batches:
 # Useful for LAM (dropping unconnected nodes from forcing dataset)
 grid_indices:
   _target_: anemoi.training.data.grid_indices.FullGrid
+  nodes_name: ${graph.data}
 
 # ============
 # Dataloader definitions
