@@ -9,6 +9,15 @@ Please add your functional changes to the appropriate section in the PR.
 Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.3.1...HEAD)
+### Fixed
+- Patched issue [#57] to load checkpoints of large models. 
+
+### Added
+- Introduce variable to configure: transfer_learning -> bool, True if loading checkpoint in a transfer learning setting.
+- <b> TRANSFER LEARNING</b>: enabled new functionality. You can now load checkpoints from different models and different training runs.
+- Effective batch size: `(config.dataloader.batch_size["training"] * config.hardware.num_gpus_per_node * config.hardware.num_nodes) // config.hardware.num_gpus_per_model`. 
+  Used for experiment reproducibility across different computing configurations.
+
 
 ## [0.3.1 - AIFS v0.3 Compatibility](https://github.com/ecmwf/anemoi-training/compare/0.3.0...0.3.1) - 2024-11-28
 

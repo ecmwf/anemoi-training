@@ -106,7 +106,7 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
     try:
         checkpoint = torch.load(ckpt_path, map_location=model.device)
 
-    # TODO @icedoom888: this is a patch for issue #57
+    # TODO @anaprietonem: this is a patch for issue #57
     except RuntimeError:
         LOGGER.debug("Need to remove metadata from the checkpoint file due to issue #57..")
 
