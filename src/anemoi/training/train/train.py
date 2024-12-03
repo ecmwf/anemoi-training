@@ -162,7 +162,7 @@ class AnemoiTrainer:
         if self.load_weights_only:
             # Sanify the checkpoint for transfer learning
             if self.config.training.transfer_learning:
-                LOGGER.info("Learning weights with Transfer Learning from %s", self.last_checkpoint)
+                LOGGER.info("Loading weights with Transfer Learning from %s", self.last_checkpoint)
                 return transfer_learning_loading(model, self.last_checkpoint)
 
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
