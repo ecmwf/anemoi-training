@@ -83,10 +83,10 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @cached_property
     def grid_indices(self) -> type[BaseGridIndices]:
-        read_group_size = self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model)
-        grid_indices = instantiate(self.config.dataloader.grid_indices, read_group_size=read_group_size)
+        reader_group_size = self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model)
+        grid_indices = instantiate(self.config.dataloader.grid_indices, reader_group_size=reader_group_size)
         grid_indices.setup(self.graph_data)
-        return
+        return grid_indices
 
     @cached_property
     def timeincrement(self) -> int:

@@ -270,7 +270,7 @@ class NativeGridDataset(IterableDataset):
             start = i - (self.multi_step - 1) * self.timeincrement
             end = i + (self.rollout + 1) * self.timeincrement
 
-            grid_shard_indices = self.grid_indices.get_shard_indices(self.reader_group_rank, self.reader_group_size)
+            grid_shard_indices = self.grid_indices.get_shard_indices(self.reader_group_rank)
             x = self.data[start : end : self.timeincrement, :, :, :]
             x = x[..., grid_shard_indices]  # select the grid shard
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
