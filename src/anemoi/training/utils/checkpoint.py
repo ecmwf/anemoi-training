@@ -22,33 +22,43 @@ from anemoi.training.train.forecaster import GraphForecaster
 LOGGER = logging.getLogger(__name__)
 
 
-def remove_file_from_zip(zip_path: Path | str, file_to_remove: Path | str) -> None:
+def create_new_zip_path(zip_path: Path | str) -> Path:
+    # Convert the path to a Path object
+    zip_path = Path(zip_path)
+
+    # Add '_patched' before the file extension
+    new_zip_path = zip_path.stem + "_patched" + zip_path.suffix
+
+    # Create the new path within the same directory
+    return zip_path.with_name(new_zip_path)
+
+def remove_file_from_zip(
+    zip_path: Path | str, 
+    file_to_remove: Path | str, 
+) -> Path | str:
+    
+    new_zip_path = create_new_zip_path(zip_path)
     try:
-        temp_zip_path = f"{zip_path}.temp"
         file_removed = False
 
         # Open the existing ZIP file and create a new one
-        with zipfile.ZipFile(zip_path, "r") as src_zip, zipfile.ZipFile(temp_zip_path, "w") as dest_zip:
+        with zipfile.ZipFile(zip_path, "r") as src_zip, zipfile.ZipFile(new_zip_path, "w") as dest_zip:
             for item in src_zip.infolist():
                 if item.filename != file_to_remove:
                     dest_zip.writestr(item, src_zip.read(item.filename))
                 else:
                     file_removed = True
 
-        # Replace the old ZIP file with the new one
-        Path.replace(temp_zip_path, zip_path)
-
         # Check the result
         if file_removed:
-            LOGGER.debug("File successfully removed from the zip archive.")
+            LOGGER.debug(f"File successfully removed from the zip archive and saved as {new_zip_path}.")
         else:
-            LOGGER.debug("File not found in the zip archive.")
+            LOGGER.debug(f"File not found in the zip archive. The new zip file is identical to the original.")
 
     except FileNotFoundError:
         LOGGER.exception("Error occurred while modifying the zip archive.")
-        # Clean up the temporary file in case of an error
-        if Path.exists(temp_zip_path):
-            Path.unlink(temp_zip_path)
+
+    return new_zip_path
 
 
 def load_and_prepare_model(lightning_checkpoint_path: str) -> tuple[torch.nn.Module, dict]:
@@ -111,10 +121,9 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
         LOGGER.debug("Need to remove metadata from the checkpoint file due to issue #57..")
 
         file_to_delete = "archive/anemoi-metadata/ai-models.json"
-        # Construct and execute the command
-        remove_file_from_zip(ckpt_path, file_to_delete)
-
-        checkpoint = torch.load(ckpt_path, map_location=model.device)
+        # Creates copy of checkpoint and removed the metadata from the copy
+        new_ckpt_path = remove_file_from_zip(ckpt_path, file_to_delete)
+        checkpoint = torch.load(new_ckpt_path, map_location=model.device)
 
     # Filter out layers with size mismatch
     state_dict = checkpoint["state_dict"]
