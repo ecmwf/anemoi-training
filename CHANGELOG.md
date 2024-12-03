@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Please add your functional changes to the appropriate section in the PR.
 Keep it human-readable, your future self will thank you!
 
-## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.3.0...HEAD)
+## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.3.1...HEAD)
 ### Fixed
 
 ### Added
@@ -19,12 +19,23 @@ Keep it human-readable, your future self will thank you!
 ### Removed
 - Removed the resolution config entry [#120](https://github.com/ecmwf/anemoi-training/pull/120)
 
+## [0.3.1 - AIFS v0.3 Compatibility](https://github.com/ecmwf/anemoi-training/compare/0.3.0...0.3.1) - 2024-11-28
+
+### Changed
+- Perform full shuffle of training dataset [#153](https://github.com/ecmwf/anemoi-training/pull/153)
+
+### Fixed
+- Update `n_pixel` used by datashader to better adapt across resolutions #152
+- Fixed bug in power spectra plotting for the n320 resolution.
+- Allow histogram and spectrum plot for one variable [#165](https://github.com/ecmwf/anemoi-training/pull/165)
+
+### Added
+- Introduce variable to configure (Cosine Annealing) optimizer warm up [#155](https://github.com/ecmwf/anemoi-training/pull/155)
+- Add reader groups to reduce CPU memory usage and increase dataloader throughput [#76](https://github.com/ecmwf/anemoi-training/pull/76)
+- Bump `anemoi-graphs` version to 0.4.1 [#159](https://github.com/ecmwf/anemoi-training/pull/159)
 
 
 ## [0.3.0 - Loss & Callback Refactors](https://github.com/ecmwf/anemoi-training/compare/0.2.2...0.3.0) - 2024-11-14
-
-### Changed
-- Increase the default MlFlow HTTP max retries [#111](https://github.com/ecmwf/anemoi-training/pull/111)
 
 ### Fixed
 
@@ -32,10 +43,8 @@ Keep it human-readable, your future self will thank you!
 - Refactored callbacks. [#60](https://github.com/ecmwf/anemoi-training/pulls/60)
   - Updated docs [#115](https://github.com/ecmwf/anemoi-training/pull/115)
   - Fix enabling LearningRateMonitor [#119](https://github.com/ecmwf/anemoi-training/pull/119)
-
 - Refactored rollout [#87](https://github.com/ecmwf/anemoi-training/pulls/87)
   - Enable longer validation rollout than training
-
 - Expand iterables in logging [#91](https://github.com/ecmwf/anemoi-training/pull/91)
   - Save entire config in mlflow
 
@@ -44,22 +53,25 @@ Keep it human-readable, your future self will thank you!
 
 - Included more loss functions and allowed configuration [#70](https://github.com/ecmwf/anemoi-training/pull/70)
 - Include option to use datashader and optimised asyncronohous callbacks [#102](https://github.com/ecmwf/anemoi-training/pull/102)
-   - Fix that applies the metric_ranges in the post-processed variable space [#116](https://github.com/ecmwf/anemoi-training/pull/116)
+  - Fix that applies the metric_ranges in the post-processed variable space [#116](https://github.com/ecmwf/anemoi-training/pull/116)
 - Allow updates to scalars [#137](https://github.com/ecmwf/anemoi-training/pulls/137)
   - Add without subsetting in ScaleTensor
-
 - Sub-hour datasets [#63](https://github.com/ecmwf/anemoi-training/pull/63)
 - Add synchronisation workflow [#92](https://github.com/ecmwf/anemoi-training/pull/92)
 - Feat: Anemoi Profiler compatible with mlflow and using Pytorch (Kineto) Profiler for memory report [38](https://github.com/ecmwf/anemoi-training/pull/38/)
 - Feat: Save a gif for longer rollouts in validation [#65](https://github.com/ecmwf/anemoi-training/pull/65)
 - New limited area config file added, limited_area.yaml. [#134](https://github.com/ecmwf/anemoi-training/pull/134/)
 - New stretched grid config added, stretched_grid.yaml [#133](https://github.com/ecmwf/anemoi-training/pull/133)
+- Functionality to change the weight attribute of nodes in the graph at the start of training without re-generating the graph. [#136] (https://github.com/ecmwf/anemoi-training/pull/136)
+- Custom System monitor for Nvidia and AMD GPUs [#147](https://github.com/ecmwf/anemoi-training/pull/147)
+
 
 ### Changed
 
 - Renamed frequency keys in callbacks configuration. [#118](https://github.com/ecmwf/anemoi-training/pull/118)
 - Modified training configuration to support max_steps and tied lr iterations to max_steps by default [#67](https://github.com/ecmwf/anemoi-training/pull/67)
 - Merged node & edge trainable feature callbacks into one. [#135](https://github.com/ecmwf/anemoi-training/pull/135)
+- Increase the default MlFlow HTTP max retries [#111](https://github.com/ecmwf/anemoi-training/pull/111)
 
 ### Removed
 
@@ -121,6 +133,7 @@ Keep it human-readable, your future self will thank you!
 - Feature: Support training for datasets with missing time steps [#48](https://github.com/ecmwf/anemoi-training/pulls/48)
 - Feature: `AnemoiMlflowClient`, an mlflow client with authentication support [#86](https://github.com/ecmwf/anemoi-training/pull/86)
 - Long Rollout Plots
+- Mask NaN values in training loss function [#72](https://github.com/ecmwf/anemoi-training/pull/72) and [#271](https://github.com/ecmwf-lab/aifs-mono/issues/271)
 
 ### Fixed
 

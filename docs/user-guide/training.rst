@@ -183,15 +183,38 @@ levels nearer to the surface). By default anemoi-training uses a ReLU
 Pressure Level scaler with a minimum weighting of 0.2 (i.e. no pressure
 level has a weighting less than 0.2).
 
+The loss is also scaled by assigning a weight to each node on the output
+grid. These weights are calculated during graph-creation and stored as
+an attribute in the graph object. The configuration option
+``config.training.node_loss_weights`` is used to specify the node
+attribute used as weights in the loss function. By default
+anemoi-training uses area weighting, where each node is weighted
+according to the size of the geographical area it represents.
+
+It is also possible to rescale the weight of a subset of nodes after
+they are loaded from the graph. For instance, for a stretched grid setup
+we can rescale the weight of nodes in the limited area such that their
+sum equals 0.25 of the sum of all node weights with the following config
+setup
+
+.. code:: yaml
+
+   node_loss_weights:
+      _target_: anemoi.training.losses.nodeweights.ReweightedGraphNodeAttribute
+      target_nodes: data
+      scaled_attribute: cutout
+      weight_frac_of_total: 0.25
+
 ***************
  Learning rate
 ***************
 
 Anemoi training uses the ``CosineLRScheduler`` from PyTorch as it's
-learning rate scheduler. The user can configure the maximum learning
-rate by setting ``config.training.lr.rate``. Note that this learning
-rate is scaled by the number of GPUs where for the `data parallelism
-<distributed>`_.
+learning rate scheduler. Docs for this scheduler can be found here
+https://github.com/huggingface/pytorch-image-models/blob/main/timm/scheduler/cosine_lr.py
+The user can configure the maximum learning rate by setting
+``config.training.lr.rate``. Note that this learning rate is scaled by
+the number of GPUs where for the `data parallelism <distributed>`_.
 
 .. code:: yaml
 
@@ -201,7 +224,11 @@ The user can also control the rate at which the learning rate decreases
 by setting the total number of iterations through
 ``config.training.lr.iterations`` and the minimum learning rate reached
 through ``config.training.lr.min``. Note that the minimum learning rate
-is not scaled by the number of GPUs.
+is not scaled by the number of GPUs. The user can also control the
+warmup period by setting ``config.training.lr.warmup_t``. If the warmup
+period is set to 0, the learning rate will start at the maximum learning
+rate. If no warmup period is defined, a default warmup period of 1000
+iterations is used.
 
 *********
  Rollout
