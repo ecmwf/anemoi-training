@@ -8,15 +8,16 @@ nodes:
   # Data nodes
   data:
     node_builder:
-      _target_: anemoi.graphs.nodes.ZarrDatasetNodes # options: ZarrDatasetNodes, NPZFileNodes
-      dataset: ${dataloader.dataset}
-    attributes: ${graph.attributes.nodes} # options: l1, l2, unit-max, unit-sum, unit-std
+      _target_: anemoi.graphs.nodes.ZarrDatasetNodes
+      dataset: ${dataloader.training.dataset}
+    attributes: ${graph.attributes.nodes}
   # Hidden nodes
   hidden:
     node_builder:
-      _target_: anemoi.graphs.nodes.NPZFileNodes # options: ZarrDatasetNodes, NPZFileNodes
-      grid_definition_path: ${hardware.paths.grids}
-      resolution: o48 # grid resolution for npz (o32, o48, ...)
+      _target_: anemoi.graphs.nodes.LimitedAreaTriNodes # options: ZarrDatasetNodes, NPZFileNodes, TriNodes
+      resolution: 5 # grid resolution for npz (o32, o48, ...)
+      reference_node_name: ${graph.data}
+      mask_attr_name: cutout
 
 edges:
 # Encoder configuration
@@ -26,11 +27,19 @@ edges:
   - _target_: anemoi.graphs.edges.CutOffEdges # options: KNNEdges, CutOffEdges
     cutoff_factor: 0.6 # only for cutoff method
   attributes: ${graph.attributes.edges}
-  # Decoder configuration
+# Processor configuration
+- source_name: ${graph.hidden}
+  target_name: ${graph.hidden}
+  edge_builders:
+  - _target_: anemoi.graphs.edges.MultiScaleEdges
+    x_hops: 1
+  attributes: ${graph.attributes.edges}
+# Decoder configuration
 - source_name: ${graph.hidden}
   target_name: ${graph.data}
   edge_builders:
   - _target_: anemoi.graphs.edges.KNNEdges # options: KNNEdges, CutOffEdges
+    target_mask_attr_name: cutout
     num_nearest_neighbours: 3 # only for knn method
   attributes: ${graph.attributes.edges}
 
@@ -40,6 +49,8 @@ attributes:
     area_weight:
       _target_: anemoi.graphs.nodes.attributes.AreaWeights # options: Area, Uniform
       norm: unit-max # options: l1, l2, unit-max, unit-sum, unit-std
+    cutout:
+      _target_: anemoi.graphs.nodes.attributes.CutOutMask
   edges:
     edge_length:
       _target_: anemoi.graphs.edges.attributes.EdgeLength
