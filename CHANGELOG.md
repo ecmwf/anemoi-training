@@ -23,6 +23,7 @@ Keep it human-readable, your future self will thank you!
 
 - Allow histogram and spectrum plot for one variable [#165](https://github.com/ecmwf/anemoi-training/pull/165)
 
+- Not update NaN-weight-mask for loss function when using remapper and no imputer
 
 ### Added
 
