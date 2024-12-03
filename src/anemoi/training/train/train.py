@@ -22,7 +22,6 @@ import pytorch_lightning as pl
 import torch
 from anemoi.utils.config import DotDict
 from anemoi.utils.provenance import gather_provenance_info
-from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
@@ -346,7 +345,7 @@ class AnemoiTrainer:
     def strategy(self) -> DDPGroupStrategy:
         """Training strategy."""
         return DDPGroupStrategy(
-            self.config.hardware.num_gpus_per_model, 
+            self.config.hardware.num_gpus_per_model,
             self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model),
             static_graph=not self.config.training.accum_grad_batches > 1,
         )
