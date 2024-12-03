@@ -121,6 +121,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         Until then, assumes regular interval of changed model runs
         """
         if not hasattr(self.config.dataloader, "model_run_info"):
+            data_reader.model_run_ids = None
             return data_reader
 
         mr_start = np.datetime64(self.config.dataloader.model_run_info.start)
