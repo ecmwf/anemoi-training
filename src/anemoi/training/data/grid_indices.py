@@ -27,17 +27,18 @@ ArrayIndex = Union[slice, int, Sequence[int]]
 class BaseGridIndices(ABC):
     """Base class for custom grid indices."""
 
-    def __init__(self, nodes_name: str) -> None:
+    def __init__(self, nodes_name: str, reader_group_size: int) -> None:
         self.nodes_name = nodes_name
+        self.reader_group_size = reader_group_size
 
     def setup(self, graph: HeteroData) -> None:
         self.grid_size = self.compute_grid_size(graph)
 
-    def split_seq_in_shards(self, reader_group_rank: int, reader_group_size: int) -> tuple[int, int]:
+    def split_seq_in_shards(self, reader_group_rank: int) -> tuple[int, int]:
         """Get the indices to split a sequence into equal size shards."""
-        grid_shard_size = self.grid_size // reader_group_size
+        grid_shard_size = self.grid_size // self.reader_group_size
         grid_start = reader_group_rank * grid_shard_size
-        if reader_group_rank == reader_group_size - 1:
+        if reader_group_rank == self.reader_group_size - 1:
             grid_end = self.grid_size
         else:
             grid_end = (reader_group_rank + 1) * grid_shard_size
@@ -48,7 +49,7 @@ class BaseGridIndices(ABC):
     def compute_grid_size(self, graph: HeteroData) -> int: ...
 
     @abstractmethod
-    def get_shard_indices(self, reader_group_rank: int, reader_group_size: int) -> ArrayIndex: ...
+    def get_shard_indices(self, reader_group_rank: int) -> ArrayIndex: ...
 
 
 class FullGrid(BaseGridIndices):
@@ -57,15 +58,15 @@ class FullGrid(BaseGridIndices):
     def compute_grid_size(self, graph: HeteroData) -> int:
         return graph[self.nodes_name].num_nodes
 
-    def get_shard_indices(self, reader_group_rank: int, reader_group_size: int) -> ArrayIndex:
-        return self.split_seq_in_shards(reader_group_rank, reader_group_size)
+    def get_shard_indices(self, reader_group_rank: int) -> ArrayIndex:
+        return self.split_seq_in_shards(reader_group_rank)
 
 
 class MaskedGrid(BaseGridIndices):
     """Grid is masked based on a node attribute."""
 
-    def __init__(self, nodes_name: str, node_attribute_name: str):
-        super().__init__(nodes_name)
+    def __init__(self, nodes_name: str, reader_group_size: int, node_attribute_name: str):
+        super().__init__(nodes_name, reader_group_size)
         self.node_attribute_name = node_attribute_name
 
     def setup(self, graph: HeteroData) -> None:
@@ -80,6 +81,6 @@ class MaskedGrid(BaseGridIndices):
     def compute_grid_size(self, _graph: HeteroData) -> int:
         return len(self.spatial_indices)
 
-    def get_shard_indices(self, reader_group_rank: int, reader_group_size: int) -> ArrayIndex:
-        sequence_indices = self.split_seq_in_shards(reader_group_rank, reader_group_size)
+    def get_shard_indices(self, reader_group_rank: int) -> ArrayIndex:
+        sequence_indices = self.split_seq_in_shards(reader_group_rank)
         return self.spatial_indices[sequence_indices]

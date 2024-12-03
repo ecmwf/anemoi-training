@@ -18,6 +18,7 @@ import pytorch_lightning as pl
 from anemoi.datasets.data import open_dataset
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.utils.dates import frequency_to_seconds
+from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
@@ -28,13 +29,15 @@ from anemoi.training.data.dataset import worker_init_func
 LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from torch_geometric.data import HeteroData
+
     from anemoi.training.data.grid_indices import BaseGridIndices
 
 
 class AnemoiDatasetsDataModule(pl.LightningDataModule):
     """Anemoi Datasets data module for PyTorch Lightning."""
 
-    def __init__(self, config: DictConfig, grid_indices: type[BaseGridIndices]) -> None:
+    def __init__(self, config: DictConfig, graph_data: HeteroData) -> None:
         """Initialize Anemoi Datasets data module.
 
         Parameters
@@ -46,8 +49,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         super().__init__()
 
         self.config = config
-
-        self.grid_indices = grid_indices
+        self.graph_data = graph_data
 
         # Set the maximum rollout to be expected
         self.rollout = (
@@ -78,6 +80,12 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     @cached_property
     def data_indices(self) -> IndexCollection:
         return IndexCollection(self.config, self.ds_train.name_to_index)
+
+    @cached_property
+    def grid_indices(self) -> type[BaseGridIndices]:
+        grid_indices = instantiate(self.config.dataloader.grid_indices)
+        grid_indices.setup(self.graph_data)
+        return
 
     @cached_property
     def timeincrement(self) -> int:

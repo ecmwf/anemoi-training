@@ -165,9 +165,6 @@ class NativeGridDataset(IterableDataset):
 
         assert self.reader_group_size >= 1, "reader_group_size must be postive"
 
-        # get the grid shard size and start/end indices
-        self.grid_shard_indices = self.grid_indices.get_shard_indices(self.reader_group_rank, self.reader_group_size)
-
         LOGGER.debug(
             "NativeGridDataset.set_group_info(): global_rank %d, model_comm_group_id %d, "
             "model_comm_group_rank %d, model_comm_num_groups %d, reader_group_rank %d",
@@ -273,8 +270,9 @@ class NativeGridDataset(IterableDataset):
             start = i - (self.multi_step - 1) * self.timeincrement
             end = i + (self.rollout + 1) * self.timeincrement
 
+            grid_shard_indices = self.grid_indices.get_shard_indices(self.reader_group_rank, self.reader_group_size)
             x = self.data[start : end : self.timeincrement, :, :, :]
-            x = x[..., self.grid_shard_indices]
+            x = x[..., grid_shard_indices] # select the grid shard
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
 
