@@ -60,11 +60,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         if not self.config.dataloader.get("pin_memory", True):
             LOGGER.info("Data loader memory pinning disabled.")
 
-    def _check_resolution(self, resolution: str) -> None:
-        assert (
-            self.config.data.resolution.lower() == resolution.lower()
-        ), f"Network resolution {self.config.data.resolution=} does not match dataset resolution {resolution=}"
-
     @cached_property
     def statistics(self) -> dict:
         return self.ds_train.statistics
@@ -163,7 +158,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             // self.config.hardware.num_gpus_per_model
         )
 
-        data = NativeGridDataset(
+        return NativeGridDataset(
             data_reader=data_reader,
             rollout=r,
             multistep=self.config.training.multistep_input,
@@ -172,8 +167,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             label=label,
             effective_bs=effective_bs,
         )
-        self._check_resolution(data.resolution)
-        return data
 
     def _get_dataloader(self, ds: NativeGridDataset, stage: str) -> DataLoader:
         assert stage in {"training", "validation", "test"}
