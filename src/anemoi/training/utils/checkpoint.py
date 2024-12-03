@@ -32,11 +32,12 @@ def create_new_zip_path(zip_path: Path | str) -> Path:
     # Create the new path within the same directory
     return zip_path.with_name(new_zip_path)
 
+
 def remove_file_from_zip(
-    zip_path: Path | str, 
-    file_to_remove: Path | str, 
+    zip_path: Path | str,
+    file_to_remove: Path | str,
 ) -> Path | str:
-    
+
     new_zip_path = create_new_zip_path(zip_path)
     try:
         file_removed = False
@@ -51,9 +52,9 @@ def remove_file_from_zip(
 
         # Check the result
         if file_removed:
-            LOGGER.debug(f"File successfully removed from the zip archive and saved as {new_zip_path}.")
+            LOGGER.debug("File successfully removed from the zip archive and saved as %s.", new_zip_path)
         else:
-            LOGGER.debug(f"File not found in the zip archive. The new zip file is identical to the original.")
+            LOGGER.debug("File not found in the zip archive. The new zip file is identical to the original.")
 
     except FileNotFoundError:
         LOGGER.exception("Error occurred while modifying the zip archive.")

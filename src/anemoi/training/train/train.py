@@ -90,8 +90,8 @@ class AnemoiTrainer:
         """DataModule instance and DataSets."""
         datamodule = AnemoiDatasetsDataModule(self.config)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
-        LOGGER.info("Number of data variables: " + str(len(datamodule.ds_train.data.variables)))
-        LOGGER.debug("Variables: " + str(datamodule.ds_train.data.variables))
+        LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
+        LOGGER.debug("Variables: %s", str(datamodule.ds_train.data.variables))
         return datamodule
 
     @cached_property
