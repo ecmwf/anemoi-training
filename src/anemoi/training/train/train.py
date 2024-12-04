@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.DEBUG)  # Change DEBUG to INFO, WARNING, etc., as needed
 
 
 class AnemoiTrainer:
