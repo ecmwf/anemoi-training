@@ -71,8 +71,8 @@ class DatasetSchema(BaseModel):
     """Dataset configuration schema."""
 
     dataset: dict | Path = Field(description="Path to dataset.")
-    start: int | None = Field(None, description="Starting year for sample of the dataset.")
-    end: int | None = Field(None, description="Ending year [inclusive] for sample of the dataset.")
+    start: int | None = Field(None, description="Starting datetime for sample of the dataset.")
+    end: int | None = Field(None, description="Ending datetime [inclusive] for sample of the dataset.")
     frequency: Frequency = Field(description="Temporal resolution, frequency must be >= to dataset frequency.")
     drop: list | None = Field(None, description="???")
 
