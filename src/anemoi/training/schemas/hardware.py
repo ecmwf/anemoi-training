@@ -9,16 +9,22 @@
 
 from __future__ import annotations
 
+from functools import partial  # noqa: TCH003
 from pathlib import Path  # noqa: TCH003
+from typing import Annotated
 
+from pydantic import AfterValidator
 from pydantic import BaseModel
 from pydantic import DirectoryPath
 from pydantic import NonNegativeInt
 from pydantic import field_validator
 from pydantic import model_validator
 
+from anemoi.training.schemas.utils import allowed_values  # noqa: TCH001
+
 
 class Checkpoint(BaseModel):
+    # TODO(HELEN): Discuss merging with diagnostics checkpoint.
     every_n_epochs: str = "anemoi-by_epoch-epoch_{epoch:03d}-step_{step:06d}"
     every_n_train_steps: str = "anemoi-by_step-epoch_{epoch:03d}-step_{step:06d}"
     every_n_minutes: str = "anemoi-by_time-epoch_{epoch:03d}-step_{step:06d}"
@@ -26,12 +32,16 @@ class Checkpoint(BaseModel):
 
 class FilesConfig(BaseModel):
     dataset: Path  # TODO(Helen): Change to FilePath, only posisble after refactor
+    "Path to the dataset file"
     graph: Path
+    "Path to the graph file"
     checkpoint: dict[str, str]
+    "Each dictionary key is a checkpoint name, and the value is the path to the checkpoint file"
     warm_start: str | None = None
 
 
 class Logs(BaseModel):
+    # TODO(Helen): Discuss merging with logging in diagnsotics
     base: DirectoryPath | None = None
     wandb: DirectoryPath | None = None
     mlflow: DirectoryPath | None = None
@@ -40,27 +50,41 @@ class Logs(BaseModel):
 
 class PathsConfig(BaseModel):
     data: DirectoryPath
+    "Path to the data directory"
     grids: DirectoryPath
+    "Path to the grids directory"
     graph: DirectoryPath
+    "Path to the graph directory"
     output: Path
+    "Path to the output directory"
     logs: Logs
+    "Logging directories"
     checkpoints: Path
+    "Path to the checkpoints directory"
     plots: Path
+    "Path to the plots directory"
     profiler: Path
+    "Path to the profiler directory"
 
 
 class HardwareSchema(BaseModel):
-    accelerator: str = "auto"
+    accelerator: Annotated[str, AfterValidator(partial(allowed_values, values=["cpu", "gpu", "auto"]))] = "auto"
+    "Accelerator to use for training"
     num_gpus_per_node: NonNegativeInt = 1
+    "Number of GPUs per node"
     num_nodes: NonNegativeInt = 1
+    "Number of nodes"
     num_gpus_per_model: NonNegativeInt = 1
+    "Number of GPUs per model"
     files: FilesConfig
+    "Files"
     paths: PathsConfig
+    "Paths"
 
     @field_validator("num_gpus_per_node")
     @classmethod
     def check_valid_num_gpus_per_node(cls, num_gpus_per_node: int) -> int:
-        assert num_gpus_per_node <= 8, "num_gpus_per_node must be less than 8"
+        assert num_gpus_per_node <= 4, "num_gpus_per_node must be less than 4"
         return num_gpus_per_node
 
     @model_validator(mode="before")
