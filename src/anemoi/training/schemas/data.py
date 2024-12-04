@@ -36,7 +36,7 @@ class RemapperSchema(BaseModel):
     default: str = Field(description="Remapper default method to apply.", examples=["none", "cos_sin"])
 
 
-class Target(Enum):
+class Target(str, Enum):
     normalizer = "anemoi.models.preprocessing.normalizer.InputNormalizer"
     imputer = "anemoi.models.preprocessing.imputer.InputImputer"
     remapper = "anemoi.models.preprocessing.remapper.Remapper"

@@ -78,7 +78,7 @@ class LossScalingSchema(BaseModel):
     sfc: dict[str, NonNegativeFloat]
 
 
-class PressureLevelScalerTargets(Enum):
+class PressureLevelScalerTargets(str, Enum):
 
     relu_scaler = "anemoi.training.data.scaling.ReluPressureLevelScaler"
     linear_scaler = "anemoi.training.data.scaling.LinearPressureLevelScaler"
