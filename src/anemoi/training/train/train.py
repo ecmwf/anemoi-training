@@ -33,11 +33,11 @@ from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
+from anemoi.training.schemas.base_schema import BaseSchema
+from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.checkpoint import transfer_learning_loading
 from anemoi.training.utils.jsonify import map_config_to_primitives
-from anemoi.training.utils.schemas.base_schema import BaseSchema
-from anemoi.training.utils.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.utils.seeding import get_base_seed
 
 if TYPE_CHECKING:

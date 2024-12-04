@@ -29,7 +29,7 @@ from anemoi.training.diagnostics.callbacks.sanity import CheckVariableOrder
 if TYPE_CHECKING:
     from pytorch_lightning.callbacks import Callback
 
-    from anemoi.training.utils.schemas.base_schema import BaseSchema
+    from anemoi.training.schemas.base_schema import BaseSchema
 
 LOGGER = logging.getLogger(__name__)
 

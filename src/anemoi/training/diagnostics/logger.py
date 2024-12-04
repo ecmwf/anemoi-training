@@ -19,11 +19,14 @@ from omegaconf import OmegaConf
 
 if TYPE_CHECKING:
     import pytorch_lightning as pl
+    from anemoi.training.schemas.base_schema import BaseSchema
+
+from anemoi.training.schemas.base_schema import convert_to_omegaconf
 
 LOGGER = logging.getLogger(__name__)
 
 
-def get_mlflow_logger(config: DictConfig) -> None:
+def get_mlflow_logger(config: BaseSchema) -> None:
     if not config.diagnostics.log.mlflow.enabled:
         LOGGER.debug("MLFlow logging is disabled.")
         return None
@@ -85,11 +88,11 @@ def get_mlflow_logger(config: DictConfig) -> None:
         authentication=config.diagnostics.log.mlflow.authentication,
         on_resume_create_child=config.diagnostics.log.mlflow.on_resume_create_child,
     )
-    config_params = OmegaConf.to_container(config, resolve=True)
+    config_params = OmegaConf.to_container(convert_to_omegaconf(config), resolve=True)
 
     logger.log_hyperparams(
         config_params,
-        expand_keys=config.diagnostics.log.mlflow.get("expand_hyperparams", ["config"]),
+        expand_keys=config.diagnostics.log.mlflow.expand_hyperparams,
     )
 
     if config.diagnostics.log.mlflow.terminal:

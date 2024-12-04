@@ -20,7 +20,7 @@ from hydra import compose
 from hydra import initialize
 
 from anemoi.training.commands import Command
-from anemoi.training.utils.schemas.base_schema import BaseSchema
+from anemoi.training.schemas.base_schema import BaseSchema
 
 if TYPE_CHECKING:
     import argparse
@@ -55,7 +55,7 @@ class ConfigGenerator(Command):
         help_msg = "Validate the Anemoi training configs."
         validate = subparsers.add_parser("validate", help=help_msg, description=help_msg)
 
-        validate.add_argument("name", help="Name of the primary config file")
+        validate.add_argument("--name", help="Name of the primary config file")
         validate.add_argument("--overwrite", "-f", action="store_true")
 
     def run(self, args: argparse.Namespace) -> None:

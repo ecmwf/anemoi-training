@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from functools import partial  # noqa: TCH003
 from typing import Annotated
 
@@ -19,7 +20,7 @@ from pydantic import NonNegativeFloat
 from pydantic import NonNegativeInt
 from pydantic import PositiveInt
 
-from anemoi.training.utils.schemas.base_schema import allowed_values  # noqa: TCH001
+from anemoi.training.schemas.utils import allowed_values  # noqa: TCH001
 
 
 class GradientClip(BaseModel):
@@ -77,14 +78,16 @@ class LossScalingSchema(BaseModel):
     sfc: dict[str, NonNegativeFloat]
 
 
+class PressureLevelScalerTargets(Enum):
+
+    relu_scaler = "anemoi.training.data.scaling.ReluPressureLevelScaler"
+    linear_scaler = "anemoi.training.data.scaling.LinearPressureLevelScaler"
+    polynomial_sclaer = "anemoi.training.data.scaling.PolynomialPressureLevelScaler"
+    no_scaler = "anemoi.training.data.scaling.NoPressureLevelScaler"
+
+
 class PressureLevelScalerSchema(BaseModel):
-    _allowed_values: list[str] = [
-        "anemoi.training.data.scaling.ReluPressureLevelScaler",
-        "anemoi.training.data.scaling.LinearPressureLevelScaler",
-        "anemoi.training.data.scaling.PolynomialPressureLevelScaler",
-        "anemoi.training.data.scaling.NoPressureLevelScaler",
-    ]
-    target_: Annotated[str, AfterValidator(partial(allowed_values, _allowed_values))] = Field(
+    target_: PressureLevelScalerTargets = Field(
         default="anemoi.training.data.scaling.ReluPressureLevelScaler",
         alias="_target_",
     )
@@ -96,7 +99,7 @@ class PressureLevelScalerSchema(BaseModel):
 
 class MetricLossSchema(BaseModel):
     target_: str = Field("anemoi.training.losses.mse.WeightedMSELoss", alias="_target_")
-    scalars: list[str] = Field(default_factory=["variable"])
+    scalars: list[str] = Field(default=["variable"])
     "Scalars to include in loss calculation"
     ignore_nans: bool = False
     "Allow nans in the loss and apply methods ignoring nans for measuring the loss."

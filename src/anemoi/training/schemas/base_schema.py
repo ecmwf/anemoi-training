@@ -10,8 +10,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from omegaconf import OmegaConf
 from pydantic import BaseModel
 from pydantic import Field
@@ -27,11 +25,6 @@ from .models.gnn import GNNConfig  # noqa: TCH001
 from .models.graph_transformer import GraphTransformerConfig  # noqa: TCH001
 from .models.transformer import TransformerConfig  # noqa: TCH001
 from .training import TrainingSchema  # noqa: TCH001
-
-
-def allowed_values(v: Any, values: list[Any]) -> Any:
-    assert v in values
-    return v
 
 
 class HydraInstantiable(BaseModel):

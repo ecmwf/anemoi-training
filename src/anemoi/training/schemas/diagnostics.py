@@ -62,7 +62,7 @@ class Mlflow(BaseModel):
     terminal: bool
     run_name: str | None
     on_resume_create_child: bool
-    expand_hyperparams: Any
+    expand_hyperparams: list[str] = Field(default_factory=lambda: ["config"])
 
 
 class Tensorboard(BaseModel):

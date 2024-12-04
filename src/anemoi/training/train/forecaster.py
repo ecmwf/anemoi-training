@@ -27,13 +27,13 @@ from torch.utils.checkpoint import checkpoint
 
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
+from anemoi.training.schemas.base_schema import BaseSchema
+from anemoi.training.schemas.base_schema import convert_to_omegaconf
+from anemoi.training.schemas.training import LossScalingSchema  # noqa: TCH001
+from anemoi.training.schemas.training import MetricLossSchema  # noqa: TCH001
+from anemoi.training.schemas.training import PressureLevelScalerSchema  # noqa: TCH001
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
-from anemoi.training.utils.schemas.base_schema import BaseSchema
-from anemoi.training.utils.schemas.base_schema import convert_to_omegaconf
-from anemoi.training.utils.schemas.training import LossScalingSchema  # noqa: TCH001
-from anemoi.training.utils.schemas.training import MetricLossSchema  # noqa: TCH001
-from anemoi.training.utils.schemas.training import PressureLevelScalerSchema  # noqa: TCH001
 
 if TYPE_CHECKING:
     from collections.abc import Generator

@@ -20,8 +20,8 @@ from torch.utils.data import DataLoader
 
 from anemoi.training.data.dataset import NativeGridDataset
 from anemoi.training.data.dataset import worker_init_func
-from anemoi.training.utils.schemas.base_schema import BaseSchema
-from anemoi.training.utils.schemas.base_schema import convert_to_omegaconf
+from anemoi.training.schemas.base_schema import BaseSchema
+from anemoi.training.schemas.base_schema import convert_to_omegaconf
 
 LOGGER = logging.getLogger(__name__)
 

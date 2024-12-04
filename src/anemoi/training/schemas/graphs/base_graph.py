@@ -52,7 +52,7 @@ class NodeSchema(BaseModel):
 class EdgeSchema(BaseModel):
     source_name: str
     target_name: str
-    edge_builder: CutoffEdgeSchema | KNNEdgeSchema | MultiScaleEdgeSchema
+    edge_builders: list[CutoffEdgeSchema | KNNEdgeSchema | MultiScaleEdgeSchema]
     attributes: dict[str, EdgeAttributeSchema]
 
 
