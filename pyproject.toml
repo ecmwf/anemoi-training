@@ -70,6 +70,7 @@ optional-dependencies.dev = [
 ]
 
 optional-dependencies.docs = [
+  "autodoc-pydantic",
   "nbsphinx",
   "pandoc",
   "sphinx",
