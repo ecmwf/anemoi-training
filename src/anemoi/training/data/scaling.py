@@ -97,7 +97,7 @@ class NoTendencyScaler(BaseTendencyScaler):
 
 
 class NormTendencyScaler(BaseTendencyScaler):
-    """Constant scaling by 1.0."""
+    """Scale loses by stdev of tendency statistics."""
 
     @staticmethod
     def scaler(variable_stdev: float, variable_tendency_stdev: float) -> float:

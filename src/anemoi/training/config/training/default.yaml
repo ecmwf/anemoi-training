@@ -117,3 +117,7 @@ pressure_level_scaler:
   _target_: anemoi.training.data.scaling.ReluPressureLevelScaler
   minimum: 0.2
   slope: 0.001
+
+tendency_scaler:
+  _target_: anemoi.training.data.scaling.NoTendencyScaler
+  # _target_: anemoi.training.data.scaling.NormTendencyScaler
