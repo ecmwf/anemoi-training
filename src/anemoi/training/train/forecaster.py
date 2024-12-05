@@ -111,7 +111,7 @@ class GraphForecaster(pl.LightningModule):
         # Add mask multiplying NaN locations with zero. At this stage at [[1]].
         # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
         variable_scaling = self.get_variable_scaling(
-            config.training.loss_scaling,
+            config.training.variable_loss_scaling,
             config.training.pressure_level_scaler,
             data_indices,
         )
@@ -133,12 +133,8 @@ class GraphForecaster(pl.LightningModule):
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
         self.multi_step = config.training.multistep_input
-        self.lr = (
-            config.hardware.num_nodes
-            * config.hardware.num_gpus_per_node
-            * config.training.lr.rate
-            / config.hardware.num_gpus_per_model
-        )
+        self.lr = config.training.lr.rate
+
         self.warmup_t = getattr(config.training.lr, "warmup_t", 1000)
         self.lr_iterations = config.training.lr.iterations
         self.lr_min = config.training.lr.min

@@ -28,18 +28,13 @@ from .models.transformer import TransformerConfig  # noqa: TC001
 from .training import TrainingSchema  # noqa: TC001
 
 
-class HydraInstantiable(BaseModel):
-    target_: str = Field(..., alias="_target_")
-    convert_: str = Field("all", alias="_convert_")
-
-
 class BaseSchema(BaseModel):
     data: DataSchema
     dataloader: DataLoaderSchema
     diagnostics: DiagnosticsSchema
     hardware: HardwareSchema
     graph: BaseGraphSchema
-    model: GNNConfig | TransformerConfig | GraphTransformerConfig
+    model: GNNConfig | TransformerConfig | GraphTransformerConfig = Field(..., descriminator="target_")
     training: TrainingSchema
 
     class Config:
@@ -51,6 +46,17 @@ class BaseSchema(BaseModel):
     def set_read_group_size_if_not_provided(self) -> BaseSchema:
         if not self.dataloader.read_group_size:
             self.dataloader.read_group_size = self.hardware.num_gpus_per_model
+        return self
+
+    @model_validator(mode="after")
+    def adjust_lr_to_hardware_settings(self) -> BaseSchema:
+        self.training.lr.rate = (
+            self.hardware.num_nodes
+            * self.hardware.num_gpus_per_node
+            * self.training.lr.rate
+            / self.hardware.num_gpus_per_model
+        )
+        return self
 
 
 def convert_to_omegaconf(config: BaseSchema) -> dict:
