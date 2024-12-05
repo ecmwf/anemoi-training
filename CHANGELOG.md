@@ -11,6 +11,7 @@ Keep it human-readable, your future self will thank you!
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.3.1...HEAD)
 ### Fixed
 - Patched issue [#57] to load checkpoints of large models.
+- Not update NaN-weight-mask for loss function when using remapper and no imputer [#178](https://github.com/ecmwf/anemoi-training/pull/178)
 
 ### Added
 - Introduce variable to configure: transfer_learning -> bool, True if loading checkpoint in a transfer learning setting.
