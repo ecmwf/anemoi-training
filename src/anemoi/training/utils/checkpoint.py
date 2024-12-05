@@ -93,7 +93,7 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
     return model
 
 
-def freeze_submodule_by_name(module: nn.Module, target_name:str) -> None:
+def freeze_submodule_by_name(module: nn.Module, target_name: str) -> None:
     """
     Recursively freezes the parameters of a submodule with the specified name.
 
