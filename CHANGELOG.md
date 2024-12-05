@@ -10,7 +10,6 @@ Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-training/compare/0.3.1...HEAD)
 ### Fixed
-- Patched issue [#57] to load checkpoints of large models.
 - Not update NaN-weight-mask for loss function when using remapper and no imputer [#178](https://github.com/ecmwf/anemoi-training/pull/178)
 - Dont crash when using the profiler if certain env vars arent set [#180](https://github.com/ecmwf/anemoi-training/pull/180)
 
