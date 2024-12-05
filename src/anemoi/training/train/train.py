@@ -143,6 +143,7 @@ class AnemoiTrainer:
             "graph_data": self.graph_data,
             "metadata": self.metadata,
             "statistics": self.datamodule.statistics,
+            "statistics_tendencies": self.datamodule.statistics_tendencies,
         }
         if self.load_weights_only:
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)

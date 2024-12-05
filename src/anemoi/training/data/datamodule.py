@@ -96,6 +96,10 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         return self.ds_train.statistics
 
     @cached_property
+    def statistics_tendencies(self) -> dict:
+        return self.ds_train.statistics_tendencies
+
+    @cached_property
     def metadata(self) -> dict:
         return self.ds_train.metadata
 
@@ -182,6 +186,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             rollout=r,
             multistep=self.config.training.multistep_input,
             timeincrement=self.timeincrement,
+            timestep=self.config.data.timestep,
             model_comm_group_rank=self.model_comm_group_rank,
             model_comm_group_id=self.model_comm_group_id,
             model_comm_num_groups=self.model_comm_num_groups,
