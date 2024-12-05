@@ -7,11 +7,11 @@
 # nor does it submit to any jurisdiction.
 #
 
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import NonNegativeInt
-from pydantic import field_validator
 
 from .base_model import BaseModelConfig
 
@@ -25,35 +25,17 @@ class GNNModelComponent(BaseModel):
 
 
 class GNNProcessor(GNNModelComponent):
-    target_: str = Field("anemoi.models.layers.processor.GNNProcessor", alias="_target_")
+    target_: Literal["anemoi.models.layers.processor.GNNProcessor"] = Field(..., alias="_target_")
     num_layers: NonNegativeInt = Field(default=16)
     num_chunks: NonNegativeInt = Field(default=2)
 
-    @field_validator("target_")
-    @classmethod
-    def check_valid_target(cls, target: str) -> str:
-        assert target == "anemoi.models.layers.processor.GNNProcessor"
-        return target
-
 
 class GNNEncoder(GNNModelComponent):
-    target_: str = Field("anemoi.models.layers.mapper.GNNForwardMapper", alias="_target_")
-
-    @field_validator("target_")
-    @classmethod
-    def check_valid_target(cls, target: str) -> str:
-        assert target == "anemoi.models.layers.mapper.GNNForwardMapper"
-        return target
+    target_: Literal["anemoi.models.layers.mapper.GNNForwardMapper"] = Field(..., alias="_target_")
 
 
 class GNNDecoder(GNNModelComponent):
-    target_: str = Field("anemoi.models.layers.mapper.GNNBackwardMapper", alias="_target_")
-
-    @field_validator("target_")
-    @classmethod
-    def check_valid_target(cls, target: str) -> str:
-        assert target == "anemoi.models.layers.mapper.GNNBackwardMapper"
-        return target
+    target_: Literal["anemoi.models.layers.mapper.GNNBackwardMapper"] = Field(..., alias="_target_")
 
 
 class GNNConfig(BaseModelConfig):

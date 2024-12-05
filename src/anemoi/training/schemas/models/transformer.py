@@ -7,11 +7,11 @@
 # nor does it submit to any jurisdiction.
 #
 
+from typing import Literal
 
 from pydantic import Field
 from pydantic import NonNegativeFloat
 from pydantic import NonNegativeInt
-from pydantic import field_validator
 
 from .base_model import BaseModelConfig
 from .base_model import GraphTransformerDecoder
@@ -20,17 +20,11 @@ from .base_model import TransformerModelComponent
 
 
 class TransformerProcessor(TransformerModelComponent):
-    target_: str = Field("anemoi.models.layers.processor.TransformerProcessor", alias="_target_")
+    target_: Literal["anemoi.models.layers.processor.TransformerProcessor"] = Field(..., alias="_target_")
     num_layers: NonNegativeInt = Field(default=16)
     num_chunks: NonNegativeInt = Field(default=2)
     window_size: NonNegativeInt = Field(default=512)
     dropout_p: NonNegativeFloat = Field(default=0.0)
-
-    @field_validator("target_")
-    @classmethod
-    def check_valid_target(cls, target: str) -> str:
-        assert target == "anemoi.models.layers.processor.TransformerProcessor"
-        return target
 
 
 class TransformerConfig(BaseModelConfig):
