@@ -18,6 +18,7 @@ from typing import Union
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import copy
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.interface import AnemoiModelInterface
 from anemoi.utils.config import DotDict
@@ -110,21 +111,21 @@ class GraphForecaster(pl.LightningModule):
         # Scalars to include in the loss function, must be of form (dim, scalar)
         # Add mask multiplying NaN locations with zero. At this stage at [[1]].
         # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
-        scalars = {
+        self.scalars = {
             "variable": (-1, variable_scaling),
             "loss_weights_mask": ((-2, -1), torch.ones((1, 1))),
             "limited_area_mask": (2, limited_area_mask),
         }
         self.updated_loss_mask = False
 
-        self.loss = self.get_loss_function(config.training.training_loss, scalars=scalars, **loss_kwargs)
+        self.loss = self.get_loss_function(config.training.training_loss, scalars=self.scalars, **loss_kwargs)
 
         assert isinstance(self.loss, torch.nn.Module) and not isinstance(
             self.loss,
             torch.nn.ModuleList,
         ), f"Loss function must be a `torch.nn.Module`, not a {type(self.loss).__name__!r}"
 
-        self.metrics = self.get_loss_function(config.training.validation_metrics, scalars=scalars, **loss_kwargs)
+        self.metrics = self.get_loss_function(config.training.validation_metrics, scalars=self.scalars, **loss_kwargs)
         if not isinstance(self.metrics, torch.nn.ModuleList):
             self.metrics = torch.nn.ModuleList([self.metrics])
 
@@ -561,6 +562,15 @@ class GraphForecaster(pl.LightningModule):
                     scalar_indices=[..., indices] if -1 in metric.scalar else None,
                 )
 
+            if metric.__class__.__name__ == "WeightedMSELossLimitedArea":
+                metric_scaled = copy.deepcopy(metric)
+                metric_scaled.add_scalar(*self.scalars["variable"], name="variable")
+                metrics[f"{metric_name}_epoch/{rollout_step + 1}"] = metric_scaled(
+                    y_pred_postprocessed,
+                    y_postprocessed,
+                    scalar_indices=[..., self.data_indices.internal_data.output.full],
+                )
+
         return metrics
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
@@ -629,6 +639,7 @@ class GraphForecaster(pl.LightningModule):
                 batch_size=batch.shape[0],
                 sync_dist=True,
             )
+
         return val_loss, y_preds
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:
