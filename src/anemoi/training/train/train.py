@@ -137,7 +137,7 @@ class AnemoiTrainer:
 
         from anemoi.graphs.create import GraphCreator
 
-        graph_config = DotDict(OmegaConf.to_container(convert_to_omegaconf(self.config.graph), resolve=True))
+        graph_config = DotDict(convert_to_omegaconf(self.config.graph))
         return GraphCreator(config=graph_config).create(
             save_path=graph_filename,
             overwrite=self.config.graph.overwrite,
@@ -293,13 +293,6 @@ class AnemoiTrainer:
 
     @cached_property
     def accelerator(self) -> str:
-        assert self.config.hardware.accelerator in {
-            "auto",
-            "cpu",
-            "gpu",
-            "cuda",
-            "tpu",
-        }, f"Invalid accelerator ({self.config.hardware.accelerator}) in hardware config."
         if self.config.hardware.accelerator == "cpu":
             LOGGER.info("WARNING: Accelerator set to CPU, this should only be used for debugging.")
         return self.config.hardware.accelerator
@@ -370,7 +363,7 @@ class AnemoiTrainer:
         """Training strategy."""
         return DDPGroupStrategy(
             self.config.hardware.num_gpus_per_model,
-            self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model),
+            self.config.dataloader.read_group_size,
             static_graph=not self.config.training.accum_grad_batches > 1,
         )
 

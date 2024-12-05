@@ -9,8 +9,8 @@
 
 from __future__ import annotations
 
-from functools import partial  # noqa: TCH003
-from pathlib import Path  # noqa: TCH003
+from functools import partial
+from pathlib import Path  # noqa: TC003
 from typing import Annotated
 
 from pydantic import AfterValidator
@@ -20,7 +20,7 @@ from pydantic import NonNegativeInt
 from pydantic import field_validator
 from pydantic import model_validator
 
-from anemoi.training.schemas.utils import allowed_values  # noqa: TCH001
+from anemoi.training.schemas.utils import allowed_values
 
 
 class Checkpoint(BaseModel):
@@ -68,7 +68,10 @@ class PathsConfig(BaseModel):
 
 
 class HardwareSchema(BaseModel):
-    accelerator: Annotated[str, AfterValidator(partial(allowed_values, values=["cpu", "gpu", "auto"]))] = "auto"
+    accelerator: Annotated[
+        str,
+        AfterValidator(partial(allowed_values, values=["cpu", "gpu", "auto", "cuda", "tpu"])),
+    ] = "auto"
     "Accelerator to use for training"
     num_gpus_per_node: NonNegativeInt = 1
     "Number of GPUs per node"
