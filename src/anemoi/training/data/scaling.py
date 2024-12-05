@@ -79,14 +79,14 @@ class NoPressureLevelScaler(BasePressureLevelScaler):
         return 1.0
 
 
-class BasePrognosticScaler(ABC):
+class BaseTendencyScaler(ABC):
     """Configurable method to scale prognostic variables based on data statistics and statistics_tendencies."""
 
     @abstractmethod
     def scaler(self, variable_stdev: float, variable_tendency_stdev: float) -> float: ...
 
 
-class NoPrognosticScaler(BasePrognosticScaler):
+class NoTendencyScaler(BaseTendencyScaler):
     """Constant scaling by 1.0."""
 
     @staticmethod
@@ -96,7 +96,7 @@ class NoPrognosticScaler(BasePrognosticScaler):
         return 1.0
 
 
-class TendencyPrognosticScaler(BasePrognosticScaler):
+class NormTendencyScaler(BaseTendencyScaler):
     """Constant scaling by 1.0."""
 
     @staticmethod
