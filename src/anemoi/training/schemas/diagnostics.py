@@ -19,6 +19,7 @@ from pydantic import PositiveInt
 
 class Plot(BaseModel):
     asynchronous: bool
+    datashader: bool
     frequency: PlottingFrequency
     sample_idx: int
     parameters: list[str]

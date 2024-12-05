@@ -70,6 +70,7 @@ class LR(BaseModel):
     "Number of iterations."
     min: NonNegativeFloat = Field(default=3e-7)
     "Minimum learning rate."
+    warmup_time: NonNegativeInt = Field(default=1000)
 
 
 class LossScalingSchema(BaseModel):
@@ -103,6 +104,17 @@ class MetricLossSchema(BaseModel):
     "Scalars to include in loss calculation"
     ignore_nans: bool = False
     "Allow nans in the loss and apply methods ignoring nans for measuring the loss."
+
+
+class NodeLossWeightsTargets(str, Enum):
+    graph_node_attribute = "anemoi.training.losses.nodeweights.GraphNodeAttribute"
+    reweighted_graph_node_attributes = "anemoi.training.losses.ReweightedGraphNodeAttribute"
+
+
+class NodeLossWeightsSchema(BaseModel):
+    target_: NodeLossWeightsTargets = Field(..., alias="_target_")
+    target_nodes: str
+    node_attribute: str
 
 
 class TrainingSchema(BaseModel):
@@ -151,3 +163,6 @@ class TrainingSchema(BaseModel):
     pressure_level_scaler: PressureLevelScalerSchema = Field(default_factory=PressureLevelScalerSchema)
     "Pressure level scaler configuration."
     metrics: list[str]
+    "List of metrics"
+    node_loss_weights: NodeLossWeightsSchema
+    "Node loss weights configuration."

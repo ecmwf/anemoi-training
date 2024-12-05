@@ -63,3 +63,4 @@ class BaseGraphSchema(BaseModel):
     overwrite: bool = True
     data: str = "data"
     hidden: str = "hidden"
+    # TODO(Helen): Needs to be adjusted for more complex graph setups
