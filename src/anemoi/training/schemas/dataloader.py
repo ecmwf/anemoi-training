@@ -10,8 +10,8 @@
 
 from __future__ import annotations
 
-import datetime  # noqa: TCH003
-from pathlib import Path  # noqa: TCH003
+import datetime  # noqa: TC003
+from pathlib import Path  # noqa: TC003
 from typing import Any
 
 from anemoi.utils.dates import frequency_to_timedelta
@@ -70,7 +70,7 @@ class Frequency(RootModel):
 class DatasetSchema(BaseModel):
     """Dataset configuration schema."""
 
-    dataset: dict | Path = Field(description="Path to dataset.")
+    dataset: str | dict | Path = Field(description="dateset")
     start: int | None = Field(None, description="Starting datetime for sample of the dataset.")
     end: int | None = Field(None, description="Ending datetime [inclusive] for sample of the dataset.")
     frequency: Frequency = Field(description="Temporal resolution, frequency must be >= to dataset frequency.")
@@ -105,3 +105,6 @@ class DataLoaderSchema(BaseModel):
         description="Number of rollouts to use for validation, must be equal or greater than rollout expected \
                      by callbacks.",
     )  # TODO(Helen): Ccheck that this equal or greater than the number of rollouts expected by callbacks ???
+
+    read_group_size: PositiveInt = Field(default=None)
+    "Number of GPUs per reader group. Defaults to number of GPUs (see BaseSchema validators)."

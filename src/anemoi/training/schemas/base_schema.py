@@ -13,18 +13,19 @@ from __future__ import annotations
 from omegaconf import OmegaConf
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import model_validator
 
 # to make these available at runtime for pydantic, bug should be resolved in
 # future versions (see https://github.com/astral-sh/ruff/issues/7866)
-from .data import DataSchema  # noqa: TCH001
-from .dataloader import DataLoaderSchema  # noqa: TCH001
-from .diagnostics import DiagnosticsSchema  # noqa: TCH001
-from .graphs.base_graph import BaseGraphSchema  # noqa: TCH001
-from .hardware import HardwareSchema  # noqa: TCH001
-from .models.gnn import GNNConfig  # noqa: TCH001
-from .models.graph_transformer import GraphTransformerConfig  # noqa: TCH001
-from .models.transformer import TransformerConfig  # noqa: TCH001
-from .training import TrainingSchema  # noqa: TCH001
+from .data import DataSchema  # noqa: TC001
+from .dataloader import DataLoaderSchema  # noqa: TC001
+from .diagnostics import DiagnosticsSchema  # noqa: TC001
+from .graphs.base_graph import BaseGraphSchema  # noqa: TC001
+from .hardware import HardwareSchema  # noqa: TC001
+from .models.gnn import GNNConfig  # noqa: TC001
+from .models.graph_transformer import GraphTransformerConfig  # noqa: TC001
+from .models.transformer import TransformerConfig  # noqa: TC001
+from .training import TrainingSchema  # noqa: TC001
 
 
 class HydraInstantiable(BaseModel):
@@ -45,6 +46,11 @@ class BaseSchema(BaseModel):
         """Pydantic configuration."""
 
         arbitrary_types_allowed = True
+
+    @model_validator(mode="after")
+    def set_read_group_size_if_not_provided(self) -> BaseSchema:
+        if not self.dataloader.read_group_size:
+            self.dataloader.read_group_size = self.hardware.num_gpus_per_model
 
 
 def convert_to_omegaconf(config: BaseSchema) -> dict:
