@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import logging
-import zipfile
 from pathlib import Path
 
 import torch
@@ -22,44 +21,15 @@ from anemoi.training.train.forecaster import GraphForecaster
 LOGGER = logging.getLogger(__name__)
 
 
-def create_new_zip_path(zip_path: Path | str) -> Path:
+def create_new_zip_path(zip_path: Path | str, patch_str: str = "patched") -> Path:
     # Convert the path to a Path object
     zip_path = Path(zip_path)
 
     # Add '_patched' before the file extension
-    new_zip_path = zip_path.stem + "_patched" + zip_path.suffix
+    new_zip_path = zip_path.stem + "_" + patch_str + zip_path.suffix
 
     # Create the new path within the same directory
     return zip_path.with_name(new_zip_path)
-
-
-def remove_file_from_zip(
-    zip_path: Path | str,
-    file_to_remove: Path | str,
-) -> Path | str:
-
-    new_zip_path = create_new_zip_path(zip_path)
-    try:
-        file_removed = False
-
-        # Open the existing ZIP file and create a new one
-        with zipfile.ZipFile(zip_path, "r") as src_zip, zipfile.ZipFile(new_zip_path, "w") as dest_zip:
-            for item in src_zip.infolist():
-                if item.filename != file_to_remove:
-                    dest_zip.writestr(item, src_zip.read(item.filename))
-                else:
-                    file_removed = True
-
-        # Check the result
-        if file_removed:
-            LOGGER.debug("File successfully removed from the zip archive and saved as %s.", new_zip_path)
-        else:
-            LOGGER.debug("File not found in the zip archive. The new zip file is identical to the original.")
-
-    except FileNotFoundError:
-        LOGGER.exception("Error occurred while modifying the zip archive.")
-
-    return new_zip_path
 
 
 def load_and_prepare_model(lightning_checkpoint_path: str) -> tuple[torch.nn.Module, dict]:
@@ -113,18 +83,13 @@ def save_inference_checkpoint(model: torch.nn.Module, metadata: dict, save_path:
 
 def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> nn.Module:
 
+    # Related to issue #57
+    patched_ckpt_file = create_new_zip_path(ckpt_path, patch_str="patched")
+    if Path(patched_ckpt_file).exists():
+        ckpt_path = patched_ckpt_file
+
     # Load the checkpoint
-    try:
-        checkpoint = torch.load(ckpt_path, map_location=model.device)
-
-    # TODO @anaprietonem: this is a patch for issue #57
-    except RuntimeError:
-        LOGGER.debug("Need to remove metadata from the checkpoint file due to issue #57..")
-
-        file_to_delete = "archive/anemoi-metadata/ai-models.json"
-        # Creates copy of checkpoint and removed the metadata from the copy
-        new_ckpt_path = remove_file_from_zip(ckpt_path, file_to_delete)
-        checkpoint = torch.load(new_ckpt_path, map_location=model.device)
+    checkpoint = torch.load(ckpt_path, map_location=model.device)
 
     # Filter out layers with size mismatch
     state_dict = checkpoint["state_dict"]
@@ -133,9 +98,9 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
 
     for key in state_dict.copy():
         if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
-            LOGGER.debug("Skipping loading parameter: ", key)
-            LOGGER.debug("Checkpoint shape: ", state_dict[key].shape)
-            LOGGER.debug("Model shape: ", model_state_dict[key].shape)
+            LOGGER.debug("Skipping loading parameter: %s", key)
+            LOGGER.debug("Checkpoint shape: %s", str(state_dict[key].shape))
+            LOGGER.debug("Model shape: %s", str(model_state_dict[key].shape))
 
             del state_dict[key]  # Remove the mismatched key
 
