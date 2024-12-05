@@ -35,6 +35,7 @@ from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.checkpoint import transfer_learning_loading
+from anemoi.training.utils.checkpoint import freeze_submodule_by_name
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
 
@@ -150,6 +151,7 @@ class AnemoiTrainer:
 
         model = GraphForecaster(**kwargs)
 
+        # Load the model weights
         if self.load_weights_only:
             # Sanify the checkpoint for transfer learning
             if self.config.training.transfer_learning:
@@ -161,6 +163,14 @@ class AnemoiTrainer:
             return model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
         LOGGER.info("Model initialised from scratch.")
+
+        # Freeze the chosen model weights
+        if self.config.training.submodules_2_freeze:
+            LOGGER.info("The following submodules will NOT be trained: %s", self.config.training.submodules_2_freeze)
+            for submodule_name in self.config.training.submodules_to_freeze:
+                freeze_submodule_by_name(model, submodule_name)
+                LOGGER.info("%s Frozen successfully.", submodule_name)
+
         return model
 
     @rank_zero_only

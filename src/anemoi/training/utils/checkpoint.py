@@ -91,3 +91,21 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
     # Load the filtered st-ate_dict into the model
     model.load_state_dict(state_dict, strict=False)
     return model
+
+
+def freeze_submodule_by_name(module: nn.Module, target_name:str) -> None:
+    """
+    Recursively freezes the parameters of a submodule with the specified name.
+
+    Args:
+        module (nn.Module): The parent module to search in.
+        target_name (str): The name of the submodule to freeze.
+    """
+    for name, child in module.named_children():
+        # If this is the target submodule, freeze its parameters
+        if name == target_name:
+            for param in child.parameters():
+                param.requires_grad = False
+        else:
+            # Recursively search within children
+            freeze_submodule_by_name(child, target_name)
