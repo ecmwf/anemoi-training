@@ -50,6 +50,7 @@ class GraphForecaster(pl.LightningModule):
         config: DictConfig,
         graph_data: HeteroData,
         statistics: dict,
+        statistics_tendencies: dict,
         data_indices: IndexCollection,
         metadata: dict,
     ) -> None:
@@ -87,6 +88,7 @@ class GraphForecaster(pl.LightningModule):
 
         self.latlons_data = graph_data[config.graph.data].x
         self.node_weights = graph_data[config.graph.data][config.model.node_loss_weight].squeeze()
+        self.statistics_tendencies = statistics_tendencies
 
         if config.model.get("output_mask", None) is not None:
             self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
@@ -253,8 +255,8 @@ class GraphForecaster(pl.LightningModule):
 
         return metric_ranges, metric_ranges_validation
 
-    @staticmethod
     def get_variable_scaling(
+        self,
         config: DictConfig,
         data_indices: IndexCollection,
     ) -> torch.Tensor:
@@ -271,12 +273,28 @@ class GraphForecaster(pl.LightningModule):
             pressure_level.minimum,
         )
 
+        prognostic_scaler = instantiate(config.training.prognostic_scaler)
+
+        LOGGER.info(
+            "Prognostic variable scaling: using scaler %s",
+            type(prognostic_scaler).__name__,
+        )
+
         for key, idx in data_indices.internal_model.output.name_to_index.items():
+            if idx in self.data_indices.internal_model.output.prognostic:
+                prog_idx = self.data_indices.data.output.name_to_index[key]
+                variable_stdev = 1 / self.model.pre_processors.processors.normalizer._norm_mul[prog_idx]
+                variable_tendency_stdev = (
+                    self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
+                )
+                scaling = prognostic_scaler.scaler(variable_stdev, variable_tendency_stdev)
+                LOGGER.debug("Parameter %(key)s is being scaled by statistic_tendencies by %(scaling).2f")
+                variable_loss_scaling[idx] *= scaling
             split = key.split("_")
             if len(split) > 1 and split[-1].isdigit():
                 # Apply pressure level scaling
                 if split[0] in config.training.variable_loss_scaling.pl:
-                    variable_loss_scaling[idx] = config.training.variable_loss_scaling.pl[
+                    variable_loss_scaling[idx] *= config.training.variable_loss_scaling.pl[
                         split[0]
                     ] * pressure_level.scaler(
                         int(split[-1]),
@@ -286,7 +304,7 @@ class GraphForecaster(pl.LightningModule):
             else:
                 # Apply surface variable scaling
                 if key in config.training.variable_loss_scaling.sfc:
-                    variable_loss_scaling[idx] = config.training.variable_loss_scaling.sfc[key]
+                    variable_loss_scaling[idx] *= config.training.variable_loss_scaling.sfc[key]
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
 
