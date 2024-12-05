@@ -21,17 +21,6 @@ from anemoi.training.train.forecaster import GraphForecaster
 LOGGER = logging.getLogger(__name__)
 
 
-def create_new_zip_path(zip_path: Path | str, patch_str: str = "patched") -> Path:
-    # Convert the path to a Path object
-    zip_path = Path(zip_path)
-
-    # Add '_patched' before the file extension
-    new_zip_path = zip_path.stem + "_" + patch_str + zip_path.suffix
-
-    # Create the new path within the same directory
-    return zip_path.with_name(new_zip_path)
-
-
 def load_and_prepare_model(lightning_checkpoint_path: str) -> tuple[torch.nn.Module, dict]:
     """Load the lightning checkpoint and extract the pytorch model and its metadata.
 
@@ -82,11 +71,6 @@ def save_inference_checkpoint(model: torch.nn.Module, metadata: dict, save_path:
 
 
 def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> nn.Module:
-
-    # Related to issue #57
-    patched_ckpt_file = create_new_zip_path(ckpt_path, patch_str="patched")
-    if Path(patched_ckpt_file).exists():
-        ckpt_path = patched_ckpt_file
 
     # Load the checkpoint
     checkpoint = torch.load(ckpt_path, map_location=model.device)

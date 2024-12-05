@@ -63,12 +63,6 @@ class AnemoiTrainer:
         OmegaConf.resolve(config)
         self.config = config
 
-        # Set Transfer Learning based on the other if not provided
-        if self.config.training.transfer_learning is None:
-            self.config.training.transfer_learning = (
-                bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
-            ) and self.config.training.load_weights_only
-
         self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
         self.load_weights_only = self.config.training.load_weights_only
         self.parent_uuid = None
