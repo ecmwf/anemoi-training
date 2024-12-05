@@ -163,7 +163,7 @@ class NativeGridDataset(IterableDataset):
         self.reader_group_rank = reader_group_rank
         self.reader_group_size = reader_group_size
 
-        assert self.reader_group_size >= 1, "reader_group_size must be postive"
+        assert self.reader_group_size >= 1, "reader_group_size must be positive"
 
         LOGGER.debug(
             "NativeGridDataset.set_group_info(): global_rank %d, model_comm_group_id %d, "
