@@ -63,6 +63,7 @@ class Mlflow(BaseModel):
     run_name: str | None
     on_resume_create_child: bool
     expand_hyperparams: list[str] = Field(default_factory=lambda: ["config"])
+    http_max_retries: PositiveInt = Field(default=35)
 
 
 class Tensorboard(BaseModel):

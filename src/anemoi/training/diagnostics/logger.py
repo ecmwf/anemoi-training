@@ -32,7 +32,7 @@ def get_mlflow_logger(config: BaseSchema) -> None:
         return None
 
     # 35 retries allow for 1 hour of server downtime
-    http_max_retries = config.diagnostics.log.mlflow.get("http_max_retries", 35)
+    http_max_retries = config.diagnostics.log.mlflow.http_max_retries
 
     os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = str(http_max_retries)
     os.environ["_MLFLOW_HTTP_REQUEST_MAX_RETRIES_LIMIT"] = str(http_max_retries + 1)
