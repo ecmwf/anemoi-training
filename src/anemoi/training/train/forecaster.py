@@ -29,9 +29,9 @@ from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
-from anemoi.training.schemas.training import LossScalingSchema  # noqa: TCH001
-from anemoi.training.schemas.training import MetricLossSchema  # noqa: TCH001
-from anemoi.training.schemas.training import PressureLevelScalerSchema  # noqa: TCH001
+from anemoi.training.schemas.training import LossScalingSchema  # noqa: TC001
+from anemoi.training.schemas.training import MetricLossSchema  # noqa: TC001
+from anemoi.training.schemas.training import PressureLevelScalerSchema  # noqa: TC001
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
 
@@ -296,7 +296,8 @@ class GraphForecaster(pl.LightningModule):
         data_indices: IndexCollection,
     ) -> torch.Tensor:
         variable_loss_scaling = (
-            np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32) * variable_loss_scaling_config.default
+            np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32)
+            * variable_loss_scaling_config.default
         )
         pressure_level = instantiate(pressure_level_scaling_config.model_dump(by_alias=True))
 
@@ -312,9 +313,7 @@ class GraphForecaster(pl.LightningModule):
             if len(split) > 1 and split[-1].isdigit():
                 # Apply pressure level scaling
                 if split[0] in variable_loss_scaling_config.pl:
-                    variable_loss_scaling[idx] = variable_loss_scaling_config.pl[
-                        split[0]
-                    ] * pressure_level.scaler(
+                    variable_loss_scaling[idx] = variable_loss_scaling_config.pl[split[0]] * pressure_level.scaler(
                         int(split[-1]),
                     )
                 else:

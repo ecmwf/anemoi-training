@@ -15,15 +15,15 @@ from pydantic import BaseModel
 from pydantic import Field
 from pydantic import field_validator
 
-from .edge_schemas import CutoffEdgeSchema  # noqa: TCH001
-from .edge_schemas import EdgeAttributeSchema  # noqa: TCH001
-from .edge_schemas import KNNEdgeSchema  # noqa: TCH001
-from .edge_schemas import MultiScaleEdgeSchema  # noqa: TCH001
-from .node_schemas import IcosahedralandHealPixNodeSchema  # noqa: TCH001
-from .node_schemas import LimitedAreaIcosahedralandHealPixNodeSchema  # noqa: TCH001
-from .node_schemas import LimitedAreaNPZFileNodesSchema  # noqa: TCH001
-from .node_schemas import NPZnodeSchema  # noqa: TCH001
-from .node_schemas import ZarrNodeSchema  # noqa: TCH001
+from .edge_schemas import CutoffEdgeSchema  # noqa: TC001
+from .edge_schemas import EdgeAttributeSchema  # noqa: TC001
+from .edge_schemas import KNNEdgeSchema  # noqa: TC001
+from .edge_schemas import MultiScaleEdgeSchema  # noqa: TC001
+from .node_schemas import IcosahedralandHealPixNodeSchema  # noqa: TC001
+from .node_schemas import LimitedAreaIcosahedralandHealPixNodeSchema  # noqa: TC001
+from .node_schemas import LimitedAreaNPZFileNodesSchema  # noqa: TC001
+from .node_schemas import NPZnodeSchema  # noqa: TC001
+from .node_schemas import ZarrNodeSchema  # noqa: TC001
 
 
 class AreaWeightSchema(BaseModel):

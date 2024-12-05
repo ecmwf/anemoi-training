@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from functools import partial  # noqa: TCH003
+from functools import partial
 from typing import Annotated
 
 from pydantic import AfterValidator
@@ -20,7 +20,7 @@ from pydantic import NonNegativeFloat
 from pydantic import NonNegativeInt
 from pydantic import PositiveInt
 
-from anemoi.training.schemas.utils import allowed_values  # noqa: TCH001
+from anemoi.training.schemas.utils import allowed_values
 
 
 class GradientClip(BaseModel):
