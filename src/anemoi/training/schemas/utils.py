@@ -11,6 +11,12 @@
 from typing import Any
 
 
+class ValidationError(Exception):
+    pass
+
+
 def allowed_values(v: Any, values: list[Any]) -> Any:
-    assert v in values
+    if v not in values:
+        msg = {f"Value {v} not in {values}"}
+        raise ValidationError(msg)
     return v

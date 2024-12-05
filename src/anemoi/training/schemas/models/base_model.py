@@ -9,16 +9,20 @@
 
 from __future__ import annotations
 
+from enum import Enum
+from typing import Literal
+
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import NonNegativeInt
-from pydantic import field_validator
-
-_allowed_models = ["anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"]
 
 
-class HydraInstantiable(BaseModel):
-    target_: str = Field(..., alias="_target_")
+class AllowedModels(str, Enum):
+    ANEMOI_MODEL_ENC_PROC_DEC = "anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"
+
+
+class Model(BaseModel):
+    target_: AllowedModels = Field(..., alias="_target_")
     convert_: str = Field("all", alias="_convert_")
 
 
@@ -31,25 +35,13 @@ class TransformerModelComponent(BaseModel):
 
 
 class GraphTransformerEncoder(TransformerModelComponent):
-    target_: str = Field("anemoi.models.layers.mapper.GraphTransformerForwardMapper", alias="_target_")
+    target_: Literal["anemoi.models.layers.mapper.GraphTransformerForwardMapper"] = Field(..., alias="_target_")
     sub_graph_edge_attributes: list[str] = ["edge_length", "edge_dir"]
-
-    @field_validator("target_")
-    @classmethod
-    def check_valid_target(cls, target: str) -> str:
-        assert target == "anemoi.models.layers.mapper.GraphTransformerForwardMapper"
-        return target
 
 
 class GraphTransformerDecoder(TransformerModelComponent):
-    target_: str = Field("anemoi.models.layers.mapper.GraphTransformerBackwardMapper", alias="_target_")
+    target_: Literal["anemoi.models.layers.mapper.GraphTransformerBackwardMapper"] = Field(..., alias="_target_")
     sub_graph_edge_attributes: list[str] = ["edge_length", "edge_dir"]
-
-    @field_validator("target_")
-    @classmethod
-    def check_valid_target(cls, target: str) -> str:
-        assert target == "anemoi.models.layers.mapper.GraphTransformerBackwardMapper"
-        return target
 
 
 class TrainableParameters(BaseModel):
@@ -59,12 +51,6 @@ class TrainableParameters(BaseModel):
 
 class BaseModelConfig(BaseModel):
     num_channels: NonNegativeInt = Field(default=512)
-    model: HydraInstantiable = Field(default_factory=HydraInstantiable)
+    model: Model = Field(default_factory=Model)
     trainable_parameters: TrainableParameters = Field(default_factory=TrainableParameters)
     node_loss_weight: str = Field(default="area_weight")
-
-    @field_validator("model")
-    @classmethod
-    def check_valid_model(cls, model: HydraInstantiable) -> HydraInstantiable:
-        assert model.target_ in _allowed_models, f"Model not implemented. Allowed models are {_allowed_models}"
-        return model
