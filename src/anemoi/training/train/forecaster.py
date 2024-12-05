@@ -273,11 +273,11 @@ class GraphForecaster(pl.LightningModule):
             pressure_level.minimum,
         )
 
-        prognostic_scaler = instantiate(config.training.prognostic_scaler)
+        tendency_scaler = instantiate(config.training.tendency_scaler)
 
         LOGGER.info(
-            "Prognostic variable scaling: using scaler %s",
-            type(prognostic_scaler).__name__,
+            "Tendency variable scaling: using scaler %s",
+            type(tendency_scaler).__name__,
         )
 
         for key, idx in data_indices.internal_model.output.name_to_index.items():
@@ -287,7 +287,7 @@ class GraphForecaster(pl.LightningModule):
                 variable_tendency_stdev = (
                     self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
                 )
-                scaling = prognostic_scaler.scaler(variable_stdev, variable_tendency_stdev)
+                scaling = tendency_scaler.scaler(variable_stdev, variable_tendency_stdev)
                 LOGGER.debug("Parameter %(key)s is being scaled by statistic_tendencies by %(scaling).2f")
                 variable_loss_scaling[idx] *= scaling
             split = key.split("_")
