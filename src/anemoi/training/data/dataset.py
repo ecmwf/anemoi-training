@@ -293,10 +293,6 @@ class NativeGridDataset(IterableDataset):
             Timeincrement: {self.timeincrement}
         """
 
-    # def __len__(self) -> int:
-    #     """Estimate the total number of samples based on valid indices."""
-    #     return len(self.valid_date_indices) // self.effective_bs
-
 
 def worker_init_func(worker_id: int) -> None:
     """Configures each dataset worker process.
