@@ -21,6 +21,7 @@ import pandas as pd
 from anemoi.models.layers.mapper import GraphEdgeMixin
 from datashader.mpl_ext import dsshow
 from matplotlib.collections import LineCollection
+from matplotlib.collections import PathCollection
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import ListedColormap
 from matplotlib.colors import TwoSlopeNorm
@@ -48,6 +49,13 @@ class LatLonData:
     latitudes: np.ndarray
     longitudes: np.ndarray
     data: np.ndarray
+
+
+def equirectangular_projection(latlons: np.array) -> np.array:
+    pc = EquirectangularProjection()
+    lat, lon = latlons[:, 0], latlons[:, 1]
+    pc_lon, pc_lat = pc(lon, lat)
+    return pc_lat, pc_lon
 
 
 def init_plot_settings() -> None:
@@ -159,20 +167,17 @@ def plot_power_spectrum(
     figsize = (n_plots_y * 4, n_plots_x * 3)
     fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize, layout=LAYOUT)
 
-    pc = EquirectangularProjection()
-    lat, lon = latlons[:, 0], latlons[:, 1]
-    pc_lon, pc_lat = pc(lon, lat)
+    pc_lat, pc_lon = equirectangular_projection(latlons)
+
     pc_lon = np.array(pc_lon)
     pc_lat = np.array(pc_lat)
-    # Calculate delta_lon and delta_lat on the projected grid
-    delta_lon = abs(np.diff(pc_lon))
-    non_zero_delta_lon = delta_lon[delta_lon != 0]
+    # Calculate delta_lat on the projected grid
     delta_lat = abs(np.diff(pc_lat))
     non_zero_delta_lat = delta_lat[delta_lat != 0]
 
     # Define a regular grid for interpolation
-    n_pix_lon = int(np.floor(abs(pc_lon.max() - pc_lon.min()) / abs(np.min(non_zero_delta_lon))))  # around 400 for O96
-    n_pix_lat = int(np.floor(abs(pc_lat.max() - pc_lat.min()) / abs(np.min(non_zero_delta_lat))))  # around 192 for O96
+    n_pix_lat = int(np.floor(abs(pc_lat.max() - pc_lat.min()) / abs(np.min(non_zero_delta_lat))))
+    n_pix_lon = (n_pix_lat - 1) * 2 + 1  # 2*lmax + 1
     regular_pc_lon = np.linspace(pc_lon.min(), pc_lon.max(), n_pix_lon)
     regular_pc_lat = np.linspace(pc_lat.min(), pc_lat.max(), n_pix_lat)
     grid_pc_lon, grid_pc_lat = np.meshgrid(regular_pc_lon, regular_pc_lat)
@@ -381,9 +386,7 @@ def plot_predicted_multilevel_flat_sample(
     figsize = (n_plots_y * 4, n_plots_x * 3)
     fig, ax = plt.subplots(n_plots_x, n_plots_y, figsize=figsize, layout=LAYOUT)
 
-    pc = EquirectangularProjection()
-    lat, lon = latlons[:, 0], latlons[:, 1]
-    pc_lon, pc_lat = pc(lon, lat)
+    pc_lat, pc_lon = equirectangular_projection(latlons)
 
     for plot_idx, (variable_idx, (variable_name, output_only)) in enumerate(parameters.items()):
         xt = x[..., variable_idx].squeeze() * int(output_only)
@@ -722,6 +725,36 @@ def single_plot(
     ax.set_aspect("auto", adjustable=None)
     _hide_axes_ticks(ax)
     fig.colorbar(psc, ax=ax)
+
+
+def get_scatter_frame(
+    ax: plt.Axes,
+    data: np.ndarray,
+    latlons: np.ndarray,
+    cmap: str = "viridis",
+    vmin: int | None = None,
+    vmax: int | None = None,
+) -> [plt.Axes, PathCollection]:
+    """Create a scatter plot for a single frame of an animation."""
+    pc_lat, pc_lon = equirectangular_projection(latlons)
+
+    scatter_frame = ax.scatter(
+        pc_lon,
+        pc_lat,
+        c=data,
+        cmap=cmap,
+        s=5,
+        alpha=1.0,
+        rasterized=True,
+        vmin=vmin,
+        vmax=vmax,
+    )
+    ax.set_xlim((-np.pi, np.pi))
+    ax.set_ylim((-np.pi / 2, np.pi / 2))
+    continents.plot_continents(ax)
+    ax.set_aspect("auto", adjustable=None)
+    _hide_axes_ticks(ax)
+    return ax, scatter_frame
 
 
 def edge_plot(
