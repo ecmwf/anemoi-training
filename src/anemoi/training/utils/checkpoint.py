@@ -82,9 +82,9 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
 
     for key in state_dict.copy():
         if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
-            LOGGER.debug("Skipping loading parameter: %s", key)
-            LOGGER.debug("Checkpoint shape: %s", str(state_dict[key].shape))
-            LOGGER.debug("Model shape: %s", str(model_state_dict[key].shape))
+            LOGGER.info("Skipping loading parameter: %s", key)
+            LOGGER.info("Checkpoint shape: %s", str(state_dict[key].shape))
+            LOGGER.info("Model shape: %s", str(model_state_dict[key].shape))
 
             del state_dict[key]  # Remove the mismatched key
 
