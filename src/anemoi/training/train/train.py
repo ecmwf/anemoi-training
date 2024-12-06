@@ -34,8 +34,10 @@ from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.train.forecaster import GraphForecaster
+
 <<<<<<< HEAD
 from anemoi.training.utils.checkpoint import freeze_submodule_by_name
+
 =======
 >>>>>>> develop
 from anemoi.training.utils.checkpoint import transfer_learning_loading
