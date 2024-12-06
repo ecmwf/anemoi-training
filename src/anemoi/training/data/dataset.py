@@ -38,6 +38,7 @@ class NativeGridDataset(IterableDataset):
         timeincrement: int = 1,
         shuffle: bool = True,
         label: str = "generic",
+        effective_bs: int = 1,
     ) -> None:
         """Initialize (part of) the dataset state.
 
@@ -55,9 +56,11 @@ class NativeGridDataset(IterableDataset):
             Shuffle batches, by default True
         label : str, optional
             label for the dataset, by default "generic"
-
+        effective_bs : int, default 1
+            effective batch size useful to compute the lenght of the dataset
         """
         self.label = label
+        self.effective_bs = effective_bs
 
         self.data = data_reader
 
@@ -206,6 +209,7 @@ class NativeGridDataset(IterableDataset):
 
         low = shard_start + worker_id * self.n_samples_per_worker
         high = min(shard_start + (worker_id + 1) * self.n_samples_per_worker, shard_end)
+        self.chunk_index_range = np.arange(low, high, dtype=np.uint32)
 
         LOGGER.debug(
             "Worker %d (pid %d, global_rank %d, model comm group %d) has low/high range %d / %d",
@@ -217,27 +221,17 @@ class NativeGridDataset(IterableDataset):
             high,
         )
 
-        self.chunk_index_range = self.valid_date_indices[np.arange(low, high, dtype=np.uint32)]
-
-        # each worker must have a different seed for its random number generator,
-        # otherwise all the workers will output exactly the same data
-        # should we check lightning env variable "PL_SEED_WORKERS" here?
-        # but we alwyas want to seed these anyways ...
-
         base_seed = get_base_seed()
 
-        seed = (
-            base_seed * (self.model_comm_group_id + 1) - worker_id
-        )  # note that test, validation etc. datasets get same seed
-        torch.manual_seed(seed)
-        random.seed(seed)
-        self.rng = np.random.default_rng(seed=seed)
+        torch.manual_seed(base_seed)
+        random.seed(base_seed)
+        self.rng = np.random.default_rng(seed=base_seed)
         sanity_rnd = self.rng.random(1)
 
         LOGGER.debug(
             (
                 "Worker %d (%s, pid %d, glob. rank %d, model comm group %d, "
-                "group_rank %d, base_seed %d) using seed %d, sanity rnd %f"
+                "group_rank %d, base_seed %d), sanity rnd %f"
             ),
             worker_id,
             self.label,
@@ -246,7 +240,6 @@ class NativeGridDataset(IterableDataset):
             self.model_comm_group_id,
             self.model_comm_group_rank,
             base_seed,
-            seed,
             sanity_rnd,
         )
 
@@ -261,12 +254,12 @@ class NativeGridDataset(IterableDataset):
         """
         if self.shuffle:
             shuffled_chunk_indices = self.rng.choice(
-                self.chunk_index_range,
-                size=self.n_samples_per_worker,
+                self.valid_date_indices,
+                size=len(self.valid_date_indices),
                 replace=False,
-            )
+            )[self.chunk_index_range]
         else:
-            shuffled_chunk_indices = self.chunk_index_range
+            shuffled_chunk_indices = self.valid_date_indices[self.chunk_index_range]
 
         LOGGER.debug(
             (
