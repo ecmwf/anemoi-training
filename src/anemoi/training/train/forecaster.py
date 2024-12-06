@@ -288,7 +288,7 @@ class GraphForecaster(pl.LightningModule):
                     self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
                 )
                 scaling = tendency_scaler.scaler(variable_stdev, variable_tendency_stdev)
-                LOGGER.debug("Parameter %(key)s is being scaled by statistic_tendencies by %(scaling).2f")
+                LOGGER.debug(f"Parameter {key} is being scaled by statistic_tendencies by {scaling:.2f}")
                 variable_loss_scaling[idx] *= scaling
             split = key.split("_")
             if len(split) > 1 and split[-1].isdigit():
