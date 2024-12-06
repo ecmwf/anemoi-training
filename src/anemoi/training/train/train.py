@@ -34,6 +34,7 @@ from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.train.forecaster import GraphForecaster
+from anemoi.training.utils.checkpoint import freeze_submodule_by_name
 from anemoi.training.utils.checkpoint import transfer_learning_loading
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
@@ -154,17 +155,25 @@ class AnemoiTrainer:
 
         model = GraphForecaster(**kwargs)
 
+        # Load the model weights
         if self.load_weights_only:
             # Sanify the checkpoint for transfer learning
             if self.config.training.transfer_learning:
                 LOGGER.info("Loading weights with Transfer Learning from %s", self.last_checkpoint)
-                return transfer_learning_loading(model, self.last_checkpoint)
+                model = transfer_learning_loading(model, self.last_checkpoint)
+            else:
+                LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
+                model = model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
-            LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
+        else:
+            LOGGER.info("Model initialised from scratch.")
 
-            return model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+        # Freeze the chosen model weights
+        LOGGER.info("The following submodules will NOT be trained: %s", self.config.training.submodules_to_freeze)
+        for submodule_name in self.config.training.submodules_to_freeze:
+            freeze_submodule_by_name(model, submodule_name)
+            LOGGER.info("%s Frozen successfully.", submodule_name)
 
-        LOGGER.info("Model initialised from scratch.")
         return model
 
     @rank_zero_only
