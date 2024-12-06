@@ -156,20 +156,19 @@ class AnemoiTrainer:
             # Sanify the checkpoint for transfer learning
             if self.config.training.transfer_learning:
                 LOGGER.info("Loading weights with Transfer Learning from %s", self.last_checkpoint)
-                return transfer_learning_loading(model, self.last_checkpoint)
+                model = transfer_learning_loading(model, self.last_checkpoint)
+            else:
+                LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
+                model = model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
-            LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-
-            return model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
-
-        LOGGER.info("Model initialised from scratch.")
+        else:
+            LOGGER.info("Model initialised from scratch.")
 
         # Freeze the chosen model weights
-        if self.config.training.submodules_2_freeze:
-            LOGGER.info("The following submodules will NOT be trained: %s", self.config.training.submodules_2_freeze)
-            for submodule_name in self.config.training.submodules_to_freeze:
-                freeze_submodule_by_name(model, submodule_name)
-                LOGGER.info("%s Frozen successfully.", submodule_name)
+        LOGGER.info("The following submodules will NOT be trained: %s", self.config.training.submodules_to_freeze)
+        for submodule_name in self.config.training.submodules_to_freeze:
+            freeze_submodule_by_name(model, submodule_name)
+            LOGGER.info("%s Frozen successfully.", submodule_name)
 
         return model
 
