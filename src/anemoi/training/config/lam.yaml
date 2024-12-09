@@ -24,10 +24,10 @@ dataloader:
       - dataset: ${hardware.paths.data}/${hardware.files.forcing_dataset}
     adjust: all
     min_distance_km: 0
-#  spatial_indices:
-#    _target_: anemoi.training.utils.spatial_indices.GraphNodeAttribute
-#    nodes_name: data
-#    node_attribute_name: indices_connected_nodes
+  grid_indices:
+    _target_: anemoi.training.data.grid_indices.MaskedGrid
+    nodes_name: data
+    node_attribute_name: indices_connected_nodes
 model:
   output_mask: cutout_mask
 hardware:
