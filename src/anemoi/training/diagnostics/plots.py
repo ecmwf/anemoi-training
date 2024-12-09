@@ -182,8 +182,9 @@ def plot_power_spectrum(
     min_delta_lat = np.min(abs(non_zero_delta_lat))
 
     if min_delta_lat < min_delta:
-        logging.warning(
-            f"Minimum distance between lat/lon points is less than the specified minimum distance. Defaulting to min_delta={min_delta}."
+        LOGGER.warning(
+            "Minimum distance between lat/lon points is less than the specified minimum distance. Defaulting to min_delta=%s.",
+            min_delta,
         )
         min_delta_lat = min_delta
 
