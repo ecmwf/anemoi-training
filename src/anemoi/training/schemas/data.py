@@ -19,21 +19,24 @@ from pydantic import model_validator
 
 
 class NormalizerSchema(BaseModel):
-    default: str = Field(
-        description="Normalizer default method to apply",
-        examples=["mean-std", "std", "min-max", "max", "none"],
-    )
-    min_max: str | None = Field(None, description="Variables to normalize with min-max method.")
-    max: list[str] = Field(default_factory=list, description="Variables to normalize with max method.")
-    none: list[str] = Field(default_factory=list, description="Variables not to be normalized.")
+    default: str = Field(examples=["mean-std", "std", "min-max", "max", "none"])
+    "Normalizer default method to apply"
+    min_max: str | None = Field(default=None)
+    "Variables to normalize with min-max method."
+    max: list[str] = Field(default_factory=list)
+    "Variables to normalize with max method."
+    none: list[str] = Field(default_factory=list)
+    "Variables not to be normalized."
 
 
 class ImputerSchema(BaseModel):
-    default: str = Field(description="Imputer default method to apply.", examples=["none", "mean", "stdev"])
+    default: str = Field(examples=["none", "mean", "stdev"])
+    "Imputer default method to apply."
 
 
 class RemapperSchema(BaseModel):
-    default: str = Field(description="Remapper default method to apply.", examples=["none", "cos_sin"])
+    default: str = Field(examples=["none", "cos_sin"])
+    "Remapper default method to apply."
 
 
 class Target(str, Enum):
@@ -46,14 +49,10 @@ target_to_schema = {Target.normalizer: NormalizerSchema, Target.imputer: Imputer
 
 
 class Processor(BaseModel):
-    target_: Target = Field(
-        ...,
-        alias="_target_",
-        description="Processor object from anemoi.models.preprocessing.[normalizer|imputer|remapper].",
-    )
-    config: NormalizerSchema | ImputerSchema | RemapperSchema = Field(
-        description="Target schema containing processor methods.",
-    )
+    target_: Target = Field(..., alias="_target_")
+    "Processor object from anemoi.models.preprocessing.[normalizer|imputer|remapper]."
+    config: NormalizerSchema | ImputerSchema | RemapperSchema
+    "Target schema containing processor methods."
 
     @model_validator(mode="after")
     def schema_consistent_with_target(self) -> Processor:
@@ -86,25 +85,22 @@ class DataSchema(BaseModel):
         The number of features in the forecast state. To be set in the code.
     """
 
-    format: str = Field(None, description="Format of the data.")
-    resolution: str = Field(None, description="Grid type and resolution.", examples=["o96", "n320", "o48"])
-    frequency: str = Field(None, description="Time frequency requested from the dataset.")
-    timestep: str = Field(None, description="Time step of model (must be multiple of frequency).")
-    processors: dict[str, Processor] = Field(
-        description="Layers of model performing computation on latent space. \
-                                Processors including imputers and normalizers are applied in order of definition.",
-    )
-    forcing: list[str] = Field(
-        default_factory=list,
-        description="Features that are not part of the forecast state but are used as forcing to generate the \
-                     forecast state.",
-    )
-    diagnostic: list[str] = Field(
-        default_factory=list,
-        description="Features that are only part of the forecast state and are not used as an input to the model.",
-    )
-    num_features: int | None = Field(
-        None,
-        description="Number of features in the forecast state.",
-    )  # Set in the code should not be in the config???
-    remapped: dict | None = Field(None, description="Dictionary of remapped names for variables.")
+    format: str = Field(default=None)
+    "Format of the data."
+    resolution: str = Field(default=None, examples=["o96", "n320", "o48"])
+    "Grid type and resolution."
+    frequency: str = Field(default=None)
+    "Time frequency requested from the dataset."
+    timestep: str = Field(default=None)
+    "Time step of model (must be multiple of frequency)."
+    processors: dict[str, Processor]
+    "Layers of model performing computation on latent space. \
+            Processors including imputers and normalizers are applied in order of definition."
+    forcing: list[str] = Field(default_factory=list)
+    "Features that are not part of the forecast state but are used as forcing to generate the forecast state."
+    diagnostic: list[str] = Field(default_factory=list)
+    "Features that are only part of the forecast state and are not used as an input to the model."
+    num_features: int | None = Field(default=None)
+    "Number of features in the forecast state."  # Set in the code should not be in the config???
+    remapped: dict | None = Field(default=None)
+    "Dictionary of remapped names for variables."
