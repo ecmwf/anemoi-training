@@ -157,6 +157,8 @@ def plot_power_spectrum(
         Expected data of shape (lat*lon, nvar*level)
     y_pred : np.ndarray
         Predicted data of shape (lat*lon, nvar*level)
+    min_delta: float, optional
+        Minimum distance between lat/lon points, if None defaulted to 1km
 
     Returns
     -------
@@ -183,7 +185,7 @@ def plot_power_spectrum(
 
     if min_delta_lat < min_delta:
         LOGGER.warning(
-            "Minimum distance between lat/lon points is less than the specified minimum distance. Defaulting to min_delta=%s.",
+            "Min. distance between lat/lon points is < specified minimum distance. Defaulting to min_delta=%s.",
             min_delta,
         )
         min_delta_lat = min_delta
