@@ -27,6 +27,10 @@ Keep it human-readable, your future self will thank you!
 ### Removed
 - Removed the resolution config entry [#120](https://github.com/ecmwf/anemoi-training/pull/120)
 
+### Added
+
+- Add supporting arrrays (numpy) to checkpoint
+
 ## [0.3.1 - AIFS v0.3 Compatibility](https://github.com/ecmwf/anemoi-training/compare/0.3.0...0.3.1) - 2024-11-28
 
 ### Changed
