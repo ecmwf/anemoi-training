@@ -26,7 +26,7 @@ nodes:
       mask_attr_name: cutout
       margin_radius_km: 11
     attributes:
-      area_weights:
+      area_weight:
         _target_: anemoi.graphs.nodes.attributes.AreaWeights
         norm: unit-max
 

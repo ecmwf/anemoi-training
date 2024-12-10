@@ -100,7 +100,7 @@ class BasePlotCallback(Callback, ABC):
         exp_log_tag: str = "val_pred_sample",
     ) -> None:
         """Figure output: save to file and/or display in notebook."""
-        if self.save_basedir is not None:
+        if self.save_basedir is not None and fig is not None:
             save_path = Path(
                 self.save_basedir,
                 "plots",
