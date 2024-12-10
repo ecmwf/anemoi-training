@@ -8,33 +8,41 @@
 # nor does it submit to any jurisdiction.
 
 
+from __future__ import annotations
+
 import logging
 from collections import defaultdict
-from collections.abc import Generator
-from collections.abc import Mapping
-from typing import Optional
-from typing import Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
-from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.interface import AnemoiModelInterface
-from anemoi.utils.config import DotDict
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from timm.scheduler import CosineLRScheduler
-from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
-from torch_geometric.data import HeteroData
 
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
-from anemoi.training.utils.jsonify import map_config_to_primitives
+from anemoi.training.schemas.base_schema import BaseSchema
+from anemoi.training.schemas.base_schema import convert_to_omegaconf
+from anemoi.training.schemas.training import LossScalingSchema  # noqa: TC001
+from anemoi.training.schemas.training import MetricLossSchema  # noqa: TC001
+from anemoi.training.schemas.training import PressureLevelScalerSchema  # noqa: TC001
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+    from collections.abc import Mapping
+
+    from anemoi.models.data_indices.collection import IndexCollection
+    from torch.distributed.distributed_c10d import ProcessGroup
+    from torch_geometric.data import HeteroData
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,7 +53,7 @@ class GraphForecaster(pl.LightningModule):
     def __init__(
         self,
         *,
-        config: DictConfig,
+        config: BaseSchema,
         graph_data: HeteroData,
         statistics: dict,
         data_indices: IndexCollection,
@@ -76,7 +84,7 @@ class GraphForecaster(pl.LightningModule):
             data_indices=data_indices,
             metadata=metadata,
             graph_data=graph_data,
-            config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
+            config=convert_to_omegaconf(config),
         )
 
         self.data_indices = data_indices
@@ -86,7 +94,7 @@ class GraphForecaster(pl.LightningModule):
         self.latlons_data = graph_data[config.graph.data].x
         self.node_weights = self.get_node_weights(config, graph_data)
 
-        if config.model.get("output_mask", None) is not None:
+        if getattr(config.model, "output_mask", None) is not None:
             self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
         else:
             self.output_mask = NoOutputMask()
@@ -94,15 +102,19 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        variable_scaling = self.get_variable_scaling(config, data_indices)
-
-        _, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
+        _, self.val_metric_ranges = self.get_val_metric_ranges(convert_to_omegaconf(config), data_indices)
 
         # Kwargs to pass to the loss function
         loss_kwargs = {"node_weights": self.node_weights}
+
         # Scalars to include in the loss function, must be of form (dim, scalar)
         # Add mask multiplying NaN locations with zero. At this stage at [[1]].
         # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
+        variable_scaling = self.get_variable_scaling(
+            config.training.variable_loss_scaling,
+            config.training.pressure_level_scaler,
+            data_indices,
+        )
         scalars = {"variable": (-1, variable_scaling), "loss_weights_mask": ((-2, -1), torch.ones((1, 1)))}
         self.updated_loss_mask = False
 
@@ -121,12 +133,8 @@ class GraphForecaster(pl.LightningModule):
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
         self.multi_step = config.training.multistep_input
-        self.lr = (
-            config.hardware.num_nodes
-            * config.hardware.num_gpus_per_node
-            * config.training.lr.rate
-            / config.hardware.num_gpus_per_model
-        )
+        self.lr = config.training.lr.rate
+
         self.warmup_t = getattr(config.training.lr, "warmup_t", 1000)
         self.lr_iterations = config.training.lr.iterations
         self.lr_min = config.training.lr.min
@@ -158,10 +166,10 @@ class GraphForecaster(pl.LightningModule):
     # Future import breaks other type hints TODO Harrison Cook
     @staticmethod
     def get_loss_function(
-        config: DictConfig,
-        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,  # noqa: FA100
+        config: MetricLossSchema | list[MetricLossSchema],
+        scalars: dict[str, tuple[int | tuple[int, ...] | torch.Tensor]] | None = None,
         **kwargs,
-    ) -> Union[torch.nn.Module, torch.nn.ModuleList]:  # noqa: FA100
+    ) -> torch.nn.Module | torch.nn.ModuleList:
         """Get loss functions from config.
 
         Can be ModuleList if multiple losses are specified.
@@ -191,12 +199,11 @@ class GraphForecaster(pl.LightningModule):
         ValueError
             If scalar is not found in valid scalars
         """
-        config_container = OmegaConf.to_container(config, resolve=False)
-        if isinstance(config_container, list):
+        if isinstance(config, list):
             return torch.nn.ModuleList(
                 [
                     GraphForecaster.get_loss_function(
-                        OmegaConf.create(loss_config),
+                        loss_config,
                         scalars=scalars,
                         **kwargs,
                     )
@@ -204,7 +211,7 @@ class GraphForecaster(pl.LightningModule):
                 ],
             )
 
-        loss_config = OmegaConf.to_container(config, resolve=True)
+        loss_config = OmegaConf.create(config.model_dump(by_alias=True))
         scalars_to_include = loss_config.pop("scalars", [])
 
         # Instantiate the loss function with the loss_init_config
@@ -280,14 +287,15 @@ class GraphForecaster(pl.LightningModule):
 
     @staticmethod
     def get_variable_scaling(
-        config: DictConfig,
+        variable_loss_scaling_config: LossScalingSchema,
+        pressure_level_scaling_config: PressureLevelScalerSchema,
         data_indices: IndexCollection,
     ) -> torch.Tensor:
         variable_loss_scaling = (
             np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32)
-            * config.training.variable_loss_scaling.default
+            * variable_loss_scaling_config.default
         )
-        pressure_level = instantiate(config.training.pressure_level_scaler)
+        pressure_level = instantiate(pressure_level_scaling_config.model_dump(by_alias=True))
 
         LOGGER.info(
             "Pressure level scaling: use scaler %s with slope %.4f and minimum %.2f",
@@ -300,18 +308,16 @@ class GraphForecaster(pl.LightningModule):
             split = key.split("_")
             if len(split) > 1 and split[-1].isdigit():
                 # Apply pressure level scaling
-                if split[0] in config.training.variable_loss_scaling.pl:
-                    variable_loss_scaling[idx] = config.training.variable_loss_scaling.pl[
-                        split[0]
-                    ] * pressure_level.scaler(
+                if split[0] in variable_loss_scaling_config.pl:
+                    variable_loss_scaling[idx] = variable_loss_scaling_config.pl[split[0]] * pressure_level.scaler(
                         int(split[-1]),
                     )
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
             else:
                 # Apply surface variable scaling
-                if key in config.training.variable_loss_scaling.sfc:
-                    variable_loss_scaling[idx] = config.training.variable_loss_scaling.sfc[key]
+                if key in variable_loss_scaling_config.sfc:
+                    variable_loss_scaling[idx] = variable_loss_scaling_config.sfc[key]
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
 
@@ -379,10 +385,10 @@ class GraphForecaster(pl.LightningModule):
     def rollout_step(
         self,
         batch: torch.Tensor,
-        rollout: Optional[int] = None,  # noqa: FA100
+        rollout: int | None = None,
         training_mode: bool = True,
         validation_mode: bool = False,
-    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:  # noqa: FA100
+    ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
         """Rollout step for the forecaster.
 
         Will run pre_processors on batch, but not post_processors on predictions.
