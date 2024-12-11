@@ -43,7 +43,6 @@ class AnemoiCheckpoint(ModelCheckpoint):
 
         """
         super().__init__(**kwargs)
-
         self.config = config
         self.start = time.time()
         self._model_metadata = None
@@ -76,15 +75,6 @@ class AnemoiCheckpoint(ModelCheckpoint):
         }
 
         return self._model_metadata
-
-    def on_fit_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
-        del pl_module
-        if not self._should_skip_saving_checkpoint(trainer) and not self._should_save_on_train_epoch_end(trainer):
-            monitor_candidates = self._monitor_candidates(trainer)
-            # PTL advances one epoch at end of training,  Need to correct the checkpoint epoch to the last epoch
-            monitor_candidates["epoch"] = trainer.current_epoch - 1
-            self._save_topk_checkpoint(trainer, monitor_candidates)
-            self._save_last_checkpoint(trainer, monitor_candidates)
 
     def tracker_metadata(self, trainer: pl.Trainer) -> dict:
         if self._tracker_metadata is not None:
