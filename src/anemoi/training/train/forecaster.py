@@ -287,6 +287,9 @@ class GraphForecaster(pl.LightningModule):
             if key in config.training.metrics:
                 metric_ranges_validation[key] = [idx]
 
+        # Add the full list of output indices
+        metric_ranges_validation["all"] = data_indices.internal_model.output.full.tolist()
+
         return metric_ranges, metric_ranges_validation
 
     @staticmethod
