@@ -121,14 +121,18 @@ class AnemoiTrainer:
 
         Creates the graph in all workers.
         """
-        graph_filename = Path(
-            self.config.hardware.paths.graph,
-            self.config.hardware.files.graph,
-        )
+        if self.config.hardware.files.graph is not None:
+            graph_filename = Path(
+                self.config.hardware.paths.graph,
+                self.config.hardware.files.graph,
+            )
 
-        if graph_filename.exists() and not self.config.graph.overwrite:
-            LOGGER.info("Loading graph data from %s", graph_filename)
-            return torch.load(graph_filename)
+            if graph_filename.exists() and not self.config.graph.overwrite:
+                LOGGER.info("Loading graph data from %s", graph_filename)
+                return torch.load(graph_filename)
+
+        else:
+            graph_filename = None
 
         from anemoi.graphs.create import GraphCreator
 
@@ -160,7 +164,7 @@ class AnemoiTrainer:
             else:
                 LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
                 model = model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
-
+        
         else:
             LOGGER.info("Model initialised from scratch.")
 
