@@ -164,7 +164,7 @@ class AnemoiTrainer:
             else:
                 LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
                 model = model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
-        
+
         else:
             LOGGER.info("Model initialised from scratch.")
 
