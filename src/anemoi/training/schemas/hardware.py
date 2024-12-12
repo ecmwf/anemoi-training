@@ -16,6 +16,7 @@ from typing import Annotated
 from pydantic import AfterValidator
 from pydantic import BaseModel
 from pydantic import DirectoryPath
+from pydantic import Field
 from pydantic import NonNegativeInt
 from pydantic import field_validator
 from pydantic import model_validator
@@ -33,7 +34,7 @@ class Checkpoint(BaseModel):
 class FilesConfig(BaseModel):
     dataset: Path  # TODO(Helen): Change to FilePath, only posisble after refactor
     "Path to the dataset file"
-    graph: Path
+    graph: Path | None = Field(default=None)
     "Path to the graph file"
     checkpoint: dict[str, str]
     "Each dictionary key is a checkpoint name, and the value is the path to the checkpoint file"

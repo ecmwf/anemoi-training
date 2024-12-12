@@ -18,8 +18,8 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from anemoi.models.interface import AnemoiModelInterface
+from anemoi.utils.config import DotDict
 from hydra.utils import instantiate
-from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from timm.scheduler import CosineLRScheduler
 from torch.distributed.optim import ZeroRedundancyOptimizer
@@ -32,6 +32,7 @@ from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.schemas.training import LossScalingSchema  # noqa: TC001
 from anemoi.training.schemas.training import MetricLossSchema  # noqa: TC001
 from anemoi.training.schemas.training import PressureLevelScalerSchema  # noqa: TC001
+from anemoi.training.schemas.training import TrainingSchema  # noqa: TC001
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
 
@@ -84,7 +85,7 @@ class GraphForecaster(pl.LightningModule):
             data_indices=data_indices,
             metadata=metadata,
             graph_data=graph_data,
-            config=convert_to_omegaconf(config),
+            config=DotDict(convert_to_omegaconf(config)),
         )
 
         self.data_indices = data_indices
@@ -92,7 +93,7 @@ class GraphForecaster(pl.LightningModule):
         self.save_hyperparameters()
 
         self.latlons_data = graph_data[config.graph.data].x
-        self.node_weights = self.get_node_weights(config, graph_data)
+        self.node_weights = self.get_node_weights(config.training, graph_data)
 
         if getattr(config.model, "output_mask", None) is not None:
             self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
@@ -102,7 +103,7 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        _, self.val_metric_ranges = self.get_val_metric_ranges(convert_to_omegaconf(config), data_indices)
+        _, self.val_metric_ranges = self.get_val_metric_ranges(config.training, data_indices)
 
         # Kwargs to pass to the loss function
         loss_kwargs = {"node_weights": self.node_weights}
@@ -135,7 +136,7 @@ class GraphForecaster(pl.LightningModule):
         self.multi_step = config.training.multistep_input
         self.lr = config.training.lr.rate
 
-        self.warmup_t = getattr(config.training.lr, "warmup_t", 1000)
+        self.warmup_t = config.training.lr.warmup_time
         self.lr_iterations = config.training.lr.iterations
         self.lr_min = config.training.lr.min
         self.rollout = config.training.rollout.start
@@ -250,7 +251,7 @@ class GraphForecaster(pl.LightningModule):
         self.updated_loss_mask = True
 
     @staticmethod
-    def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, dict]:
+    def get_val_metric_ranges(config: TrainingSchema, data_indices: IndexCollection) -> tuple[dict, dict]:
 
         metric_ranges = defaultdict(list)
         metric_ranges_validation = defaultdict(list)
@@ -264,7 +265,7 @@ class GraphForecaster(pl.LightningModule):
                 metric_ranges[f"sfc_{key}"].append(idx)
 
             # Specific metrics from hydra to log in logger
-            if key in config.training.metrics:
+            if key in config.metrics:
                 metric_ranges[key] = [idx]
 
         # Add the full list of output indices
@@ -280,7 +281,7 @@ class GraphForecaster(pl.LightningModule):
             else:
                 metric_ranges_validation[f"sfc_{key}"].append(idx)
             # Create specific metrics from hydra to log in logger
-            if key in config.training.metrics:
+            if key in config.metrics:
                 metric_ranges_validation[key] = [idx]
 
         return metric_ranges, metric_ranges_validation
@@ -324,8 +325,8 @@ class GraphForecaster(pl.LightningModule):
         return torch.from_numpy(variable_loss_scaling)
 
     @staticmethod
-    def get_node_weights(config: DictConfig, graph_data: HeteroData) -> torch.Tensor:
-        node_weighting = instantiate(config.training.node_loss_weights)
+    def get_node_weights(config: TrainingSchema, graph_data: HeteroData) -> torch.Tensor:
+        node_weighting = instantiate(config.node_loss_weights.model_dump(by_alias=True))
 
         return node_weighting.weights(graph_data)
 

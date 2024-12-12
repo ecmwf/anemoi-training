@@ -153,7 +153,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
         # Compute effective batch size
         effective_bs = (
-            self.config.dataloader.batch_size["training"]
+            self.config.dataloader.batch_size.training
             * self.config.hardware.num_gpus_per_node
             * self.config.hardware.num_nodes
             // self.config.hardware.num_gpus_per_model
