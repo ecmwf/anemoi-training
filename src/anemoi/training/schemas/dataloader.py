@@ -70,41 +70,46 @@ class Frequency(RootModel):
 class DatasetSchema(BaseModel):
     """Dataset configuration schema."""
 
-    dataset: str | dict | Path = Field(description="dateset")
-    start: int | None = Field(None, description="Starting datetime for sample of the dataset.")
-    end: int | None = Field(None, description="Ending datetime [inclusive] for sample of the dataset.")
-    frequency: Frequency = Field(description="Temporal resolution, frequency must be >= to dataset frequency.")
-    drop: list | None = Field(None, description="???")
+    dataset: str | dict | Path
+    "Dataset"
+    start: int | None = Field(default=None)
+    "Starting datetime for sample of the dataset."
+    end: int | None = Field(default=None)
+    "Ending datetime [inclusive] for sample of the dataset."
+    frequency: Frequency
+    "Temporal resolution, frequency must be >= to dataset frequency."
+    drop: list | None = Field(default=None)
+    "???"
 
 
 class LoaderSet(BaseModel):
-    training: PositiveInt | None = Field(None, description="Value for training dataset")
-    validation: PositiveInt | None = Field(None, description="Value for validation dataset")
-    test: PositiveInt | None = Field(None, description="Value for test dataset")
+    training: PositiveInt | None = Field(default=None)
+    "Value for training dataset"
+    validation: PositiveInt | None = Field(default=None)
+    "Value for validation dataset"
+    test: PositiveInt | None = Field(default=None)
+    "Value for test dataset"
 
 
 class DataLoaderSchema(BaseModel):
-    prefetch_factor: int = Field(2, description="Number of batches loaded in advance by each worker.", ge=0)
-    pin_memory: bool = Field(
-        True,
-        description="If True, the data loader will copy Tensors into device/CUDA pinned memory before returning them.",
-    )
-
-    num_workers: LoaderSet = Field(description="Number of process per-GPU for batch distribution.")
-    batch_size: LoaderSet = Field(description="Per-GPU batch size.")
-    limit_batches: LoaderSet = Field(
-        None,
-        description="Limit number of batches to run. Default value null, will run on all the batches.",
-    )
-
-    training: DatasetSchema = Field(None, description="Training DatasetSchema.")
-    validation: DatasetSchema = Field(None, description="Validation DatasetSchema.")
-    test: DatasetSchema = Field(None, description="Test DatasetSchema.")
-    validation_rollout: PositiveInt = Field(
-        1,
-        description="Number of rollouts to use for validation, must be equal or greater than rollout expected \
-                     by callbacks.",
-    )  # TODO(Helen): Ccheck that this equal or greater than the number of rollouts expected by callbacks ???
-
+    prefetch_factor: int = Field(default=2, ge=0)
+    "Number of batches loaded in advance by each worker."
+    pin_memory: bool = Field(default=True)
+    "If True, the data loader will copy Tensors into device/CUDA pinned memory before returning them."
+    num_workers: LoaderSet
+    "Number of process per-GPU for batch distribution."
+    batch_size: LoaderSet
+    "Per-GPU batch size."
+    limit_batches: LoaderSet = Field(default=None)
+    "Limit number of batches to run. Default value null, will run on all the batches."
+    training: DatasetSchema = Field(None)
+    "Training DatasetSchema."
+    validation: DatasetSchema = Field(None)
+    "Validation DatasetSchema."
+    test: DatasetSchema = Field(None)
+    "Test DatasetSchema."
+    validation_rollout: PositiveInt = Field(default=1)
+    "Number of rollouts to use for validation, must be equal or greater than rollout expected by callbacks."
+    # TODO(Helen): Ccheck that this equal or greater than the number of rollouts expected by callbacks ???
     read_group_size: PositiveInt = Field(default=None)
     "Number of GPUs per reader group. Defaults to number of GPUs (see BaseSchema validators)."
