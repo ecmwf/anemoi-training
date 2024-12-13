@@ -222,9 +222,7 @@ class NativeGridDataset(IterableDataset):
         )
 
         for i in shuffled_chunk_indices:
-            #TODO: self.data[relative_date_indices + i] is intended here, but it seems like array indices are not supported in
-            #anemoi-datasets, and I couldn't get a tuple of indices that may not have a regular structure to work either 
-            x = self.data[slice(self.relative_date_indices[0]+i, i+ self.relative_date_indices[-1]+1, 1)]
+            x = self.data[self.relative_date_indices + i] #NOTE: this requires an update to anemoi datasets
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
 
