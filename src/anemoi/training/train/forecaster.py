@@ -103,7 +103,7 @@ class GraphForecaster(pl.LightningModule):
             mask_name = config.graph.nodes.hidden.node_builder.mask_attr_name
             limited_area_mask = graph_data[config.graph.data][mask_name].squeeze().bool()
         else:
-            limited_area_mask = 1
+            limited_area_mask = torch.ones((1,))
 
         # Kwargs to pass to the loss function
         loss_kwargs = {"node_weights": self.node_weights}
