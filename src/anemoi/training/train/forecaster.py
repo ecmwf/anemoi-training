@@ -8,6 +8,7 @@
 # nor does it submit to any jurisdiction.
 
 
+import copy
 import logging
 from collections import defaultdict
 from collections.abc import Generator
@@ -78,7 +79,7 @@ class GraphForecaster(pl.LightningModule):
             graph_data=graph_data,
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
-
+        self.config = config
         self.data_indices = data_indices
 
         self.save_hyperparameters()
@@ -103,17 +104,17 @@ class GraphForecaster(pl.LightningModule):
         # Scalars to include in the loss function, must be of form (dim, scalar)
         # Add mask multiplying NaN locations with zero. At this stage at [[1]].
         # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
-        scalars = {"variable": (-1, variable_scaling), "loss_weights_mask": ((-2, -1), torch.ones((1, 1)))}
+        self.scalars = {"variable": (-1, variable_scaling), "loss_weights_mask": ((-2, -1), torch.ones((1, 1)))}
         self.updated_loss_mask = False
 
-        self.loss = self.get_loss_function(config.training.training_loss, scalars=scalars, **loss_kwargs)
+        self.loss = self.get_loss_function(config.training.training_loss, scalars=self.scalars, **loss_kwargs)
 
-        assert isinstance(self.loss, torch.nn.Module) and not isinstance(
+        assert isinstance(self.loss, BaseWeightedLoss) and not isinstance(
             self.loss,
             torch.nn.ModuleList,
-        ), f"Loss function must be a `torch.nn.Module`, not a {type(self.loss).__name__!r}"
+        ), f"Loss function must be a `BaseWeightedLoss`, not a {type(self.loss).__name__!r}"
 
-        self.metrics = self.get_loss_function(config.training.validation_metrics, scalars=scalars, **loss_kwargs)
+        self.metrics = self.get_loss_function(config.training.validation_metrics, scalars=self.scalars, **loss_kwargs)
         if not isinstance(self.metrics, torch.nn.ModuleList):
             self.metrics = torch.nn.ModuleList([self.metrics])
 
@@ -161,7 +162,7 @@ class GraphForecaster(pl.LightningModule):
         config: DictConfig,
         scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,  # noqa: FA100
         **kwargs,
-    ) -> Union[torch.nn.Module, torch.nn.ModuleList]:  # noqa: FA100
+    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:  # noqa: FA100
         """Get loss functions from config.
 
         Can be ModuleList if multiple losses are specified.
@@ -181,7 +182,7 @@ class GraphForecaster(pl.LightningModule):
 
         Returns
         -------
-        Union[torch.nn.Module, torch.nn.ModuleList]
+        Union[BaseWeightedLoss, torch.nn.ModuleList]
             Loss function, or list of metrics
 
         Raises
@@ -240,6 +241,8 @@ class GraphForecaster(pl.LightningModule):
                     loss_weights_mask = pre_processor.transform_loss_mask(loss_weights_mask)
             # update scaler with loss_weights_mask retrieved from preprocessors
             self.loss.update_scalar(scalar=loss_weights_mask.cpu(), name="loss_weights_mask")
+
+        self.scalars["loss_weights_mask"] = ((-2, -1), loss_weights_mask.cpu())
         self.updated_loss_mask = True
 
     @staticmethod
@@ -514,6 +517,29 @@ class GraphForecaster(pl.LightningModule):
 
         return torch.cat(tensor_list, dim=-2)
 
+    def _remap_output_to_internal_indices(self, indexes: list[int]) -> list[int]:
+        """
+        Map output indices to input indices.
+
+        Parameters
+        ----------
+        indexes : list[int]
+            Indices to remap
+
+        Returns
+        -------
+        list[int]
+            Remapped indices
+        """
+        new_indexes = []
+        output_index_to_name = {v: k for k, v in self.data_indices.model.output.name_to_index.items()}
+
+        for i in indexes:
+            name_of_index = output_index_to_name[i]
+            if name_of_index in self.data_indices.internal_model.output.name_to_index:
+                new_indexes.append(self.data_indices.internal_model.output.name_to_index[name_of_index])
+        return new_indexes
+
     def calculate_val_metrics(
         self,
         y_pred: torch.Tensor,
@@ -552,11 +578,28 @@ class GraphForecaster(pl.LightningModule):
                 continue
 
             for mkey, indices in self.val_metric_ranges.items():
-                metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
-                    y_pred_postprocessed[..., indices],
-                    y_postprocessed[..., indices],
-                    scalar_indices=[..., indices] if -1 in metric.scalar else None,
-                )
+                if (
+                    "scale_validation_metrics" in self.config.training
+                    and mkey in self.config.training.scale_validation_metrics.metrics
+                ):
+                    metric = copy(metric)
+                    for key in self.config.training.scale_validation_metrics.scalars_to_apply:
+                        metric.add_scalar(*self.scalars[key], name=key)
+
+                    # Use normalised space data
+                    internal_model_indices = self._remap_output_to_internal_indices(indices)
+
+                    metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
+                        y[..., internal_model_indices],
+                        y_pred[..., internal_model_indices],
+                        scalar_indices=[..., internal_model_indices] if -1 in metric.scalar else None,
+                    )
+                else:
+                    metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
+                        y_pred_postprocessed[..., indices],
+                        y_postprocessed[..., indices],
+                        scalar_indices=[..., indices] if -1 in metric.scalar else None,
+                    )
 
         return metrics
 
@@ -603,7 +646,20 @@ class GraphForecaster(pl.LightningModule):
         self.rollout = min(self.rollout, self.rollout_max)
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
+        """
+        Calculate the loss over a validation batch using the training loss function.
 
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Validation batch
+        batch_idx : int
+            Batch inces
+
+        Returns
+        -------
+        None
+        """
         with torch.no_grad():
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
 
