@@ -8,7 +8,6 @@
 # nor does it submit to any jurisdiction.
 
 
-import copy
 import logging
 from collections import defaultdict
 from collections.abc import Generator
@@ -552,6 +551,7 @@ class GraphForecaster(pl.LightningModule):
             name_of_index = output_index_to_name[i]
             if name_of_index in self.data_indices.internal_model.output.name_to_index:
                 new_indexes.append(self.data_indices.internal_model.output.name_to_index[name_of_index])
+
         return new_indexes
 
     def calculate_val_metrics(
@@ -596,18 +596,19 @@ class GraphForecaster(pl.LightningModule):
                     "scale_validation_metrics" in self.config.training
                     and mkey in self.config.training.scale_validation_metrics.metrics
                 ):
-                    metric = copy.copy(metric)
-                    for key in self.config.training.scale_validation_metrics.scalars_to_apply:
-                        metric.add_scalar(*self.scalars[key], name=key)
+                    with metric.scalar.freeze_state():
+                        for key in self.config.training.scale_validation_metrics.scalars_to_apply:
+                            metric.add_scalar(*self.scalars[key], name=key)
 
-                    # Use normalised space data
-                    internal_model_indices = self._remap_output_to_internal_indices(indices)
+                        # Use normalised space data
+                        internal_model_indices = self._remap_output_to_internal_indices(indices)
 
-                    metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
-                        y[..., internal_model_indices],
-                        y_pred[..., internal_model_indices],
-                        scalar_indices=[..., internal_model_indices] if -1 in metric.scalar else None,
-                    )
+                        metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
+                            y[..., internal_model_indices],
+                            y_pred[..., internal_model_indices],
+                            scalar_indices=[..., internal_model_indices] if -1 in metric.scalar else None,
+                        )
+
                 else:
                     metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
                         y_pred_postprocessed[..., indices],

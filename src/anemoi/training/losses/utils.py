@@ -229,6 +229,58 @@ class ScaleTensor:
         self.tensors[name] = (dimension, scalar)
         self._specified_dimensions[name] = dimension
 
+    def remove_scalar(self, name: str) -> None:
+        """
+        Remove scalar from ScaleTensor.
+
+        Parameters
+        ----------
+        name : str
+            Name of tensor to remove
+
+        Raises
+        ------
+        ValueError
+            If the scalar is not in the scalars
+        """
+        if name not in self.tensors:
+            valid_keys = list(self.tensors.keys())
+            error_msg = f"{name} not in scalars. Must be one of {valid_keys}."
+            raise ValueError(error_msg)
+
+        self.tensors.pop(name)
+        self._specified_dimensions.pop(name)
+
+    def freeze_state(self) -> FrozenStateRecord:  # noqa: F821
+        """
+        Freeze the state of the Scalar with a context manager.
+
+        Any changes made will be reverted on exit.
+
+        Returns
+        -------
+        FrozenStateRecord
+            Context manager to freeze the state
+        """
+        record_of_scalars: dict = self.tensors.copy()
+
+        class FrozenStateRecord:
+            """Freeze the state of the ScaleTensor. Any changes will be reverted on exit."""
+
+            def __enter__(self):
+                pass
+
+            def __exit__(context_self, *a):  # noqa: N805
+                for key in list(self.tensors.keys()):
+                    if key not in record_of_scalars:
+                        self.remove_scalar(key)
+
+                for key in record_of_scalars:
+                    if key not in self:
+                        self.add_scalar(*record_of_scalars[key], name=key)
+
+        return FrozenStateRecord()
+
     def update_scalar(self, name: str, scalar: torch.Tensor, *, override: bool = False) -> None:
         """Update an existing scalar maintaining original dimensions.
 
