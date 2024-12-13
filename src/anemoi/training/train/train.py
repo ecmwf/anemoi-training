@@ -81,7 +81,7 @@ class AnemoiTrainer:
     @cached_property
     def datamodule(self) -> AnemoiDatasetsDataModule:
         """DataModule instance and DataSets."""
-        datamodule = AnemoiDatasetsDataModule(self.config)
+        datamodule = AnemoiDatasetsDataModule(self.config, self.graph_data)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
         LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
         LOGGER.debug("Variables: %s", str(datamodule.ds_train.data.variables))
@@ -162,7 +162,7 @@ class AnemoiTrainer:
 
             LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
 
-            return model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+            return GraphForecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
         LOGGER.info("Model initialised from scratch.")
         return model
