@@ -96,7 +96,7 @@ class GraphForecaster(pl.LightningModule):
 
         variable_scaling = self.get_variable_scaling(config, data_indices)
 
-        _, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
+        self.internal_metric_ranges, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
 
         # Check if the model is a stretched grid
         if "lam_resolution" in getattr(config.graph.nodes.hidden, "node_builder", []):
@@ -108,6 +108,7 @@ class GraphForecaster(pl.LightningModule):
         # Kwargs to pass to the loss function
         loss_kwargs = {"node_weights": self.node_weights}
         # Scalars to include in the loss function, must be of form (dim, scalar)
+        # Use -1 for the variable dimension, -2 for the latlon dimension
         # Add mask multiplying NaN locations with zero. At this stage at [[1]].
         # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
         self.scalars = {
@@ -530,30 +531,6 @@ class GraphForecaster(pl.LightningModule):
 
         return torch.cat(tensor_list, dim=-2)
 
-    def _remap_output_to_internal_indices(self, indexes: list[int]) -> list[int]:
-        """
-        Map output indices to input indices.
-
-        Parameters
-        ----------
-        indexes : list[int]
-            Indices to remap
-
-        Returns
-        -------
-        list[int]
-            Remapped indices
-        """
-        new_indexes = []
-        output_index_to_name = {v: k for k, v in self.data_indices.model.output.name_to_index.items()}
-
-        for i in indexes:
-            name_of_index = output_index_to_name[i]
-            if name_of_index in self.data_indices.internal_model.output.name_to_index:
-                new_indexes.append(self.data_indices.internal_model.output.name_to_index[name_of_index])
-
-        return new_indexes
-
     def calculate_val_metrics(
         self,
         y_pred: torch.Tensor,
@@ -592,19 +569,16 @@ class GraphForecaster(pl.LightningModule):
                 continue
 
             for mkey, indices in self.val_metric_ranges.items():
-                if (
-                    "scale_validation_metrics" in self.config.training
-                    and mkey in self.config.training.scale_validation_metrics.metrics
+                if "scale_validation_metrics" in self.config.training and (
+                    mkey in self.config.training.scale_validation_metrics.metrics
+                    or "*" in self.config.training.scale_validation_metrics.metrics
                 ):
                     with metric.scalar.freeze_state():
                         for key in self.config.training.scale_validation_metrics.scalars_to_apply:
                             metric.add_scalar(*self.scalars[key], name=key)
 
                         # Use internal model space indices
-                        if "mkey" == "all":
-                            internal_model_indices = self.data_indices.model.output.full.tolist()
-                        else:
-                            internal_model_indices = self._remap_output_to_internal_indices(indices)
+                        internal_model_indices = self.internal_metric_ranges[mkey]
 
                         metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
                             y_pred,
@@ -612,10 +586,18 @@ class GraphForecaster(pl.LightningModule):
                             scalar_indices=[..., internal_model_indices],
                         )
                 else:
+                    if -1 in metric.scalar:
+                        exception_msg = (
+                            "Validation metrics cannot be scaled over the variable dimension"
+                            " in the post processed space. Please specify them in the config"
+                            " at `scale_validation_metrics`."
+                        )
+                        raise ValueError(exception_msg)
+
                     metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
                         y_pred_postprocessed,
                         y_postprocessed,
-                        scalar_indices=[..., indices]
+                        scalar_indices=[..., indices],
                     )
 
         return metrics

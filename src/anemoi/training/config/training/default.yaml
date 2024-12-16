@@ -63,18 +63,19 @@ validation_metrics:
   # loss class to initialise
   - _target_: anemoi.training.losses.mse.WeightedMSELoss
     # Scalars to include in loss calculation
-    # Available scalars include, 'variable'
+    # Cannot scale over the variable dimension due to possible remappings.
+    # Use the `scale_validation_metrics` section to variable scale.
     scalars: []
     # other kwargs
     ignore_nans: True
 
-# List of validation metrics to keep in normalised space, and scalars to apply
-# Cannot be used for metrics associated with variables that are remapped between the
-# real space and internal model space.
+# List of validation metrics to keep in normalised space, and scalars to be applied
+# Use '*' in reference all metrics, or a list of metric names.
 scale_validation_metrics:
   scalars_to_apply: ['variable']
   metrics:
     - 'all'
+    # - "*"
 
 
 # length of the "rollout" window (see Keisler's paper)
