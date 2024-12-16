@@ -29,7 +29,7 @@ dataloader:
     nodes_name: data
     node_attribute_name: indices_connected_nodes
 model:
-  output_mask: cutout_mask
+  output_mask: cutout_mask # it must be a node attribute of the output nodes
 hardware:
   files:
     dataset: ???

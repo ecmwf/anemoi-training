@@ -29,7 +29,7 @@ training:
     spatial:
       _target_: anemoi.training.data.scaling.ReweightedGraphAttribute
       target_nodes: ${graph.data}
-      scaled_attribute: area_weight
+      scaled_attribute: area_weight # it must be a node attribute of the output nodes
       cutout_weight_frac_of_global: ???
 hardware:
   files:

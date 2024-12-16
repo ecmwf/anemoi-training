@@ -10,7 +10,7 @@ nodes:
     node_builder:
       _target_: anemoi.graphs.nodes.ZarrDatasetNodes
       dataset: ${dataloader.training.dataset}
-    attributes: ${graph.attributes.data_nodes}
+    attributes: ${graph.attributes.nodes}
   # Hidden nodes
   hidden:
     node_builder:
@@ -53,7 +53,8 @@ post_processors:
     save_mask_indices_to_attr: indices_connected_nodes # optional
 
 attributes:
-  data_nodes:
+  nodes:
+    # Attributes for data nodes
     area_weight:
       _target_: anemoi.graphs.nodes.attributes.AreaWeights # options: Area, Uniform
       norm: unit-max # options: l1, l2, unit-max, unit-sum, unit-std
