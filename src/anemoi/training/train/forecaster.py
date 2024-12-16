@@ -600,8 +600,11 @@ class GraphForecaster(pl.LightningModule):
                         for key in self.config.training.scale_validation_metrics.scalars_to_apply:
                             metric.add_scalar(*self.scalars[key], name=key)
 
-                        # Use normalised space data
-                        internal_model_indices = self._remap_output_to_internal_indices(indices)
+                        # Use internal model space indices
+                        if "mkey" == "all":
+                            internal_model_indices = self.data_indices.model.output.full.tolist()
+                        else:
+                            internal_model_indices = self._remap_output_to_internal_indices(indices)
 
                         metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
                             y[..., internal_model_indices],
