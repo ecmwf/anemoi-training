@@ -10,19 +10,17 @@
 #
 # This script is not part of a productive ML workflow, but is
 # used for CI/CD!
-import os
 import datetime
+import os
 import tempfile
 
 import matplotlib as mpl
 import pytest
 from hydra import compose
 from hydra import initialize
-from hydra.core.global_hydra import GlobalHydra
 
 import anemoi.training
 from anemoi.training.train.train import AnemoiTrainer
-from hydra_plugins.anemoi_searchpath.anemoi_searchpath_plugin import AnemoiSearchPathPlugin
 
 os.environ["ANEMOI_BASE_SEED"] = "42"
 os.environ["ANEMOI_CONFIG_PATH"] = os.path.join(os.path.dirname(anemoi.training.__file__), "config")
@@ -45,12 +43,13 @@ def trainer(shorten: bool = True) -> AnemoiTrainer:
     with tempfile.NamedTemporaryFile(suffix=".nc") as grid_fp:
         if grid_filename.startswith(("http://", "https://")):
             import urllib.request
+
             print("Store the grid temporarily under", grid_fp.name)
             urllib.request.urlretrieve(grid_filename, grid_fp.name)
             config.graph.nodes.icon_mesh.node_builder.grid_filename = grid_fp.name
 
         trainer = AnemoiTrainer(config)
-        #trainer.train()
+        # trainer.train()
     return trainer
 
 
@@ -61,6 +60,7 @@ def get_trainer() -> AnemoiTrainer:
 
 def test_main(get_trainer: AnemoiTrainer) -> None:
     assert get_trainer
+
 
 if __name__ == "__main__":
     test_main(trainer(shorten=False))
