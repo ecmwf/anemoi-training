@@ -186,7 +186,7 @@ class ScaleTensor:
         scalar: torch.Tensor,
         *,
         name: str | None = None,
-    ) -> None:
+    ) -> ScaleTensor:
         """Add new scalar to be applied along `dimension`.
 
         Dimension can be a single int even for a multi-dimensional scalar,
@@ -201,6 +201,11 @@ class ScaleTensor:
             Scalar tensor to apply
         name : str | None, optional
             Name of the scalar, by default None
+
+        Returns
+        -------
+        ScaleTensor
+            ScaleTensor with the scalar removed
         """
         if not isinstance(scalar, torch.Tensor):
             scalar = torch.tensor([scalar]) if isinstance(scalar, (int, float)) else torch.tensor(scalar)
@@ -229,27 +234,31 @@ class ScaleTensor:
         self.tensors[name] = (dimension, scalar)
         self._specified_dimensions[name] = dimension
 
-    def remove_scalar(self, name: str) -> None:
+        return self
+
+    def remove_scalar(self, scalar_to_remove: str | int) -> ScaleTensor:
         """
         Remove scalar from ScaleTensor.
 
         Parameters
         ----------
-        name : str
-            Name of tensor to remove
+        scalar_to_remove : str | int
+            Name or index of tensor to remove
 
         Raises
         ------
         ValueError
             If the scalar is not in the scalars
-        """
-        if name not in self.tensors:
-            valid_keys = list(self.tensors.keys())
-            error_msg = f"{name} not in scalars. Must be one of {valid_keys}."
-            raise ValueError(error_msg)
 
-        self.tensors.pop(name)
-        self._specified_dimensions.pop(name)
+        Returns
+        -------
+        ScaleTensor
+            ScaleTensor with the scalar removed
+        """
+        for scalar_to_pop in self.subset(scalar_to_remove).tensors:
+            self.tensors.pop(scalar_to_pop)
+            self._specified_dimensions.pop(scalar_to_pop)
+        return self
 
     def freeze_state(self) -> FrozenStateRecord:  # noqa: F821
         """
@@ -260,7 +269,7 @@ class ScaleTensor:
         Returns
         -------
         FrozenStateRecord
-            Context manager to freeze the state
+            Context manager to freeze the state of this ScaleTensor
         """
         record_of_scalars: dict = self.tensors.copy()
 
@@ -352,7 +361,26 @@ class ScaleTensor:
         for name, tensor in kwargs.items():
             self.update_scalar(name, tensor, override=override)
 
-    def subset(self, scalars: str | Sequence[str]) -> ScaleTensor:
+    def subset(self, scalar_identifier: str | Sequence[str] | int | Sequence[int]) -> ScaleTensor:
+        """Get subset of the scalars, filtering by name or dimension.
+
+        Parameters
+        ----------
+        scalar_identifier : str | Sequence[str] | int | Sequence[int]
+            Name/s or dimension/s of the scalars to get
+
+        Returns
+        -------
+        ScaleTensor
+            Subset of self
+        """
+        if isinstance(scalar_identifier, (str, int)):
+            scalar_identifier = [scalar_identifier]
+        if any(isinstance(scalar, int) for scalar in scalar_identifier):
+            return self.subset_by_dim(scalar_identifier)
+        return self.subset_by_str(scalar_identifier)
+
+    def subset_by_str(self, scalars: str | Sequence[str]) -> ScaleTensor:
         """Get subset of the scalars, filtering by name.
 
         See `.subset_by_dim` for subsetting by affected dimensions.
@@ -370,23 +398,6 @@ class ScaleTensor:
         if isinstance(scalars, str):
             scalars = [scalars]
         return ScaleTensor(**{name: self.tensors[name] for name in scalars})
-
-    def without(self, scalars: str | Sequence[str]) -> ScaleTensor:
-        """Get subset of the scalars, filtering out by name.
-
-        Parameters
-        ----------
-        scalars : str | Sequence[str]
-            Name/s of the scalars to exclude
-
-        Returns
-        -------
-        ScaleTensor
-            Subset of self
-        """
-        if isinstance(scalars, str):
-            scalars = [scalars]
-        return ScaleTensor(**{name: tensor for name, tensor in self.tensors.items() if name not in scalars})
 
     def subset_by_dim(self, dimensions: int | Sequence[int]) -> ScaleTensor:
         """Get subset of the scalars, filtering by dimension.
@@ -415,6 +426,42 @@ class ScaleTensor:
                 subset_scalars[name] = (dim, scalar)
 
         return ScaleTensor(**subset_scalars)
+
+    def without(self, scalar_identifier: str | Sequence[str] | int | Sequence[int]) -> ScaleTensor:
+        """Get subset of the scalars, filtering out by name or dimension.
+
+        Parameters
+        ----------
+        scalar_identifier : str | Sequence[str] | int | Sequence[int]
+            Name/s or dimension/s of the scalars to exclude
+
+        Returns
+        -------
+        ScaleTensor
+            Subset of self
+        """
+        if isinstance(scalar_identifier, (str, int)):
+            scalar_identifier = [scalar_identifier]
+        if any(isinstance(scalar, int) for scalar in scalar_identifier):
+            return self.without_by_dim(scalar_identifier)
+        return self.without_by_str(scalar_identifier)
+
+    def without_by_str(self, scalars: str | Sequence[str]) -> ScaleTensor:
+        """Get subset of the scalars, filtering out by name.
+
+        Parameters
+        ----------
+        scalars : str | Sequence[str]
+            Name/s of the scalars to exclude
+
+        Returns
+        -------
+        ScaleTensor
+            Subset of self
+        """
+        if isinstance(scalars, str):
+            scalars = [scalars]
+        return ScaleTensor(**{name: tensor for name, tensor in self.tensors.items() if name not in scalars})
 
     def without_by_dim(self, dimensions: int | Sequence[int]) -> ScaleTensor:
         """Get subset of the scalars, filtering out by dimension.
