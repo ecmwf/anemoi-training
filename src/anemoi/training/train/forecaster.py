@@ -607,16 +607,15 @@ class GraphForecaster(pl.LightningModule):
                             internal_model_indices = self._remap_output_to_internal_indices(indices)
 
                         metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
-                            y[..., internal_model_indices],
-                            y_pred[..., internal_model_indices],
-                            scalar_indices=[..., internal_model_indices] if -1 in metric.scalar else None,
+                            y_pred,
+                            y,
+                            scalar_indices=[..., internal_model_indices],
                         )
-
                 else:
                     metrics[f"{metric_name}/{mkey}/{rollout_step + 1}"] = metric(
-                        y_pred_postprocessed[..., indices],
-                        y_postprocessed[..., indices],
-                        scalar_indices=[..., indices] if -1 in metric.scalar else None,
+                        y_pred_postprocessed,
+                        y_postprocessed,
+                        scalar_indices=[..., indices]
                     )
 
         return metrics
