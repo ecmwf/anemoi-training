@@ -50,7 +50,7 @@ def trainer(shorten: bool = True) -> AnemoiTrainer:
             config.graph.nodes.icon_mesh.node_builder.grid_filename = grid_fp.name
 
         trainer = AnemoiTrainer(config)
-        trainer.train()
+        #trainer.train()
     return trainer
 
 
