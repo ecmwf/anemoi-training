@@ -45,7 +45,7 @@ edges:
   attributes: ${graph.attributes.edges}
 
 attributes:
-  nodes: 
+  nodes:
     # Attributes for data nodes
     area_weight:
       _target_: anemoi.graphs.nodes.attributes.AreaWeights

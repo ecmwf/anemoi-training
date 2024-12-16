@@ -654,7 +654,7 @@ class GraphTrainableFeaturesPlot(BasePerEpochPlotCallback):
             name: tt.trainable for name, tt in node_attributes.trainable_tensors.items() if tt.trainable is not None
         }
 
-    def get_edge_trainable_modules(self, model) -> dict[tuple[str, str], torch.Tensor]:
+    def get_edge_trainable_modules(self, model: torch.nn.Module) -> dict[tuple[str, str], torch.Tensor]:
         trainable_modules = {
             (model._graph_name_data, model._graph_name_hidden): model.encoder,
             (model._graph_name_hidden, model._graph_name_data): model.decoder,
@@ -663,10 +663,7 @@ class GraphTrainableFeaturesPlot(BasePerEpochPlotCallback):
         if isinstance(model.processor, GraphEdgeMixin):
             trainable_modules[model._graph_name_hidden, model._graph_name_hidden] = model.processor
 
-        trainable_tensors = {
-            name: module for name, module in trainable_modules.items() if module.trainable.trainable is not None
-        }
-        return trainable_tensors
+        return {name: module for name, module in trainable_modules.items() if module.trainable.trainable is not None}
 
     @rank_zero_only
     def _plot(

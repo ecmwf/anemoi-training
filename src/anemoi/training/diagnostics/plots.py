@@ -874,7 +874,9 @@ def edge_plot(
 
 
 def plot_graph_node_features(
-    model: nn.Module, trainable_tensors: dict[str, Tensor], datashader: bool = False,
+    model: nn.Module,
+    trainable_tensors: dict[str, Tensor],
+    datashader: bool = False,
 ) -> Figure:
     """Plot trainable graph node features.
 
@@ -920,7 +922,9 @@ def plot_graph_node_features(
 
 
 def plot_graph_edge_features(
-    model: nn.Module, trainable_modules: dict[tuple[str, str], Tensor], q_extreme_limit: float = 0.05,
+    model: nn.Module,
+    trainable_modules: dict[tuple[str, str], Tensor],
+    q_extreme_limit: float = 0.05,
 ) -> Figure:
     """Plot trainable graph edge features.
 
