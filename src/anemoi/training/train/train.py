@@ -81,7 +81,7 @@ class AnemoiTrainer:
     @cached_property
     def datamodule(self) -> AnemoiDatasetsDataModule:
         """DataModule instance and DataSets."""
-        datamodule = AnemoiDatasetsDataModule(self.config)
+        datamodule = AnemoiDatasetsDataModule(self.config, self.graph_data)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
         LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
         LOGGER.debug("Variables: %s", str(datamodule.ds_train.data.variables))
@@ -150,6 +150,7 @@ class AnemoiTrainer:
             "graph_data": self.graph_data,
             "metadata": self.metadata,
             "statistics": self.datamodule.statistics,
+            "supporting_arrays": self.supporting_arrays,
         }
 
         model = GraphForecaster(**kwargs)
@@ -248,6 +249,10 @@ class AnemoiTrainer:
                 "timestamp": datetime.datetime.now(tz=datetime.timezone.utc),
             },
         )
+
+    @cached_property
+    def supporting_arrays(self) -> dict:
+        return self.datamodule.supporting_arrays
 
     @cached_property
     def profiler(self) -> PyTorchProfiler | None:

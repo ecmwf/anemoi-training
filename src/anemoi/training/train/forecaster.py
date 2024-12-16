@@ -50,6 +50,7 @@ class GraphForecaster(pl.LightningModule):
         statistics: dict,
         data_indices: IndexCollection,
         metadata: dict,
+        supporting_arrays: dict,
     ) -> None:
         """Initialize graph neural network forecaster.
 
@@ -65,16 +66,24 @@ class GraphForecaster(pl.LightningModule):
             Indices of the training data,
         metadata : dict
             Provenance information
+        supporting_arrays : dict
+            Supporting NumPy arrays to store in the checkpoint
 
         """
         super().__init__()
 
         graph_data = graph_data.to(self.device)
 
+        if config.model.get("output_mask", None) is not None:
+            self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
+        else:
+            self.output_mask = NoOutputMask()
+
         self.model = AnemoiModelInterface(
             statistics=statistics,
             data_indices=data_indices,
             metadata=metadata,
+            supporting_arrays=supporting_arrays | self.output_mask.supporting_arrays,
             graph_data=graph_data,
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
@@ -85,11 +94,6 @@ class GraphForecaster(pl.LightningModule):
 
         self.latlons_data = graph_data[config.graph.data].x
         self.node_weights = self.get_node_weights(config, graph_data)
-
-        if config.model.get("output_mask", None) is not None:
-            self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
-        else:
-            self.output_mask = NoOutputMask()
         self.node_weights = self.output_mask.apply(self.node_weights, dim=0, fill_value=0.0)
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
@@ -98,12 +102,23 @@ class GraphForecaster(pl.LightningModule):
 
         _, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
 
+        # Check if the model is a stretched grid
+        if "lam_resolution" in getattr(config.graph.nodes.hidden, "node_builder", []):
+            mask_name = config.graph.nodes.hidden.node_builder.mask_attr_name
+            limited_area_mask = graph_data[config.graph.data][mask_name].squeeze().bool()
+        else:
+            limited_area_mask = torch.ones((1,))
+
         # Kwargs to pass to the loss function
         loss_kwargs = {"node_weights": self.node_weights}
         # Scalars to include in the loss function, must be of form (dim, scalar)
         # Add mask multiplying NaN locations with zero. At this stage at [[1]].
         # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
-        scalars = {"variable": (-1, variable_scaling), "loss_weights_mask": ((-2, -1), torch.ones((1, 1)))}
+        scalars = {
+            "variable": (-1, variable_scaling),
+            "loss_weights_mask": ((-2, -1), torch.ones((1, 1))),
+            "limited_area_mask": (2, limited_area_mask),
+        }
         self.updated_loss_mask = False
 
         self.loss = self.get_loss_function(config.training.training_loss, scalars=scalars, **loss_kwargs)
@@ -276,6 +291,9 @@ class GraphForecaster(pl.LightningModule):
             if key in config.training.metrics:
                 metric_ranges_validation[key] = [idx]
 
+        # Add the full list of output indices
+        metric_ranges_validation["all"] = data_indices.internal_model.output.full.tolist()
+
         return metric_ranges, metric_ranges_validation
 
     @staticmethod
@@ -320,7 +338,6 @@ class GraphForecaster(pl.LightningModule):
     @staticmethod
     def get_node_weights(config: DictConfig, graph_data: HeteroData) -> torch.Tensor:
         node_weighting = instantiate(config.training.node_loss_weights)
-
         return node_weighting.weights(graph_data)
 
     def set_model_comm_group(
@@ -489,7 +506,7 @@ class GraphForecaster(pl.LightningModule):
         torch.Tensor
             Allgathered (full) batch
         """
-        grid_size = self.model.metadata["dataset"]["shape"][-1]
+        grid_size = len(self.latlons_data)  # number of points
 
         if grid_size == batch.shape[-2]:
             return batch  # already have the full grid
