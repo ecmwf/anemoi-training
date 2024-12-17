@@ -16,6 +16,7 @@ import tempfile
 
 import matplotlib as mpl
 import pytest
+import torch
 from hydra import compose
 from hydra import initialize
 
@@ -35,6 +36,7 @@ def trainer(shorten: bool = True) -> AnemoiTrainer:
         date = datetime.datetime.fromisoformat(config.dataloader.training.start)
         date = date + datetime.timedelta(days=3)
         config.dataloader.training.end = date.isoformat()
+        date = date + datetime.timedelta(hours=6)
         config.dataloader.validation.start = date.isoformat()
         date = date + datetime.timedelta(days=2)
         config.dataloader.validation.end = date.isoformat()
@@ -44,23 +46,27 @@ def trainer(shorten: bool = True) -> AnemoiTrainer:
         if grid_filename.startswith(("http://", "https://")):
             import urllib.request
 
-            print("Store the grid temporarily under", grid_fp.name)
+            # print("Store the grid temporarily under", grid_fp.name)
             urllib.request.urlretrieve(grid_filename, grid_fp.name)
             config.graph.nodes.icon_mesh.node_builder.grid_filename = grid_fp.name
 
         trainer = AnemoiTrainer(config)
-        # trainer.train()
-    return trainer
+        initial_sum = torch.tensor(list(map(torch.sum, trainer.model.parameters()))).sum()
+        trainer.train()
+        final_sum = torch.tensor(list(map(torch.sum, trainer.model.parameters()))).sum()
+    return trainer, initial_sum, final_sum
 
 
 @pytest.fixture
-def get_trainer() -> AnemoiTrainer:
+def get_trainer() -> tuple:
     return trainer()
 
 
-def test_main(get_trainer: AnemoiTrainer) -> None:
-    assert get_trainer
+def test_main(get_trainer: tuple) -> None:
+    trainer, initial_sum, final_sum = get_trainer
+    assert trainer
+    assert initial_sum != final_sum
 
 
 if __name__ == "__main__":
-    test_main(trainer(shorten=False))
+    test_main(trainer(shorten=True))
