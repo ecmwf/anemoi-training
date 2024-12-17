@@ -107,7 +107,7 @@ def freeze_submodule_by_name(module: nn.Module, target_name: str) -> None:
     for name, child in module.named_children():
         # If this is the target submodule, freeze its parameters
         if name == target_name:
-            child.freeze()
+            module.freeze(child)
         else:
             # Recursively search within children
             freeze_submodule_by_name(child, target_name)

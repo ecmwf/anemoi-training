@@ -166,9 +166,6 @@ class AnemoiTrainer:
                 LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
                 model = model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
-        else:
-            LOGGER.info("Model initialised from scratch.")
-
         # Freeze the chosen model weights
         LOGGER.info("The following submodules will NOT be trained: %s", self.config.training.submodules_to_freeze)
         for submodule_name in self.config.training.submodules_to_freeze:
