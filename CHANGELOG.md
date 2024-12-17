@@ -17,15 +17,14 @@ Keep it human-readable, your future self will thank you!
 - Identify stretched grid models based on graph rather than configuration file [#204](https://github.com/ecmwf/anemoi-training/pull/204)
 
 ### Added
-
-- <b> Transfer Learning</b>: enabled new functionality. You can now load checkpoints from different models and different training runs.
-- Introduce variable to configure: transfer_learning -> bool, True if loading checkpoint in a transfer learning setting.
+- Introduce (optional) variable to configure: transfer_learning -> bool, True if loading checkpoint in a transfer learning setting.
+- <b> TRANSFER LEARNING</b>: enabled new functionality. You can now load checkpoints from different models and different training runs.
 - Effective batch size: `(config.dataloader.batch_size["training"] * config.hardware.num_gpus_per_node * config.hardware.num_nodes) // config.hardware.num_gpus_per_model`.
   Used for experiment reproducibility across different computing configurations.
 - Added a check for the variable sorting on pre-trained/finetuned models [#120](https://github.com/ecmwf/anemoi-training/pull/120)
-- <b> Model Freezing ❄️</b>: enabled new functionality. You can now Freeze parts of your model by specifying a list of submodules to freeze with the new config parameter: submodules_to_freeze.
-- Introduce new variable to configure: submodules_to_freeze -> List[str], list of submodules to freeze.
 - Added new metrics for stretched grid models to track losses inside/outside the regional domain [#199](https://github.com/ecmwf/anemoi-training/pull/199)
+- <b> Model Freezing ❄️</b>: enabled new functionality. You can now Freeze parts of your model by specifying a list of submodules to freeze with the new config parameter: submodules_to_freeze.
+- Introduce (optional) variable to configure: submodules_to_freeze -> List[str], list of submodules to freeze.
 
 ### Changed
 
