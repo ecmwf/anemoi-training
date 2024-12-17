@@ -14,6 +14,7 @@ Keep it human-readable, your future self will thank you!
 - Dont crash when using the profiler if certain env vars arent set [#180](https://github.com/ecmwf/anemoi-training/pull/180)
 - Remove saving of metadata to training checkpoint [#57](https://github.com/ecmwf/anemoi-training/pull/190)
 - Fixes to callback plots [#182] (power spectrum large numpy array error + precip cmap for cases where precip is prognostic).
+- Identify stretched grid models based on graph rather than configuration file [#204](https://github.com/ecmwf/anemoi-training/pull/204)
 
 ### Added
 
@@ -24,11 +25,17 @@ Keep it human-readable, your future self will thank you!
 - Added a check for the variable sorting on pre-trained/finetuned models [#120](https://github.com/ecmwf/anemoi-training/pull/120)
 - <b> Model Freezing ❄️</b>: enabled new functionality. You can now Freeze parts of your model by specifying a list of submodules to freeze with the new config parameter: submodules_to_freeze.
 - Introduce new variable to configure: submodules_to_freeze -> List[str], list of submodules to freeze.
+- Added new metrics for stretched grid models to track losses inside/outside the regional domain [#199](https://github.com/ecmwf/anemoi-training/pull/199)
 
 ### Changed
 
 ### Removed
 - Removed the resolution config entry [#120](https://github.com/ecmwf/anemoi-training/pull/120)
+
+### Added
+
+- Add supporting arrrays (numpy) to checkpoint
+- Support for masking out unconnected nodes in LAM [#171](https://github.com/ecmwf/anemoi-training/pull/171)
 
 ## [0.3.1 - AIFS v0.3 Compatibility](https://github.com/ecmwf/anemoi-training/compare/0.3.0...0.3.1) - 2024-11-28
 
