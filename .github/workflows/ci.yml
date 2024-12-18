@@ -31,6 +31,7 @@ jobs:
     with:
       anemoi-training: ecmwf/anemoi-training@${{ github.event.pull_request.head.sha || github.sha }}
       codecov_upload: true
+      python-version: "3.10"
     secrets: inherit
 
    # Build downstream packages on HPC
