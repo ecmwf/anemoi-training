@@ -297,7 +297,7 @@ flag to True in the configuration file.
 
    training:
       # start the training from a checkpoint of a previous run
-      fork_run_id: '51a97d40a49e48d284494a3b5d87ef2b'
+      fork_run_id: ...
       load_weights_only: True
       transfer_learning: True
 
@@ -333,7 +333,7 @@ frozen and only the encoder and decoder will be trained:
 
    training:
       # start the training from a checkpoint of a previous run
-      fork_run_id: '51a97d40a49e48d284494a3b5d87ef2b'
+      fork_run_id: ...
       load_weights_only: True
 
       submodules_to_freeze:
