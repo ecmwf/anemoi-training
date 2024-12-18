@@ -2,7 +2,7 @@ name: ci
 
 on:
   # Trigger the workflow on push to main or develop, except tag creation
-  push
+  push: ~
 
   # Trigger the workflow on pull request
   pull_request:
@@ -30,8 +30,8 @@ jobs:
     uses: ecmwf-actions/downstream-ci/.github/workflows/downstream-ci.yml@main
     with:
       anemoi-training: ecmwf/anemoi-training@${{ github.event.pull_request.head.sha || github.sha }}
+      anemoi-datasets:  ecmwf/anemoi-datasets@develop
       codecov_upload: true
-      python-version: "3.10"
     secrets: inherit
 
    # Build downstream packages on HPC
