@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
-from typing import Literal
 
 
 class RolloutScheduler(ABC):
@@ -121,8 +120,7 @@ class RolloutScheduler(ABC):
 
         if n_epochs is not None:
             return self._epoch // n_epochs
-        if n_steps is not None:
-            return self._step // n_steps
+        return self._step // n_steps
 
     @abstractmethod
     def description(self) -> str:
