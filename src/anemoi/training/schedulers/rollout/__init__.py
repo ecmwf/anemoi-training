@@ -94,16 +94,16 @@ class RolloutScheduler(ABC):
         """Step the scheduler by a count of epochs."""
         self._epoch += count
 
-    def count(self, every_n: int, step_type: Literal["step", "epoch"]) -> int:
+    def count(self, n_epochs: int | None = None, n_steps: int | None = None) -> int:
         """
         Get the count of steps or epochs.
 
         Parameters
         ----------
-        every_n : int
-            Every n steps or epochs.
-        step_type : _type_, optional
-            Which to count, by default Literal['step', 'epoch']
+        n_epochs : int | None, optional
+            Number of epochs to count, by default None
+        n_steps : int | None, optional
+            Number of steps to count, by default None
 
         Returns
         -------
@@ -113,15 +113,17 @@ class RolloutScheduler(ABC):
         Raises
         ------
         ValueError
-            If the step_type is not 'step' or 'epoch'.
+            If both `n_epochs` and `n_steps` are given, or if neither are given.
         """
-        if step_type == "epoch":
-            return (self._epoch - 1) // every_n
-        if step_type == "step":
-            return self._step // every_n
+        if n_epochs is not None and n_steps is not None or n_epochs is None and n_steps is None:
+            error_msg = "Only one of `n_epochs` or `n_steps` can be given."
+            raise ValueError(error_msg)
 
-        error_msg = "Invalid `step_type`. Must be 'epoch' or 'step'."
-        raise ValueError(error_msg)
+        if n_epochs is not None:
+            return self._epoch // n_epochs
+        if n_steps is not None:
+            return self._step // n_steps
+
 
     @abstractmethod
     def description(self) -> str:

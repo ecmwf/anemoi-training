@@ -16,9 +16,9 @@ from typing import Literal
 import numpy as np
 import pytorch_lightning as pl
 
-from anemoi.training.schedulers.rollout import RolloutScheduler
-from anemoi.training.schedulers.rollout.indexed import get_closest_key
 from anemoi.training.utils.seeding import get_base_seed
+from anemoi.training.schedulers.rollout import RolloutScheduler
+from anemoi.training.schedulers.rollout.stepped import BaseIncrementingRolloutScheduler, VALID_INCREMENT_TYPE, VALID_STEP_TYPES
 
 
 class BaseRandom(RolloutScheduler):
@@ -150,7 +150,7 @@ class RandomRange(RandomList):
         )
 
 
-class IncreasingRandom(BaseRandom):
+class IncreasingRandom(BaseIncrementingRolloutScheduler, BaseRandom):
     """IncreasingRandom is a rollout scheduler that randomly selects a rollout from an increasing range of values."""
 
     def __init__(
@@ -159,8 +159,9 @@ class IncreasingRandom(BaseRandom):
         maximum: int = 1,
         range_step: int = 1,
         every_n: int = 1,
-        increment: int | dict[int, int] = 1,
-        step_type: Literal["step", "epoch"] = "epoch",
+        increment: VALID_INCREMENT_TYPE = 1,
+        *,
+        step_type: VALID_STEP_TYPES = "epoch",
     ):
         """
         `IncreasingRandom` is a rollout scheduler that randomly selects a rollout from an increasing range of values.
@@ -177,7 +178,7 @@ class IncreasingRandom(BaseRandom):
         every_n : int, optional
             Number of steps or epochs to step the rollout value.
             If `every_n` is 0, the rollout will stay at `minimum`.
-        increment : int | dict[int, int], optional
+        increment : int | dict[int, int] | dict[Literal['step', 'epoch'], dict[int, int]], optional
             Value to increment the rollout by `every_n_epochs`, by default 1
         step_type : Literal['step', 'epoch'], optional
             Type of step, either 'epoch' or 'batch'.
@@ -195,7 +196,7 @@ class IncreasingRandom(BaseRandom):
         # any value between 1 and 2
         ```
         """
-        super().__init__()
+        super().__init__(every_n = every_n, increment = increment, step_type = step_type)
 
         if maximum <= -1:
             maximum = float("inf")
@@ -203,26 +204,23 @@ class IncreasingRandom(BaseRandom):
         self._minimum = minimum
         self._maximum = maximum
         self._range_step = range_step
-        self._every_n = every_n
-        self._increment = increment
-        self._step_type = step_type
 
     @property
     def rollout(self) -> int:
         if self._every_n == 0:
             return self._minimum
 
-        count_of_n = self.count(self._every_n, self._step_type)
+        # count_of_n = self.count(self._every_n, self._step_type)
 
-        if isinstance(self._increment, int):
-            maximum_value = self._minimum + self._increment * count_of_n
-        else:
-            sum_of_increments = [
-                self._increment.get(get_closest_key(self._increment, i + 1)) for i in range(count_of_n)
-            ]
-            maximum_value = self._minimum + sum(sum_of_increments)
+        # if isinstance(self._increment, int):
+        #     maximum_value = self._minimum + self._increment * count_of_n
+        # else:
+        #     sum_of_increments = [
+        #         self._increment.get(get_closest_key(self._increment, i + 1)) for i in range(count_of_n)
+        #     ]
+        #     maximum_value = self._minimum + sum(sum_of_increments)
 
-        rollouts = range(self._minimum, maximum_value + 1, self._range_step)
+        rollouts = range(self._minimum, self._minimum + self.total_increment, self._range_step)
 
         return self._randomly_pick(rollouts)
 

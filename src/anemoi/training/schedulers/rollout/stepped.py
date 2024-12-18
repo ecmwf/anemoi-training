@@ -14,7 +14,79 @@ from anemoi.training.schedulers.rollout import RolloutScheduler
 from anemoi.training.schedulers.rollout.indexed import get_closest_key
 
 
-class Stepped(RolloutScheduler):
+VALID_STEP_TYPE = ["step", "epoch"]
+VALID_STEP_TYPES = Literal["step", "epoch"]
+
+VALID_INCREMENT_TYPE = int | dict[int, int] | dict[VALID_STEP_TYPES, dict[int, int]]
+
+class BaseIncrementingRolloutScheduler(RolloutScheduler):
+    """Base class for schedulers that have an incrementing value."""
+    _increment_value = 0
+
+    def __init__(self, every_n: int, step_type: VALID_STEP_TYPES, increment: VALID_INCREMENT_TYPE = 1):
+        super().__init__()
+
+        if step_type not in VALID_STEP_TYPE:
+            error_msg = "Step type must be either 'step' or 'epoch'."
+            raise ValueError(error_msg)
+
+        if isinstance(increment, dict):
+            if not len(increment) == 1:
+                error_msg = (
+                    "Increment dictionary cannot be empty, nor can it contain more then one entry."
+                    "\nIt should either be a dictionary of ints or contain a single key of 'step' or 'epoch'."
+                )
+                raise ValueError(error_msg)
+
+        self._every_n = every_n
+        self._step_type = step_type
+        self._increment = increment
+        
+
+    @property
+    def total_increment(self) -> int:
+        return self._increment_value
+
+    def _get_current_increment(self):
+        if isinstance(self._increment, int):
+            return self._increment
+
+        if isinstance(list(self._increment.keys())[0], int):
+            current_value = self._step if self._step_type == 'step' else self._epoch
+            return get_closest_key(self._increment, current_value)
+        
+        elif isinstance(list(self._increment.keys())[0], str):
+            step_type = list(self._increment.keys())[0]
+            if step_type not in ['step', 'epoch']:
+                error_msg = "Increment dictionary keys must be either 'step' or 'epoch'."
+                raise ValueError(error_msg)
+            
+            current_value = self._step if step_type == 'step' else self._epoch
+            increment_dict = self._increment[step_type]
+            return increment_dict.get(get_closest_key(increment_dict, current_value), 0)
+        else:
+            error_msg = "Increment dictionary keys must be either int or str."
+            raise ValueError(error_msg)
+                
+
+    def step(self, count = 1):
+        super().step(count)
+        if self._every_n == 0:
+            return
+
+        if self._step_type == 'step' and self._step % self._every_n == 0:
+            self._increment_value += self._get_current_increment()
+            
+
+    def step_epoch(self, count = 1):
+        super().step_epoch(count)
+        if self._every_n == 0:
+            return
+        
+        if self._step_type == 'epoch' and self._epoch % self._every_n == 0:
+            self._increment_value += self._get_current_increment()
+
+class Stepped(BaseIncrementingRolloutScheduler):
     """`Stepped` is a base rollout scheduler that steps the rollout value at the end of each n steps or epochs."""
 
     def __init__(
@@ -22,8 +94,9 @@ class Stepped(RolloutScheduler):
         minimum: int,
         maximum: int,
         every_n: int,
-        increment: int | dict[int, int],
-        step_type: Literal["step", "epoch"] = "epoch",
+        increment: VALID_INCREMENT_TYPE = 1,
+        *,
+        step_type: VALID_STEP_TYPES = "epoch",
     ):
         """
         `SteppedRollout` is a base rollout scheduler that steps the rollout value at the end of each n steps or epochs.
@@ -38,7 +111,7 @@ class Stepped(RolloutScheduler):
         every_n : int
             Number of steps or epochs to step the rollout value.
             If `every_n` is 0, the rollout will stay at `minimum`.
-        increment : int | dict[int, int], optional
+        increment : int | dict[int, int] | dict[Literal['step', 'epoch'], dict[int, int]], optional
             Value to increment the rollout by.
             Can be an int or dictionary, where the keys represent the value of `step_type`
             and the values represent the increment.
@@ -73,21 +146,27 @@ class Stepped(RolloutScheduler):
         # 1
         RollSched.rollout_at(epoch = 10)
         # 2, and then increments of 1
+
+        RollSched = Stepped(minimum = 1, maximum = 10, every_n = 1, step_type = 'epoch', increment = {'step':{0: 0, 1000: 1}})
+        RollSched.rollout_at(epoch = 2)
+        # 1
+        RollSched.rollout_at(epoch = 2, step = 1000)
+        # 2
+
         ```
         """
-        super().__init__()
+        super().__init__(every_n=every_n, step_type=step_type, increment=increment)
 
         if maximum <= -1:
             maximum = float("inf")
 
         self._minimum = minimum
         self._maximum = maximum
-        self._every_n = every_n
-        self._increment = increment
-        self._step_type = step_type
 
     @property
     def rollout(self) -> int:
+        return min(self._maximum, self._minimum + self.total_increment)
+
         if self._every_n == 0:
             return self._minimum
 
@@ -116,7 +195,7 @@ class Stepped(RolloutScheduler):
 class EpochStepped(Stepped):
     """`EpochStepped` is a rollout scheduler that steps the rollout value at the end of each n epochs."""
 
-    def __init__(self, minimum: int, maximum: int, every_n_epochs: int = 1, increment: int = 1):
+    def __init__(self, minimum: int, maximum: int, every_n_epochs: int = 1, increment: VALID_INCREMENT_TYPE = 1):
         """
         `EpochStepped` is a rollout scheduler that steps the rollout value at the end of each n epochs.
 
@@ -128,8 +207,13 @@ class EpochStepped(Stepped):
             The maximum value for the scheduler.
         every_n_epochs : int, optional
             The number of epochs after which the value is incremented, by default 1.
-        increment : int, optional
-            The amount by which the value is incremented, by default 1.
+        increment : int | dict[int, int] | dict[Literal['step', 'epoch'], dict[int, int]], optional
+            Value to increment the rollout by.
+            Can be an int or dictionary, where the keys represent the value of `step_type`
+            and the values represent the increment.
+            Will round down to the closest key.
+            i.e. {0: 1, 10: 2} will increment by 1 until 10, then by 2.
+            by default 1.
         """
         super().__init__(minimum, maximum, every_n_epochs, increment, step_type="epoch")
 
@@ -137,7 +221,7 @@ class EpochStepped(Stepped):
 class StepStepped(Stepped):
     """`StepStepped` is a rollout scheduler that steps the rollout value at the end of each n steps."""
 
-    def __init__(self, minimum: int, maximum: int, every_n_steps: int = 1000, increment: int = 1):
+    def __init__(self, minimum: int, maximum: int, every_n_steps: int = 1000, increment: VALID_INCREMENT_TYPE = 1):
         """
         `StepStepped` is a rollout scheduler that steps the rollout value at the end of each n steps.
 
@@ -149,7 +233,12 @@ class StepStepped(Stepped):
             The maximum value for the scheduler.
         every_n_steps : int, optional
             The number of steps after which the value is incremented, by default 1000.
-        increment : int, optional
-            The amount by which the value is incremented, by default 1.
+        increment : int | dict[int, int] | dict[Literal['step', 'epoch'], dict[int, int]], optional
+            Value to increment the rollout by.
+            Can be an int or dictionary, where the keys represent the value of `step_type`
+            and the values represent the increment.
+            Will round down to the closest key.
+            i.e. {0: 1, 10: 2} will increment by 1 until 10, then by 2.
+            by default 1.
         """
         super().__init__(minimum, maximum, every_n_steps, increment, step_type="step")

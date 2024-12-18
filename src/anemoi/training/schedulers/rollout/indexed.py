@@ -84,7 +84,13 @@ class PositionalIndexed(RolloutScheduler):
 
     @property
     def rollout(self) -> int:
-        count = self.count(self._num_times_per_element, self._step_type)
+        if self._step_type == "epoch":
+            count = self.count(n_epochs=self._num_times_per_element)
+        elif self._step_type == "step":
+            count = self.count(n_steps=self._num_times_per_element)
+        else:
+            error_msg = "Invalid step_type. Must be 'epoch' or 'step'."
+            raise ValueError(error_msg)
         return self._rollouts[min(len(self._rollouts), count)]
 
     @property
