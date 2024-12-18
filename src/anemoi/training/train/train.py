@@ -165,7 +165,7 @@ class AnemoiTrainer:
                     model = transfer_learning_loading(model, self.last_checkpoint)
             else:
                 LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-                model = model.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+                model = GraphForecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
         if hasattr(self.config.training, "submodules_to_freeze"):
             # Freeze the chosen model weights
