@@ -15,7 +15,7 @@ Keep it human-readable, your future self will thank you!
 - Remove saving of metadata to training checkpoint [#57](https://github.com/ecmwf/anemoi-training/pull/190)
 - Fixes to callback plots [#182] (power spectrum large numpy array error + precip cmap for cases where precip is prognostic).
 - GraphTrainableParameters callback will log a warning when no trainable parameters are specified  [#173](https://github.com/ecmwf/anemoi-training/pull/173)
-- Support for masking out unconnected nodes in LAM [#171](https://github.com/ecmwf/anemoi-training/pull/171)
+- Identify stretched grid models based on graph rather than configuration file [#204](https://github.com/ecmwf/anemoi-training/pull/204)
 
 ### Added
 - Introduce variable to configure: transfer_learning -> bool, True if loading checkpoint in a transfer learning setting.
@@ -24,6 +24,10 @@ Keep it human-readable, your future self will thank you!
   Used for experiment reproducibility across different computing configurations.
 - Added a check for the variable sorting on pre-trained/finetuned models [#120](https://github.com/ecmwf/anemoi-training/pull/120)
 - Added default configuration files for stretched grid and limited area model experiments [173](https://github.com/ecmwf/anemoi-training/pull/173)
+- Added new metrics for stretched grid models to track losses inside/outside the regional domain [#199](https://github.com/ecmwf/anemoi-training/pull/199)
+- Add supporting arrrays (numpy) to checkpoint
+- Support for masking out unconnected nodes in LAM [#171](https://github.com/ecmwf/anemoi-training/pull/171)
+- Improved validation metrics, allow 'all' to be scaled [#202](https://github.com/ecmwf/anemoi-training/pull/202)
 
 ### Changed
 
