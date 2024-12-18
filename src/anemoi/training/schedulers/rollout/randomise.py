@@ -11,14 +11,14 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 import numpy as np
 import pytorch_lightning as pl
 
-from anemoi.training.utils.seeding import get_base_seed
 from anemoi.training.schedulers.rollout import RolloutScheduler
-from anemoi.training.schedulers.rollout.stepped import BaseIncrementingRolloutScheduler, VALID_INCREMENT_TYPE, VALID_STEP_TYPES
+from anemoi.training.schedulers.rollout.stepped import VALID_INCREMENT_TYPE
+from anemoi.training.schedulers.rollout.stepped import VALID_STEP_TYPES
+from anemoi.training.schedulers.rollout.stepped import IncrementMixin
+from anemoi.training.utils.seeding import get_base_seed
 
 
 class BaseRandom(RolloutScheduler):
@@ -150,7 +150,7 @@ class RandomRange(RandomList):
         )
 
 
-class IncreasingRandom(BaseIncrementingRolloutScheduler, BaseRandom):
+class IncreasingRandom(IncrementMixin, BaseRandom):
     """IncreasingRandom is a rollout scheduler that randomly selects a rollout from an increasing range of values."""
 
     def __init__(
@@ -196,7 +196,7 @@ class IncreasingRandom(BaseIncrementingRolloutScheduler, BaseRandom):
         # any value between 1 and 2
         ```
         """
-        super().__init__(every_n = every_n, increment = increment, step_type = step_type)
+        super().__init__(every_n=every_n, increment=increment, step_type=step_type)
 
         if maximum <= -1:
             maximum = float("inf")
@@ -210,17 +210,7 @@ class IncreasingRandom(BaseIncrementingRolloutScheduler, BaseRandom):
         if self._every_n == 0:
             return self._minimum
 
-        # count_of_n = self.count(self._every_n, self._step_type)
-
-        # if isinstance(self._increment, int):
-        #     maximum_value = self._minimum + self._increment * count_of_n
-        # else:
-        #     sum_of_increments = [
-        #         self._increment.get(get_closest_key(self._increment, i + 1)) for i in range(count_of_n)
-        #     ]
-        #     maximum_value = self._minimum + sum(sum_of_increments)
-
-        rollouts = range(self._minimum, self._minimum + self.total_increment, self._range_step)
+        rollouts = range(self._minimum, self._minimum + self.increment(self._step, self._epoch), self._range_step)
 
         return self._randomly_pick(rollouts)
 

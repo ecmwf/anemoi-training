@@ -91,11 +91,11 @@ rollout:
   maximum: 12
   # increase rollout every n epochs
   every_n_epochs: 1
-  # increment 
+  # Control the incrementing of the rollout window
   increment:
     step:
       0: 0
-      200000: 1
+      200000: 1 # After 200k steps, increment by 1 every 1 epoch
 
 # Set max_epochs or max_steps. Training stops at the first limit reached.
 max_epochs: null

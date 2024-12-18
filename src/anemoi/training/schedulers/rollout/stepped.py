@@ -13,15 +13,14 @@ from typing import Literal
 from anemoi.training.schedulers.rollout import RolloutScheduler
 from anemoi.training.schedulers.rollout.indexed import get_closest_key
 
-
 VALID_STEP_TYPE = ["step", "epoch"]
 VALID_STEP_TYPES = Literal["step", "epoch"]
 
 VALID_INCREMENT_TYPE = int | dict[int, int] | dict[VALID_STEP_TYPES, dict[int, int]]
 
-class BaseIncrementingRolloutScheduler(RolloutScheduler):
-    """Base class for schedulers that have an incrementing value."""
-    _increment_value = 0
+
+class IncrementMixin:
+    """Mixin class for schedulers that have an incrementing value based on the steps and epochs."""
 
     def __init__(self, every_n: int, step_type: VALID_STEP_TYPES, increment: VALID_INCREMENT_TYPE = 1):
         super().__init__()
@@ -30,63 +29,91 @@ class BaseIncrementingRolloutScheduler(RolloutScheduler):
             error_msg = "Step type must be either 'step' or 'epoch'."
             raise ValueError(error_msg)
 
-        if isinstance(increment, dict):
-            if not len(increment) == 1:
-                error_msg = (
-                    "Increment dictionary cannot be empty, nor can it contain more then one entry."
-                    "\nIt should either be a dictionary of ints or contain a single key of 'step' or 'epoch'."
-                )
-                raise ValueError(error_msg)
+        if isinstance(increment, dict) and len(increment) == 0:
+            error_msg = (
+                "Increment dictionary cannot be empty."
+                "\nIt should either be a dictionary of ints or contain a single key of 'step' or 'epoch'."
+            )
+            raise ValueError(error_msg)
 
         self._every_n = every_n
         self._step_type = step_type
         self._increment = increment
-        
 
-    @property
-    def total_increment(self) -> int:
-        return self._increment_value
+    def increment(self, step: int, epoch: int) -> int:
+        """
+        Get the increment value for a particular step or epoch.
 
-    def _get_current_increment(self):
+        Relies on the number of steps per epochs to calculate the increment
+        when the step_type of the increment is different from the stepper step_type.
+
+
+        Parameters
+        ----------
+        step : int
+            Step number.
+        epoch : int
+            Epoch number.
+
+        Returns
+        -------
+        int
+            Increment value.
+
+        Raises
+        ------
+        ValueError
+            If cannot parse the `increment` value given at init.
+        """
         if isinstance(self._increment, int):
             return self._increment
 
-        if isinstance(list(self._increment.keys())[0], int):
-            current_value = self._step if self._step_type == 'step' else self._epoch
-            return get_closest_key(self._increment, current_value)
-        
-        elif isinstance(list(self._increment.keys())[0], str):
-            step_type = list(self._increment.keys())[0]
-            if step_type not in ['step', 'epoch']:
+        count = (step // self._every_n if self._step_type == "step" else epoch // self._every_n) + 1
+
+        if isinstance(next(iter(self._increment.keys())), int):
+            return sum(
+                (self._increment.get(get_closest_key(self._increment, i * self._every_n), 0) for i in range(count)),
+            )
+
+        if isinstance(next(iter(self._increment.keys())), str):
+            increment_step_type = next(iter(self._increment.keys()))
+            if increment_step_type not in ["step", "epoch"]:
                 error_msg = "Increment dictionary keys must be either 'step' or 'epoch'."
                 raise ValueError(error_msg)
-            
-            current_value = self._step if step_type == 'step' else self._epoch
-            increment_dict = self._increment[step_type]
-            return increment_dict.get(get_closest_key(increment_dict, current_value), 0)
-        else:
-            error_msg = "Increment dictionary keys must be either int or str."
-            raise ValueError(error_msg)
-                
 
-    def step(self, count = 1):
-        super().step(count)
-        if self._every_n == 0:
-            return
+            increment_dict = self._increment[increment_step_type]
 
-        if self._step_type == 'step' and self._step % self._every_n == 0:
-            self._increment_value += self._get_current_increment()
-            
+            if increment_step_type == self._step_type:
+                return sum(
+                    (increment_dict.get(get_closest_key(increment_dict, i * self._every_n), 0) for i in range(count)),
+                )
 
-    def step_epoch(self, count = 1):
-        super().step_epoch(count)
-        if self._every_n == 0:
-            return
-        
-        if self._step_type == 'epoch' and self._epoch % self._every_n == 0:
-            self._increment_value += self._get_current_increment()
+            if epoch == 0 or step == 0:
+                return 0
 
-class Stepped(BaseIncrementingRolloutScheduler):
+            num_steps_per_epoch = step / epoch
+            if increment_step_type == "step" and self._step_type == "epoch":
+                return sum(
+                    increment_dict.get(
+                        get_closest_key(increment_dict, (i * self._every_n) * num_steps_per_epoch),
+                        0,
+                    )
+                    for i in range(count)
+                )
+            if increment_step_type == "epoch" and self._step_type == "step":
+                return sum(
+                    increment_dict.get(
+                        get_closest_key(increment_dict, (i * self._every_n) // num_steps_per_epoch),
+                        0,
+                    )
+                    for i in range(count)
+                )
+
+        error_msg = "Increment dictionary keys must be either int or a single str."
+        raise TypeError(error_msg)
+
+
+class Stepped(RolloutScheduler, IncrementMixin):
     """`Stepped` is a base rollout scheduler that steps the rollout value at the end of each n steps or epochs."""
 
     def __init__(
@@ -147,8 +174,11 @@ class Stepped(BaseIncrementingRolloutScheduler):
         RollSched.rollout_at(epoch = 10)
         # 2, and then increments of 1
 
-        RollSched = Stepped(minimum = 1, maximum = 10, every_n = 1, step_type = 'epoch', increment = {'step':{0: 0, 1000: 1}})
-        RollSched.rollout_at(epoch = 2)
+        RollSched = Stepped(
+            minimum = 1, maximum = 10, every_n = 1,
+            step_type = 'epoch', increment = {'step':{0: 0, 1000: 1}}
+        )
+        RollSched.rollout_at(epoch = 1, step = 500 )
         # 1
         RollSched.rollout_at(epoch = 2, step = 1000)
         # 2
@@ -165,21 +195,7 @@ class Stepped(BaseIncrementingRolloutScheduler):
 
     @property
     def rollout(self) -> int:
-        return min(self._maximum, self._minimum + self.total_increment)
-
-        if self._every_n == 0:
-            return self._minimum
-
-        count_of_n = self.count(self._every_n, self._step_type)
-
-        if isinstance(self._increment, int):
-            return min(self._maximum, self._minimum + self._increment * count_of_n)
-
-        sum_of_increments = [
-            self._increment.get(get_closest_key(self._increment, i + 1 if self._step_type == "epoch" else i))
-            for i in range(count_of_n)
-        ]
-        return min(self._maximum, self._minimum + sum(sum_of_increments))
+        return min(self._maximum, self._minimum + self.increment(self._step, self._epoch))
 
     @property
     def maximum_rollout(self) -> int:
@@ -187,8 +203,8 @@ class Stepped(BaseIncrementingRolloutScheduler):
 
     def description(self) -> str:
         return (
-            "Stepped rollout scheduler stepping between"
-            f"{self._minimum} and {self._maximum} by {self._increment} for {self._every_n} {self._step_type}s."
+            "Stepped rollout scheduler stepping between "
+            f"{self._minimum} and {self._maximum} by {self._increment} for every {self._every_n} {self._step_type}/s."
         )
 
 
