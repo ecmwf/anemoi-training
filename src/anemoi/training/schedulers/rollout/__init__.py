@@ -115,7 +115,7 @@ class RolloutScheduler(ABC):
         ValueError
             If both `n_epochs` and `n_steps` are given, or if neither are given.
         """
-        if n_epochs is not None and n_steps is not None or n_epochs is None and n_steps is None:
+        if (n_epochs is not None and n_steps is not None) or (n_epochs is None and n_steps is None):
             error_msg = "Only one of `n_epochs` or `n_steps` can be given."
             raise ValueError(error_msg)
 
@@ -123,7 +123,6 @@ class RolloutScheduler(ABC):
             return self._epoch // n_epochs
         if n_steps is not None:
             return self._step // n_steps
-
 
     @abstractmethod
     def description(self) -> str:
