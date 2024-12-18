@@ -22,4 +22,4 @@ jobs:
     uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-pytest-pyproject.yml@v2
     with:
       python-version: ${{ matrix.python-version }}
-      anemoi-datasets:  ecmwf/anemoi-datasets@develop
+      optional-dependencies: "all,tests] git+https://github.com/ecmwf/anemoi-datasets.git@bugfix/no-exceptions-for-missing-metadata timm["
