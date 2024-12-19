@@ -12,6 +12,8 @@
 # used for CI/CD!
 import datetime
 import os
+import pathlib
+import platform
 import tempfile
 
 import matplotlib as mpl
@@ -24,7 +26,7 @@ import anemoi.training
 from anemoi.training.train.train import AnemoiTrainer
 
 os.environ["ANEMOI_BASE_SEED"] = "42"
-os.environ["ANEMOI_CONFIG_PATH"] = os.path.join(os.path.dirname(anemoi.training.__file__), "config")
+os.environ["ANEMOI_CONFIG_PATH"] = str(pathlib.Path(anemoi.training.__file__).parent / "config")
 mpl.use("agg")
 
 
@@ -46,8 +48,7 @@ def trainer(shorten: bool = True) -> AnemoiTrainer:
         if grid_filename.startswith(("http://", "https://")):
             import urllib.request
 
-            # print("Store the grid temporarily under", grid_fp.name)
-            urllib.request.urlretrieve(grid_filename, grid_fp.name)
+            urllib.request.urlretrieve(grid_filename, grid_fp.name)  # noqa: S310
             config.graph.nodes.icon_mesh.node_builder.grid_filename = grid_fp.name
 
         trainer = AnemoiTrainer(config)
@@ -62,6 +63,11 @@ def get_trainer() -> tuple:
     return trainer()
 
 
+@pytest.mark.skipif(
+    platform.system() == "Darwin",
+    reason="We set strategy=DDP but strategies from the DDP family are not supported on the MPS,"
+    " which is the accelerator of the M1 Mac.",
+)
 def test_main(get_trainer: tuple) -> None:
     trainer, initial_sum, final_sum = get_trainer
     assert trainer
